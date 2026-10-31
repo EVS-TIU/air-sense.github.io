@@ -967,3 +967,128 @@ scheduleHeroWeatherRefresh();
 scheduleCurrentDatetimeRefresh();
 initialiseWeatherBackground();
 scheduleWeatherRefresh();
+/* ------------------------------------------------------------------
+   1) STRICT ICON RULES  (first match wins, order matters)
+   Input: WMO weather code (Open-Meteo), rain chance %, rain amount mm
+   Output: one of  storm | snow | rain | fog | partly | cloud | sun
+------------------------------------------------------------------- */
+const RAIN_CODES  = [51,53,55,56,57,61,63,65,66,67,80,81,82];
+const SNOW_CODES  = [71,73,75,77,85,86];
+const STORM_CODES = [95,96,99];
+const FOG_CODES   = [45,48];
+
+function pickIcon(code, rainChance, rainMm) {
+  // 1. Thunderstorm codes always show the storm icon
+  if (STORM_CODES.includes(code)) return 'storm';
+  // 2. Snow codes
+  if (SNOW_CODES.includes(code)) return 'snow';
+  // 3. Rain: rain code with chance >= 40%, OR any sky with chance >= 60% and >= 1 mm expected
+  if (RAIN_CODES.includes(code) && rainChance >= 40) return 'rain';
+  if (rainChance >= 60 && rainMm >= 1) return 'rain';
+  // 4. Fog
+  if (FOG_CODES.includes(code)) return 'fog';
+  // 5. Clear / mainly clear -> matching illustration (only if rain chance is low)
+  if (code === 0) return rainChance < 30 ? 'clear' : 'partly';
+  if (code === 1) return rainChance < 30 ? 'sun' : 'partly';
+  // 6. Partly cloudy
+  if (code === 2) return 'partly';
+  // 7. Overcast (and any leftover weak-drizzle/rain code with low chance)
+  return 'cloud';
+}
+
+/* ------------------------------------------------------------------
+   2) ICONS (SVG style shared with the hourly forecast)
+------------------------------------------------------------------- */
+const WEEK_CLOUD = '<path class="cloud" d="M18 39 C5 39 4 22 16 17 C18 5 37 3 43 17 C58 9 73 22 69 35 C67 41 62 43 55 43 H18Z"/>';
+const WEEK_SUN = '<g class="ww-sun-rays"><line x1="54" y1="5" x2="54" y2="11"/><line x1="54" y1="37" x2="54" y2="43"/><line x1="35" y1="24" x2="41" y2="24"/><line x1="67" y1="24" x2="73" y2="24"/><line x1="41" y1="11" x2="45" y2="15"/><line x1="63" y1="33" x2="67" y2="37"/><line x1="41" y1="37" x2="45" y2="33"/><line x1="63" y1="15" x2="67" y2="11"/></g><circle class="ww-sun" cx="54" cy="24" r="10"/>';
+const WEEK_RAIN = '<path class="rain-drop" d="M22 48 L17 58"/><path class="rain-drop" d="M39 48 L34 60"/><path class="rain-drop" d="M56 48 L51 58"/>';
+const ICONS = {
+  clear: { alt: 'Clear', content: WEEK_SUN },
+  sun: { alt: 'Sunny', content: WEEK_SUN },
+  partly: { alt: 'Partly cloudy', content: `${WEEK_SUN}${WEEK_CLOUD}` },
+  cloud: { alt: 'Cloudy', content: WEEK_CLOUD },
+  rain: { alt: 'Rain', content: `${WEEK_CLOUD}${WEEK_RAIN}` },
+  storm: { alt: 'Thunderstorm', content: `${WEEK_CLOUD}<path class="ww-lightning" d="M41 43 33 53h7l-4 9 13-15h-8l5-4Z"/>` },
+  snow: { alt: 'Snow', content: `${WEEK_CLOUD}<g class="ww-snow"><circle cx="23" cy="52" r="2.5"/><circle cx="39" cy="56" r="2.5"/><circle cx="55" cy="52" r="2.5"/></g>` },
+  fog: { alt: 'Fog', content: `${WEEK_CLOUD}<g class="ww-fog"><path d="M16 50h48M21 57h42"/></g>` }
+};
+
+/* Bar colour by rain chance: low = yellow, mid = orange, high = red */
+function barColor(p) { return p < 30 ? '#ffd23f' : p < 60 ? '#ff9a3c' : '#ff4d4d'; }
+
+/* ------------------------------------------------------------------
+   3) RENDER  (takes data in Open-Meteo "daily" shape, so mock and
+      real API data go through exactly the same code)
+------------------------------------------------------------------- */
+function renderWeek(d) {
+  const grid = document.getElementById('wwGrid');
+  grid.innerHTML = d.time.map((t, i) => {
+    const date   = new Date(t + 'T12:00:00');            // noon avoids timezone date shifts
+    const chance = Math.round(d.precipitation_probability_max[i] ?? 0);
+    const icon   = pickIcon(d.weather_code[i], chance, d.precipitation_sum[i] ?? 0);
+    return `<div class="ww-day${i === 0 ? ' today' : ''}">
+      <div class="ww-name">${date.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+      <div class="ww-date">${date.getDate()} ${date.toLocaleDateString('en-US', { month: 'short' })}</div>
+      <svg class="weather-icon ww-icon" viewBox="0 0 80 65" role="img" aria-label="${ICONS[icon].alt}">${ICONS[icon].content}</svg>
+      <div class="ww-temp">${Math.round(d.temperature_2m_max[i])}° <span>/ ${Math.round(d.temperature_2m_min[i])}°</span></div>
+      <div class="ww-rain">💧 ${chance}%</div>
+      <div class="ww-bar"><i style="width:${chance}%;background:${barColor(chance)}"></i></div>
+    </div>`;
+  }).join('');
+}
+
+/* ==================================================================
+   4) TEMPORARY MOCK DATA  – random 7 days starting 31 Oct 2026
+      DELETE this whole section once the API is connected.
+================================================================== */
+const MOCK_START = '2026-10-31';
+function getMockDaily() {
+  const codes = [0, 1, 2, 3, 45, 61, 63, 80, 95, 71];       // sun, clear, partly, cloud, fog, rain, rain, showers, storm, snow
+  const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+  const d = { time: [], weather_code: [], temperature_2m_max: [], temperature_2m_min: [],
+              precipitation_probability_max: [], precipitation_sum: [] };
+  const start = new Date(MOCK_START + 'T12:00:00');
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(start); day.setDate(start.getDate() + i);
+    const code = codes[rnd(0, codes.length - 1)];
+    const wet  = [61, 63, 80, 95, 71].includes(code);
+    const max  = rnd(14, 28);
+    d.time.push(day.toISOString().slice(0, 10));
+    d.weather_code.push(code);
+    d.temperature_2m_max.push(max);
+    d.temperature_2m_min.push(max - rnd(5, 10));
+    d.precipitation_probability_max.push(wet ? rnd(50, 95) : rnd(0, 35));
+    d.precipitation_sum.push(wet ? rnd(2, 15) : 0);
+  }
+  return d;
+}
+
+/* ==================================================================
+   5) REAL API  – Open-Meteo (free, no key)
+      >>> API DATA GOES HERE <<<
+      Set USE_MOCK = false to switch over. Call loadWeekWeather(lat, lon)
+      again whenever the city changes (search box / dropdown).
+================================================================== */
+const USE_MOCK = true;                                       // <-- flip to false for live data
+
+async function loadWeekWeather(lat = 35.4676, lon = -97.5164, unit = 'celsius') {
+  // ---- MOCK MODE ----
+  if (USE_MOCK) { renderWeek(getMockDaily()); return; }
+
+  // ---- LIVE MODE ----
+  const url = 'https://api.open-meteo.com/v1/forecast'
+    + `?latitude=${lat}&longitude=${lon}`
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum'
+    + `&temperature_unit=${unit}&timezone=auto&forecast_days=7`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    renderWeek((await res.json()).daily);                   // <-- API response lands here
+  } catch (e) {
+    document.getElementById('wwGrid').innerHTML =
+      '<div class="ww-msg">Could not load the forecast. Check your connection and try again.</div>';
+    console.error('Weekly weather error:', e);
+  }
+}
+
+loadWeekWeather();   // default city: Oklahoma City

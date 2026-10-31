@@ -10,6 +10,8 @@
 
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css">
+    <!-- 7 Days Weather component styles -->
+    <link rel="stylesheet" href="./css/7daysweather.css">
     <!-- Top Navigation component styles -->
     <link rel="stylesheet" href="./css/topbar.css">
 </head>
@@ -56,7 +58,7 @@
             <nav class="topbar-nav" aria-label="Dashboard sections">
                 <a href="#weather-now" class="is-active" aria-current="page" data-view="now" data-target=".current-weather">Weather Now</a>
                 <a href="#todays-detail" data-view="today" data-target=".hourly-forecast">Today's Detail</a>
-                <a href="#weekly-forecast" data-view="weekly" data-target=".week-forecast">Weekly Forecast</a>
+                <a href="#weekly-forecast" data-view="weekly" data-target=".week-weather">Weekly Forecast</a>
                 <a href="#weather-history" data-view="history" data-target="">Weather History</a>
             </nav>
             <div class="dropdown dropdown--end unit-select">
@@ -351,8 +353,10 @@
         </section>
 
         <!-- 7 Days Weather -->
-        <section class="week-forecast panel" aria-label="7 Days Weather"></section>
-
+        <section class="week-weather" id="weekly-forecast">
+            <div class="ww-head"><h2>7 Days Weather</h2></div>
+            <div class="ww-grid" id="wwGrid"><div class="ww-msg">Loading…</div></div>
+        </section>
     </div>
 
     <script src="./js/app.js?v=20261031-2" defer></script>
