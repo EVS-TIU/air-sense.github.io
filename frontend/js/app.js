@@ -20,7 +20,7 @@ const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 const WEATHER_REQUEST_TIMEOUT_MS = 12 * 1000;
 const WEATHER_CACHE_TTL_MS = 5 * 60 * 1000;
 const WEATHER_CACHE_KEY = "airsense:weather:v2";
-const HERO_WEATHER_CACHE_KEY = "airsense:hero-weather:v2";
+const HERO_WEATHER_CACHE_KEY = "airsense:hero-weather:v4";
 const UNITS_STORAGE_KEY = "airsense:units";
 
 /* Keep this in sync with backend/app/services.py. It is only used when the
@@ -83,6 +83,10 @@ const currentWindDirEl = document.querySelector("[data-current-wind-dir]");
 const currentVisibilityEl = document.querySelector("[data-current-visibility]");
 const currentVisibilityUnitEl = document.querySelector("[data-current-visibility-unit]");
 const currentIllustrationEl = document.querySelector("[data-current-illustration]");
+const uvIconEl = document.querySelector("[data-uv-icon]");
+const uvLabelEl = document.querySelector("[data-uv-label]");
+const uvValueEl = document.querySelector("[data-uv-value]");
+const airQualityValueEl = document.querySelector("[data-air-quality-value]");
 const tempUnitToggle = document.querySelector("[data-temp-unit-toggle]");
 const feelsUnitEls = document.querySelectorAll("[data-feels-unit]");
 const feelsMetricUnitEls = document.querySelectorAll("[data-feels-metric-unit]");
@@ -91,12 +95,87 @@ const rangeUnitLowEls = document.querySelectorAll("[data-range-unit-low]");
 const currentStateText = document.querySelector("[data-current-state-text]");
 const currentRetryBtn = document.querySelector("[data-current-retry]");
 const hourlyCards = document.querySelectorAll(".hourly-cards .hour-card");
+const hourlyCardsContainer = document.querySelector(".hourly-cards");
 
 let currentHeroWeather = null;
 let heroPosition = null;
 let heroRefreshTimer = null;
 let currentDatetimeTimer = null;
 let temperatureUnit = "c"; // "c" or "f"
+
+function isLocationDaytime(weather, nowMilliseconds = Date.now()) {
+  const sunrise = weather?.sunrise;
+  const sunset = weather?.sunset;
+  const timezoneOffset = weather?.timezone_offset;
+  if (
+    typeof sunrise !== "number" ||
+    !Number.isFinite(sunrise) ||
+    typeof sunset !== "number" ||
+    !Number.isFinite(sunset) ||
+    typeof timezoneOffset !== "number" ||
+    !Number.isFinite(timezoneOffset)
+  ) {
+    return null;
+  }
+  const localNow = Math.floor(nowMilliseconds / 1000) + timezoneOffset;
+  return localNow >= sunrise + timezoneOffset && localNow < sunset + timezoneOffset;
+}
+
+function uvRiskCategory(value) {
+  if (value <= 2) return "Low";
+  if (value <= 5) return "Moderate";
+  if (value <= 7) return "High";
+  if (value <= 10) return "Very High";
+  return "Extreme";
+}
+
+function setMoonUvIcon() {
+  if (!uvIconEl) return;
+  uvIconEl.innerHTML =
+    '<path d="M20 5.5a8.5 8.5 0 0 0-8.5 8.5A8.5 8.5 0 0 0 20 5.5Z"/>' +
+    '<path d="M4 19c4.5-1.5 7.5-4.5 9-9"/>';
+}
+
+function renderAirQuality(weather) {
+  if (!airQualityValueEl) return;
+  const air = weather?.air_quality;
+  if (Number.isFinite(air?.epa_aqi?.value)) {
+    airQualityValueEl.textContent = `${air.epa_aqi.value} · ${air.epa_aqi.category}`;
+    airQualityValueEl.title = "US EPA AQI";
+    return;
+  }
+  if (Number.isFinite(air?.provider_index)) {
+    airQualityValueEl.textContent = `${air.provider_index} · OpenWeather (1–5)`;
+    airQualityValueEl.title = "OpenWeather air pollution index; not US EPA AQI";
+    return;
+  }
+  airQualityValueEl.textContent = "Unavailable";
+  airQualityValueEl.title = "Air-quality index unavailable";
+}
+
+function renderUvIndex(weather) {
+  if (!uvLabelEl || !uvValueEl) return;
+  const daytime = isLocationDaytime(weather);
+  if (daytime === false) {
+    uvLabelEl.textContent = "Nighttime";
+    uvValueEl.textContent = "UV Index unavailable";
+    setMoonUvIcon();
+    return;
+  }
+
+  if (
+    daytime !== true ||
+    typeof weather?.uv_index !== "number" ||
+    !Number.isFinite(weather.uv_index)
+  ) {
+    uvLabelEl.textContent = "UV Index";
+    uvValueEl.textContent = "UV Index unavailable";
+    return;
+  }
+  const uv = weather.uv_index;
+  uvLabelEl.textContent = "UV Index";
+  uvValueEl.textContent = `${uv} · ${uvRiskCategory(uv)}`;
+}
 
 function loadTemperatureUnitPreference() {
   try {
@@ -300,6 +379,7 @@ function setHeroLoading(isLoading) {
   }
   currentWeatherCard.classList.toggle("is-loading", isLoading);
   if (isLoading) {
+    renderHourlyForecast(null);
     currentWeatherCard.classList.remove("is-error");
     if (currentStateText) {
       currentStateText.textContent = "Fetching weather...";
@@ -323,6 +403,7 @@ function setHeroError(message) {
   if (currentRetryBtn) {
     currentRetryBtn.hidden = false;
   }
+  renderHourlyForecast(null);
 }
 
 function clearHeroState() {
@@ -407,8 +488,16 @@ function formatVisibility(meters) {
   return { value: Math.round(meters).toString(), unit: "m" };
 }
 
-function formatForecastHour(time) {
-  const match = typeof time === "string" ? time.match(/T(\d{2}):(\d{2})/) : null;
+function formatForecastHour(time, timestamp, timezoneOffset = 0) {
+  if (Number.isFinite(timestamp)) {
+    const localDate = new Date((timestamp + timezoneOffset) * 1000);
+    const hours = localDate.getUTCHours();
+    const minutes = String(localDate.getUTCMinutes()).padStart(2, "0");
+    const suffix = hours >= 12 ? "PM" : "AM";
+    return `${hours % 12 || 12}:${minutes} ${suffix}`;
+  }
+  const match =
+    typeof time === "string" ? time.match(/[T ](\d{2}):(\d{2})/) : null;
   if (!match) {
     return "--";
   }
@@ -419,40 +508,106 @@ function formatForecastHour(time) {
 }
 
 function forecastConditionClass(code) {
-  if (code === 0) {
+  const weatherCode = Number(code);
+  if (weatherCode === 800) {
     return "clear";
   }
-  if (code === 1 || code === 2) {
+  if (weatherCode === 801 || weatherCode === 802) {
     return "partly-cloudy";
   }
-  if (code === 3 || (code >= 45 && code <= 48)) {
+  if (weatherCode === 803 || weatherCode === 804) {
     return "cloudy";
   }
-  if (code >= 51 && code <= 67) {
+  if (weatherCode >= 200 && weatherCode <= 232) {
+    return "storm";
+  }
+  if (weatherCode >= 300 && weatherCode <= 321) {
     return "rain";
   }
-  if (code >= 71 && code <= 77) {
+  if (weatherCode >= 500 && weatherCode <= 531) {
+    return "rain";
+  }
+  if (weatherCode >= 600 && weatherCode <= 622) {
     return "snow";
   }
-  if (code >= 80 && code <= 82) {
-    return "rain";
+  if (weatherCode >= 700 && weatherCode <= 781) {
+    return "fog";
   }
-  if (code >= 95) {
+  if (weatherCode >= 95 && weatherCode <= 99) {
     return "storm";
   }
   return "cloudy";
 }
 
+function forecastConditionLabel(point) {
+  const code = Number(point?.weather_code);
+  if (code === 800) {
+    return "Sunny";
+  }
+  if (code >= 801 && code <= 804) {
+    return "Cloudy";
+  }
+  if (code >= 200 && code <= 232) {
+    return "Thunderstorm";
+  }
+  if (code >= 300 && code <= 321) {
+    return "Drizzle";
+  }
+  if (code >= 500 && code <= 531) {
+    return "Rain";
+  }
+  if (code >= 600 && code <= 622) {
+    return "Snow";
+  }
+  if (code >= 700 && code <= 781) {
+    return "Foggy";
+  }
+  if (typeof point?.description === "string" && point.description.trim()) {
+    return point.description.trim().replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+  return "Weather unavailable";
+}
+
+function forecastIconMarkup(code) {
+  const conditionClass = forecastConditionClass(code);
+  if (conditionClass === "clear") {
+    return '<circle class="sun" cx="40" cy="28" r="13"></circle><g class="sun-rays"><path d="M40 6v8M40 42v8M18 28h8M54 28h8M24 12l6 6M50 38l6 6M56 12l-6 6M30 38l-6 6"></path></g>';
+  }
+  const cloud = '<path class="cloud" d="M18 42C5 42 4 26 16 20C18 8 37 6 43 20C58 12 73 25 69 38C67 44 62 46 55 46H18Z"></path>';
+  if (conditionClass === "partly-cloudy") {
+    return '<circle class="sun" cx="27" cy="20" r="11"></circle>' + cloud;
+  }
+  if (conditionClass === "rain") {
+    return cloud + '<path class="rain-drop" d="M24 50l-5 9M40 50l-5 9M56 50l-5 9"></path>';
+  }
+  if (conditionClass === "snow") {
+    return cloud + '<g class="snow-flake"><circle cx="24" cy="55" r="2"></circle><circle cx="40" cy="55" r="2"></circle><circle cx="56" cy="55" r="2"></circle></g>';
+  }
+  if (conditionClass === "storm") {
+    return cloud + '<path class="lightning" d="M42 47l-8 10h7l-4 9 11-13h-7z"></path>';
+  }
+  return cloud;
+}
+
 function renderHourlyForecast(weather) {
-  if (!hourlyCards.length || !Array.isArray(weather?.hourly)) {
+  if (!hourlyCards.length) {
     return;
   }
 
-  const availableForecast = weather.hourly
-    .filter((point) => point && typeof point.time === "string")
-  const startIndex = weather.observed_at
-    ? availableForecast.findIndex((point) => point.time >= weather.observed_at)
-    : 0;
+  const availableForecast = Array.isArray(weather?.hourly)
+    ? weather.hourly
+      .filter((point) => point && typeof point.time === "string")
+    : [];
+  if (hourlyCardsContainer) {
+    hourlyCardsContainer.setAttribute("aria-busy", "false");
+  }
+  const startIndex =
+    Number.isFinite(weather?.observed_at) &&
+    availableForecast.some((point) => Number.isFinite(point.timestamp))
+      ? availableForecast.findIndex(
+          (point) => Number(point.timestamp) >= Math.floor(Date.now() / 1000),
+        )
+      : 0;
   const forecast = availableForecast.slice(
     startIndex >= 0 ? startIndex : 0,
     (startIndex >= 0 ? startIndex : 0) + hourlyCards.length,
@@ -466,26 +621,37 @@ function renderHourlyForecast(weather) {
     }
 
     card.hidden = false;
+    card.classList.toggle("active", index === 0);
     const hourEl = card.querySelector(".hour");
     const iconEl = card.querySelector(".weather-icon");
     const moonEl = card.querySelector(".moon-icon");
     const temperatureEl = card.querySelector("h3");
     const probabilityEl = card.querySelector(".humidity");
-    const probability = Number.isFinite(point.precipitation_probability)
-      ? `${point.precipitation_probability}%`
-      : "--";
+    const conditionLabel = forecastConditionLabel(point);
 
     if (hourEl) {
-      hourEl.textContent = formatForecastHour(point.time);
+      hourEl.textContent = formatForecastHour(
+        point.time,
+        point.timestamp,
+        Number(weather.timezone_offset) || 0,
+      );
     }
     if (temperatureEl) {
       temperatureEl.textContent = `${Math.round(point.temperature)}°`;
     }
     if (probabilityEl) {
-      probabilityEl.innerHTML = `<span>♢</span> ${probability}`;
+      probabilityEl.textContent = conditionLabel;
+      probabilityEl.setAttribute(
+        "aria-label",
+        Number.isFinite(point.precipitation_probability)
+          ? `Chance of rain: ${point.precipitation_probability}%`
+          : "Chance of rain unavailable",
+      );
     }
     if (iconEl) {
-      iconEl.className = `weather-icon ${forecastConditionClass(point.weather_code)}`;
+      const iconClass = forecastConditionClass(point.weather_code);
+      iconEl.className = `weather-icon ${iconClass}`;
+      iconEl.innerHTML = forecastIconMarkup(point.weather_code);
       iconEl.hidden = !point.is_day && Boolean(moonEl);
     }
     if (moonEl) {
@@ -500,6 +666,8 @@ function renderCurrentWeather(weather) {
   }
 
   currentHeroWeather = weather;
+  renderUvIndex(weather);
+  renderAirQuality(weather);
   updateTemperatureUnitUI();
   renderHourlyForecast(weather);
 
@@ -727,18 +895,8 @@ async function initialiseCurrentWeatherHero() {
   const permission = await getGeolocationPermissionState();
 
   if (permission === "denied") {
-    // Try default location instead of showing error
-    heroPosition = { latitude: 28.6139, longitude: 77.2090 };
-    lastPosition = heroPosition;
-    try {
-      await updateCurrentWeatherHero(heroPosition);
-      return;
-    } catch (error) {
-      console.error(error);
-      setHeroError("Unable to load weather data. Check your connection or try again.");
-      applyFallbackBackground();
-      return;
-    }
+    setHeroError("Location permission is required to load live weather.");
+    return;
   }
 
   try {
@@ -751,17 +909,9 @@ async function initialiseCurrentWeatherHero() {
 
     await updateCurrentWeatherHero(heroPosition);
   } catch (error) {
-    console.info("Using fallback weather for hero card:", error.message);
-    // Try default location
-    heroPosition = { latitude: 28.6139, longitude: 77.2090 };
-    lastPosition = heroPosition;
-    try {
-      await updateCurrentWeatherHero(heroPosition);
-    } catch (err) {
-      console.error(err);
-      setHeroError("Unable to load weather data. Check your connection or try again.");
-      applyFallbackBackground();
-    }
+    console.error("Live weather unavailable:", error);
+    setHeroError("Unable to load live weather. Check your connection or try again.");
+    applyFallbackBackground();
   }
 }
 
@@ -783,7 +933,10 @@ function scheduleCurrentDatetimeRefresh() {
   if (currentDatetimeTimer) {
     clearInterval(currentDatetimeTimer);
   }
-  currentDatetimeTimer = setInterval(updateCurrentDatetime, 30 * 1000);
+  currentDatetimeTimer = setInterval(() => {
+    updateCurrentDatetime();
+    renderUvIndex(currentHeroWeather);
+  }, 30 * 1000);
 }
 
 /* --------------------------------------------------------------------------
@@ -932,7 +1085,7 @@ async function initialiseWeatherBackground() {
 
     await updateWeatherForPosition(lastPosition);
   } catch (error) {
-    console.info("Using fallback weather background:", error.message);
+    console.info("Live weather background unavailable:", error.message);
     applyFallbackBackground();
   }
 }
@@ -959,6 +1112,25 @@ document.addEventListener("visibilitychange", () => {
     sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
     updateCurrentWeatherHero(heroPosition);
   }
+});
+
+document.addEventListener("weatherly:location-change", (event) => {
+  const location = event.detail;
+  if (
+    !Number.isFinite(Number(location?.lat)) ||
+    !Number.isFinite(Number(location?.lon))
+  ) {
+    return;
+  }
+  heroPosition = {
+    latitude: Number(location.lat),
+    longitude: Number(location.lon),
+  };
+  lastPosition = heroPosition;
+  sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
+  updateCurrentWeatherHero(heroPosition).catch((error) => {
+    console.warn("Selected location weather unavailable:", error.message);
+  });
 });
 
 loadTemperatureUnitPreference();

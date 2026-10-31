@@ -172,10 +172,37 @@
     filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.3));
 }
 
+.sun {
+    fill: #ffd45a;
+    stroke: #ffd45a;
+    stroke-width: 2;
+}
+
+.sun-rays {
+    fill: none;
+    stroke: #ffd45a;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.lightning {
+    fill: #ffd45a;
+    stroke: #ffd45a;
+    stroke-width: 1;
+}
+
+.snow-flake {
+    fill: #cceeff;
+}
+
 .rain-drop {
     stroke: #20aaff;
     stroke-width: 3;
     stroke-linecap: round;
+}
+
+.weather-icon:not(.rain):not(.storm) .rain-drop {
+    display: none;
 }
 
 /* Temperature */

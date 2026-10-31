@@ -17,43 +17,29 @@
 (function () {
     'use strict';
 
-    /* ----------------------------------------------------------------------
-       Mock location service (Phase 1).
-       Keep the same method signatures when this is swapped for the real API
-       client in services/api - the UI below only talks to LocationService.
-       ---------------------------------------------------------------------- */
-    const CITIES = [
-        { id: 'oklahoma-city', name: 'Oklahoma City', region: 'Oklahoma, United States', lat: 35.4676, lon: -97.5164 },
-        { id: 'new-york', name: 'New York', region: 'New York, United States', lat: 40.7128, lon: -74.006 },
-        { id: 'london', name: 'London', region: 'England, United Kingdom', lat: 51.5072, lon: -0.1276 },
-        { id: 'paris', name: 'Paris', region: 'Île-de-France, France', lat: 48.8566, lon: 2.3522 },
-        { id: 'berlin', name: 'Berlin', region: 'Berlin, Germany', lat: 52.52, lon: 13.405 },
-        { id: 'delhi', name: 'New Delhi', region: 'Delhi, India', lat: 28.6139, lon: 77.209 },
-        { id: 'mumbai', name: 'Mumbai', region: 'Maharashtra, India', lat: 19.076, lon: 72.8777 },
-        { id: 'dubai', name: 'Dubai', region: 'Dubai, United Arab Emirates', lat: 25.2048, lon: 55.2708 },
-        { id: 'singapore', name: 'Singapore', region: 'Singapore', lat: 1.3521, lon: 103.8198 },
-        { id: 'tokyo', name: 'Tokyo', region: 'Tokyo, Japan', lat: 35.6762, lon: 139.6503 },
-        { id: 'sydney', name: 'Sydney', region: 'New South Wales, Australia', lat: -33.8688, lon: 151.2093 },
-        { id: 'toronto', name: 'Toronto', region: 'Ontario, Canada', lat: 43.6532, lon: -79.3832 }
-    ];
+    const apiBase = (
+        window.AIRSENSE_API_BASE_URL ||
+        document.querySelector('meta[name="airsense-api-base"]')?.content ||
+        'http://localhost:8000/api/v1'
+    ).replace(/\/+$/, '');
 
     const LocationService = {
-        /** Suggested / recent locations for the location dropdown. */
-        popular() {
-            return Promise.resolve(CITIES.slice(0, 6));
-        },
-
-        /** Search locations by name or region. */
         search(query) {
-            const q = query.trim().toLowerCase();
-            const results = CITIES
-                .filter((c) => (c.name + ' ' + c.region).toLowerCase().includes(q))
-                .slice(0, 6);
-            return new Promise((resolve) => setTimeout(() => resolve(results), 120));
-        },
-
-        getById(id) {
-            return CITIES.find((c) => c.id === id) || null;
+            const url = new URL(`${apiBase}/location/search`, window.location.href);
+            url.searchParams.set('q', query.trim());
+            return fetch(url, { headers: { Accept: 'application/json' } })
+                .then((response) => {
+                    if (!response.ok) throw new Error(`Location search failed (${response.status})`);
+                    return response.json();
+                })
+                .then((payload) => (Array.isArray(payload.results) ? payload.results : []))
+                .then((results) => results.map((item) => ({
+                    id: `${item.latitude},${item.longitude}`,
+                    name: item.name || 'Unknown location',
+                    region: [item.state, item.country].filter(Boolean).join(', '),
+                    lat: Number(item.latitude),
+                    lon: Number(item.longitude),
+                })));
         }
     };
 
@@ -89,7 +75,8 @@
     if (!topbar) return;
 
     const state = {
-        location: LocationService.getById(readStorage(STORAGE_KEYS.location)) || CITIES[0],
+        location: null,
+        searchResults: [],
         unit: readStorage(STORAGE_KEYS.unit) === 'F' ? 'F' : 'C'
     };
 
@@ -187,7 +174,7 @@
     const locationMenu = document.getElementById('location-menu');
 
     const locationDropdown = createDropdown(locationRoot, (id) => {
-        const city = LocationService.getById(id);
+        const city = state.searchResults.find((item) => item.id === id);
         if (city) setLocation(city);
     });
 
@@ -260,6 +247,7 @@
 
     function renderSearchResults(results, query) {
         searchResults = results;
+        state.searchResults = results;
         searchList.replaceChildren();
 
         if (!results.length) {
@@ -398,10 +386,7 @@
     /* ----------------------------------------------------------------------
        Init + public API
        ---------------------------------------------------------------------- */
-    LocationService.popular().then((cities) => {
-        renderLocationMenu(cities);
-        setLocation(state.location);   // sync label and announce initial location
-    });
+    renderLocationMenu([]);
     setUnit(state.unit);
 
     window.WeatherlyTopbar = {
