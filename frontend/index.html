@@ -6,7 +6,7 @@
     <meta name="description" content="AirSense - live weather dashboard with a location-aware background.">
     <meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
     <title>AirSense - Weather Dashboard</title>
-    <link rel="stylesheet" href="./css/style.css?v=20261031-14">
+    <link rel="stylesheet" href="./css/style.css?v=20261101-15">
 
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css?v=20261031-3">
@@ -186,19 +186,6 @@
                 <li class="current-weather__metric">
                     <div class="current-weather__metric-icon">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M20 5.5a8.5 8.5 0 0 0-8.5 8.5A8.5 8.5 0 0 0 20 5.5Z"/>
-                            <path d="M4 19c4.5-1.5 7.5-4.5 9-9"/>
-                            <path d="M4 19c3.5.5 6.5-.5 8.5-3"/>
-                        </svg>
-                    </div>
-                    <div class="current-weather__metric-text">
-                        <span>Air Quality</span>
-                        <strong data-air-quality-value>--</strong>
-                    </div>
-                </li>
-                <li class="current-weather__metric">
-                    <div class="current-weather__metric-icon">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M5 15h13a4 4 0 1 0-1.3-7.8A6 6 0 0 0 5 9a3 3 0 0 0 0 6Z"/>
                             <path d="m8 18-1 3M13 18l-1 3M18 18l-1 3"/>
                         </svg>
@@ -252,7 +239,27 @@
 
         <!-- Additional Weather Details -->
         <section class="weather-details" aria-label="Additional Weather Details">
-            <div class="weather-info"></div>
+            <div class="weather-info" aria-label="Air quality details">
+                <div class="air-quality-panel__header">
+                    <h2>Air Quality</h2>
+                    <span>US AQI</span>
+                </div>
+                <div class="air-quality-panel__summary">
+                    <strong data-air-quality-index>--</strong>
+                    <span data-air-quality-status>Loading...</span>
+                </div>
+                <div class="air-quality-panel__pollutants">
+                    <div class="air-quality-panel__pollutant">
+                        <span>PM2.5</span>
+                        <strong data-air-quality-pm25>-- μg/m³</strong>
+                    </div>
+                    <div class="air-quality-panel__pollutant">
+                        <span>PM10</span>
+                        <strong data-air-quality-pm10>-- μg/m³</strong>
+                    </div>
+                </div>
+                <p class="air-quality-panel__recommendation" data-air-quality-recommendation hidden></p>
+            </div>
             <div class="sun-panel"></div>
         </section>
 
@@ -269,7 +276,7 @@
 
     </div>
 
-    <script src="./js/app.js?v=20261101-1" defer></script>
-    <script src="./js/topbar.js?v=20261101-1" defer></script>
+    <script src="./js/app.js?v=20261101-14" defer></script>
+    <script src="./js/topbar.js?v=20261101-2" defer></script>
 </body>
 </html>

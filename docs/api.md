@@ -8,12 +8,18 @@ longitude is `-180..180`.
 
 ```bash
 cd backend
-python -m venv .venv && . .venv/bin/activate
+python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # Set OPENWEATHER_API_KEY and FRONTEND_URL in .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+When using VS Code Live Server (“Go Live”), open the frontend through a
+`localhost` URL such as `http://127.0.0.1:5500/frontend/`. The frontend
+automatically uses the local API at `http://127.0.0.1:8000/api/v1`; deployed
+frontend hosts continue to use the configured deployed API URL. Live Server
+ports are allowed by the backend CORS configuration.
 
 ## Endpoints
 

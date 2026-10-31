@@ -44,6 +44,12 @@ def test_health(client):
     assert response.json()["status"] == "ok"
 
 
+def test_local_live_server_origin_is_allowed(client):
+    response = client.get("/api/v1/health", headers={"Origin": "http://127.0.0.1:5501"})
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5501"
+
+
 def test_current_weather_accepts_both_coordinate_names(client, fake_weather):
     response = client.get("/api/v1/weather/current?latitude=10&longitude=20")
     assert response.status_code == 200
