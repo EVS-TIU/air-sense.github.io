@@ -64,5 +64,16 @@ docker build -t air-sense-backend .
 docker run --rm -p 8000:8000 --env-file .env air-sense-backend
 ```
 
-The container reads `PORT` and listens on `0.0.0.0`, making the backend
-suitable for a Voroa Nano deployment with `backend` as its deployment root.
+The container reads `PORT` and listens on `0.0.0.0`.
+
+On Voroa, a Dockerfile is used only when the service runtime is
+**Docker (Dockerfile)** at create time. Auto-detect defaults to Node.js and
+cannot be switched later. Create a new web service with:
+
+- Runtime: Docker (Dockerfile)
+- Dockerfile path: `/Dockerfile`
+- Root directory: `/`
+
+The repo-root Dockerfile builds the FastAPI app in `backend/`. Set
+`OPENWEATHER_API_KEY` and `FRONTEND_URL` on the service. Health check path:
+`/api/v1/health`.
