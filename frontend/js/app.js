@@ -94,6 +94,12 @@ const airQualityStatusEl = document.querySelector("[data-air-quality-status]");
 const airQualityPm25El = document.querySelector("[data-air-quality-pm25]");
 const airQualityPm10El = document.querySelector("[data-air-quality-pm10]");
 const airQualityRecommendationEl = document.querySelector("[data-air-quality-recommendation]");
+const uvScaleMarkerEl = document.querySelector("[data-uv-scale-marker]");
+const uvScaleValueEl = document.querySelector("[data-uv-scale-value]");
+const aqiScaleMarkerEl = document.querySelector("[data-aqi-scale-marker]");
+const aqiScaleValueEl = document.querySelector("[data-aqi-scale-value]");
+const UV_SCALE_MAX = 11;
+const AQI_SCALE_MAX = 500;
 const tempUnitToggle = document.querySelector("[data-temp-unit-toggle]");
 const feelsUnitEls = document.querySelectorAll("[data-feels-unit]");
 const feelsMetricUnitEls = document.querySelectorAll("[data-feels-metric-unit]");
@@ -146,7 +152,45 @@ function setMoonUvIcon() {
     '<path d="M4 19c4.5-1.5 7.5-4.5 9-9"/>';
 }
 
+function setIndexScaleMarker(markerEl, valueEl, value, max, labelPrefix) {
+  if (valueEl) {
+    valueEl.textContent = Number.isFinite(value)
+      ? `${labelPrefix}: ${Math.round(value)}`
+      : `${labelPrefix}: --`;
+  }
+  if (!markerEl) return;
+  if (!Number.isFinite(value) || max <= 0) {
+    markerEl.hidden = true;
+    return;
+  }
+  const percent = Math.max(0, Math.min(value, max)) / max * 100;
+  markerEl.style.left = `${percent}%`;
+  markerEl.hidden = false;
+}
+
+function renderUvScale(weather) {
+  const uv = weather?.uv_index;
+  setIndexScaleMarker(
+    uvScaleMarkerEl,
+    uvScaleValueEl,
+    typeof uv === "number" && Number.isFinite(uv) ? uv : null,
+    UV_SCALE_MAX,
+    "Current UV"
+  );
+}
+
+function renderAqiScale(aqi) {
+  setIndexScaleMarker(
+    aqiScaleMarkerEl,
+    aqiScaleValueEl,
+    Number.isFinite(aqi) ? aqi : null,
+    AQI_SCALE_MAX,
+    "Current AQI"
+  );
+}
+
 function renderUvIndex(weather) {
+  renderUvScale(weather);
   if (!uvLabelEl || !uvValueEl) return;
   const daytime = isLocationDaytime(weather);
   if (daytime === false) {
@@ -233,6 +277,7 @@ function renderAirQualityStatus(aqi) {
 async function updateAirQualityIndex(latitude, longitude) {
   if (!airQualityIndexEl || !airQualityStatusEl) return;
   renderAirQualityStatus(null);
+  renderAqiScale(null);
   const url = new URL("https://air-quality-api.open-meteo.com/v1/air-quality");
   url.searchParams.set("latitude", Number(latitude).toFixed(4));
   url.searchParams.set("longitude", Number(longitude).toFixed(4));
@@ -246,6 +291,7 @@ async function updateAirQualityIndex(latitude, longitude) {
     if (!Number.isFinite(aqi)) throw new Error("AQI is unavailable");
     airQualityIndexEl.textContent = String(Math.round(aqi));
     renderAirQualityStatus(aqi);
+    renderAqiScale(aqi);
     if (airQualityPm25El) {
       airQualityPm25El.textContent = Number.isFinite(payload?.current?.pm2_5)
         ? `${payload.current.pm2_5} μg/m³`
@@ -260,6 +306,7 @@ async function updateAirQualityIndex(latitude, longitude) {
     console.warn("Air quality unavailable:", error.message);
     airQualityIndexEl.textContent = "--";
     renderAirQualityStatus(null);
+    renderAqiScale(null);
     if (airQualityPm25El) airQualityPm25El.textContent = "-- μg/m³";
     if (airQualityPm10El) airQualityPm10El.textContent = "-- μg/m³";
   }

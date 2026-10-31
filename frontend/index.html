@@ -6,7 +6,7 @@
     <meta name="description" content="AirSense - live weather dashboard with a location-aware background.">
     <meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
     <title>AirSense - Weather Dashboard</title>
-    <link rel="stylesheet" href="./css/style.css?v=20261101-15">
+    <link rel="stylesheet" href="./css/style.css?v=20261101-22">
 
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css?v=20261031-3">
@@ -260,7 +260,57 @@
                 </div>
                 <p class="air-quality-panel__recommendation" data-air-quality-recommendation hidden></p>
             </div>
-            <div class="sun-panel"></div>
+            <div class="sun-panel" aria-label="UV and air quality scales">
+                <div class="index-scale" data-uv-scale>
+                    <div class="index-scale__header">
+                        <h3 class="index-scale__title">UV Index</h3>
+                        <span class="index-scale__badge" data-uv-scale-value>Current UV: --</span>
+                    </div>
+                    <div class="index-scale__labels index-scale__labels--uv" aria-hidden="true">
+                        <span>0 Low</span>
+                        <span>Moderate</span>
+                        <span>High</span>
+                        <span>Very High</span>
+                        <span>Extreme</span>
+                    </div>
+                    <div class="index-scale__track" role="img" aria-label="UV index scale">
+                        <div class="index-scale__segments index-scale__segments--uv">
+                            <span class="index-scale__segment index-scale__segment--uv-low"></span>
+                            <span class="index-scale__segment index-scale__segment--uv-moderate"></span>
+                            <span class="index-scale__segment index-scale__segment--uv-high"></span>
+                            <span class="index-scale__segment index-scale__segment--uv-very-high"></span>
+                            <span class="index-scale__segment index-scale__segment--uv-extreme"></span>
+                        </div>
+                        <span class="index-scale__marker" data-uv-scale-marker hidden></span>
+                    </div>
+                </div>
+
+                <div class="index-scale" data-aqi-scale>
+                    <div class="index-scale__header">
+                        <h3 class="index-scale__title">Air Quality Index</h3>
+                        <span class="index-scale__badge" data-aqi-scale-value>Current AQI: --</span>
+                    </div>
+                    <div class="index-scale__labels index-scale__labels--aqi" aria-hidden="true">
+                        <span>Good</span>
+                        <span>Moderate</span>
+                        <span>Sensitive</span>
+                        <span>Unhealthy</span>
+                        <span>Very Unh.</span>
+                        <span>Hazardous</span>
+                    </div>
+                    <div class="index-scale__track" role="img" aria-label="Air quality index scale">
+                        <div class="index-scale__segments index-scale__segments--aqi">
+                            <span class="index-scale__segment index-scale__segment--aqi-good"></span>
+                            <span class="index-scale__segment index-scale__segment--aqi-moderate"></span>
+                            <span class="index-scale__segment index-scale__segment--aqi-sensitive"></span>
+                            <span class="index-scale__segment index-scale__segment--aqi-unhealthy"></span>
+                            <span class="index-scale__segment index-scale__segment--aqi-very-unhealthy"></span>
+                            <span class="index-scale__segment index-scale__segment--aqi-hazardous"></span>
+                        </div>
+                        <span class="index-scale__marker" data-aqi-scale-marker hidden></span>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- 7 Days Weather -->
@@ -276,7 +326,7 @@
 
     </div>
 
-    <script src="./js/app.js?v=20261101-14" defer></script>
+    <script src="./js/app.js?v=20261101-15" defer></script>
     <script src="./js/topbar.js?v=20261101-2" defer></script>
 </body>
 </html>
