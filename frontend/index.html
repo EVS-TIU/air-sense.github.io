@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AirSense - live weather dashboard with a location-aware background.">
+    <meta name="airsense-api-base" content="http://localhost:8000/api/v1">
     <title>AirSense - Weather Dashboard</title>
     <link rel="stylesheet" href="./css/style.css">
 
@@ -10,6 +12,13 @@
     <link rel="stylesheet" href="./css/forecast-hourly.css">
 </head>
 <body>
+
+    <!-- Location-aware weather background (cross-fades between local images) -->
+    <div class="weather-background" id="weather-background" aria-hidden="true">
+        <div class="weather-background__layer" data-weather-layer="a"></div>
+        <div class="weather-background__layer" data-weather-layer="b"></div>
+        <div class="weather-background__scrim"></div>
+    </div>
 
     <div class="dashboard">
 
@@ -20,7 +29,133 @@
         <aside class="sidebar panel" aria-label="Dashboard navigation"></aside>
 
         <!-- Current Weather -->
-        <section class="current-weather panel" aria-label="Current Weather"></section>
+        <section class="current-weather panel" aria-label="Current Weather">
+            <div class="current-weather__header">
+                <div class="current-weather__location-group">
+                    <div class="current-weather__location">
+                        <svg class="current-weather__location-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 21s-6-5.33-6-10a6 6 0 1 1 12 0c0 4.67-6 10-6 10z"/>
+                            <circle cx="12" cy="11" r="2.5"/>
+                        </svg>
+                        <span class="current-weather__location-text" data-current-location>Loading location...</span>
+                        <span class="current-weather__country" data-current-country></span>
+                    </div>
+                    <p class="current-weather__datetime" data-current-datetime>--</p>
+                </div>
+                <div class="current-weather__status" aria-live="polite">
+                    <span></span>
+                    <span data-current-status>Updating</span>
+                </div>
+            </div>
+
+            <div class="current-weather__body">
+                <div class="current-weather__summary">
+                    <div class="current-weather__temp-row">
+                        <p class="current-weather__temp">
+                            <span data-current-temp>--</span><span class="current-weather__temp-unit">°C</span>
+                        </p>
+                    </div>
+                    <p class="current-weather__feels">Feels like <span data-current-feels>--</span>°<span data-feels-unit>C</span></p>
+                </div>
+                <div class="current-weather__visual">
+                    <img class="current-weather__illustration" data-current-illustration src="./assets/images/weather-illustrations/cloudy.png" alt="Current weather illustration" loading="lazy">
+                    <div class="current-weather__condition-panel">
+                        <p class="current-weather__condition" data-current-condition>--</p>
+                        <p class="current-weather__range">
+                            High: <span data-current-high>--</span>°<span data-range-unit-high>C</span>
+                            <span aria-hidden="true"> · </span>
+                            Low: <span data-current-low>--</span>°<span data-range-unit-low>C</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <ul class="current-weather__meta" aria-label="Weather metrics">
+                <li class="current-weather__metric">
+                    <div class="current-weather__metric-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M12 3.5c-1.6 3.2-5 5.8-5 10a5 5 0 0 0 10 0c0-4.2-3.4-6.8-5-10Z"/>
+                            <path d="M10 15.5a2.5 2.5 0 0 0 2.5 2.5"/>
+                        </svg>
+                    </div>
+                    <div class="current-weather__metric-text">
+                        <span>Humidity</span>
+                        <strong><span data-current-humidity>--</span>%</strong>
+                    </div>
+                </li>
+                <li class="current-weather__metric">
+                    <div class="current-weather__metric-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M3 9h8a3 3 0 1 0-3-3"/>
+                            <path d="M3 14h13a4 4 0 1 0-4-4"/>
+                            <path d="M3 19h7a3 3 0 1 1-3 3"/>
+                        </svg>
+                    </div>
+                    <div class="current-weather__metric-text">
+                        <span>Wind</span>
+                        <strong><span data-current-wind>--</span> <span data-current-wind-unit>km/h</span> · <span data-current-wind-dir></span></strong>
+                    </div>
+                </li>
+                <li class="current-weather__metric">
+                    <div class="current-weather__metric-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="8"/>
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 4v2M12 18v2M4 12h2M18 12h2"/>
+                        </svg>
+                    </div>
+                    <div class="current-weather__metric-text">
+                        <span>Visibility</span>
+                        <strong><span data-current-visibility>--</span> <span data-current-visibility-unit>km</span></strong>
+                    </div>
+                </li>
+                <li class="current-weather__metric">
+                    <div class="current-weather__metric-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4"/>
+                            <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/>
+                        </svg>
+                    </div>
+                    <div class="current-weather__metric-text">
+                        <span>UV Index</span>
+                        <strong>3 · Moderate</strong>
+                    </div>
+                </li>
+                <li class="current-weather__metric">
+                    <div class="current-weather__metric-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M20 5.5a8.5 8.5 0 0 0-8.5 8.5A8.5 8.5 0 0 0 20 5.5Z"/>
+                            <path d="M4 19c4.5-1.5 7.5-4.5 9-9"/>
+                            <path d="M4 19c3.5.5 6.5-.5 8.5-3"/>
+                        </svg>
+                    </div>
+                    <div class="current-weather__metric-text">
+                        <span>Air Quality</span>
+                        <strong>62 · Good</strong>
+                    </div>
+                </li>
+                <li class="current-weather__metric">
+                    <div class="current-weather__metric-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M5 15h13a4 4 0 1 0-1.3-7.8A6 6 0 0 0 5 9a3 3 0 0 0 0 6Z"/>
+                            <path d="m8 18-1 3M13 18l-1 3M18 18l-1 3"/>
+                        </svg>
+                    </div>
+                    <div class="current-weather__metric-text">
+                        <span>Precipitation</span>
+                        <strong>Chance</strong>
+                    </div>
+                </li>
+            </ul>
+
+            <div class="current-weather__state" data-current-state>
+                <div class="current-weather__state-message">
+                    <span class="current-weather__state-dot"></span>
+                    <span data-current-state-text>Fetching weather...</span>
+                </div>
+                <button class="current-weather__retry" type="button" data-current-retry hidden>Retry</button>
+            </div>
+        </section>
 
         <!-- Forecast Hourly (Roshan) -->
         <section class="hourly-forecast" aria-labelledby="hourly-forecast-title">
@@ -153,5 +288,6 @@
 
     </div>
 
+    <script src="./js/app.js?v=20261031-2" defer></script>
 </body>
 </html>
