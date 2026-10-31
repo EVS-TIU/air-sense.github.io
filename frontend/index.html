@@ -10,6 +10,8 @@
 
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css">
+    <!-- Top Navigation component styles -->
+    <link rel="stylesheet" href="./css/topbar.css">
 </head>
 <body>
 
@@ -23,7 +25,72 @@
     <div class="dashboard">
 
         <!-- Top Navigation -->
-        <header class="topbar panel" aria-label="Top navigation"></header>
+        <header class="topbar panel" aria-label="Top navigation">
+            <div class="search-box" role="search">
+                <svg class="search-box__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-3.5-3.5"/>
+                </svg>
+                <input id="location-search" type="text" placeholder="Search your location"
+                    role="combobox" aria-label="Search your location" aria-autocomplete="list"
+                    aria-expanded="false" aria-controls="search-results"
+                    autocomplete="off" spellcheck="false">
+                <kbd aria-hidden="true">/</kbd>
+                <ul id="search-results" class="search-box__results" role="listbox"
+                    aria-label="Location suggestions" hidden></ul>
+            </div>
+            <div class="dropdown location-select">
+                <button class="dropdown__trigger" type="button" aria-label="Select location"
+                    aria-haspopup="listbox" aria-expanded="false" aria-controls="location-menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/>
+                        <circle cx="12" cy="10" r="2.3"/>
+                    </svg>
+                    <span class="dropdown__label" id="location-label">Oklahoma City</span>
+                    <svg class="dropdown__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu" id="location-menu" role="listbox" aria-label="Locations" hidden></ul>
+            </div>
+            <nav class="topbar-nav" aria-label="Dashboard sections">
+                <a href="#weather-now" class="is-active" aria-current="page" data-view="now" data-target=".current-weather">Weather Now</a>
+                <a href="#todays-detail" data-view="today" data-target=".hourly-forecast">Today's Detail</a>
+                <a href="#weekly-forecast" data-view="weekly" data-target=".week-forecast">Weekly Forecast</a>
+                <a href="#weather-history" data-view="history" data-target="">Weather History</a>
+            </nav>
+            <div class="dropdown dropdown--end unit-select">
+                <button class="dropdown__trigger" type="button" aria-label="Temperature unit"
+                    aria-haspopup="listbox" aria-expanded="false" aria-controls="unit-menu">
+                    <span class="dropdown__label" id="unit-label">°C</span>
+                    <svg class="dropdown__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu" id="unit-menu" role="listbox" aria-label="Temperature unit" hidden>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="C" aria-selected="true">Celsius (°C)</li>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="F" aria-selected="false">Fahrenheit (°F)</li>
+                </ul>
+            </div>
+            <div class="dropdown dropdown--end profile">
+                <button class="dropdown__trigger" type="button" aria-label="Account menu"
+                    aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="8.5" r="4"/>
+                        <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu" id="profile-menu" role="menu" aria-label="Account" hidden>
+                    <li class="dropdown__menu-head" role="presentation">
+                        <strong>Roshan Mallick</strong>
+                        <span>Weather Enthusiast</span>
+                    </li>
+                    <li class="dropdown__item" role="menuitem" tabindex="-1" data-value="profile">My profile</li>
+                    <li class="dropdown__item" role="menuitem" tabindex="-1" data-value="settings">Settings</li>
+                    <li class="dropdown__item dropdown__item--danger" role="menuitem" tabindex="-1" data-value="signout">Sign out</li>
+                </ul>
+            </div>
+        </header>
 
         <!-- Sidebar -->
         <aside class="sidebar panel" aria-label="Dashboard navigation"></aside>
@@ -289,5 +356,6 @@
     </div>
 
     <script src="./js/app.js?v=20261031-2" defer></script>
+    <script src="./js/topbar.js" defer></script>
 </body>
 </html>
