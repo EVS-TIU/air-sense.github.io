@@ -3,7 +3,7 @@
    Dynamic, location-aware weather background + Current Weather Hero Card
    ========================================================================== */
 
-const DEFAULT_API_BASE_URL = "http://localhost:8000/api/v1";
+const DEFAULT_API_BASE_URL = "https://airsense-backend-docker.getvoroa.com/api/v1";
 const apiBaseMeta = document.querySelector('meta[name="airsense-api-base"]');
 const API_BASE_URL = (
   window.AIRSENSE_API_BASE_URL ||

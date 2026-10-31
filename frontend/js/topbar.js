@@ -20,7 +20,7 @@
     const apiBase = (
         window.AIRSENSE_API_BASE_URL ||
         document.querySelector('meta[name="airsense-api-base"]')?.content ||
-        'http://localhost:8000/api/v1'
+        'https://airsense-backend-docker.getvoroa.com/api/v1'
     ).replace(/\/+$/, '');
 
     const LocationService = {
