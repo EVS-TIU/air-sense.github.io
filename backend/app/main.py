@@ -28,6 +28,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AIR_SENSE Weather Intelligence API", version="1.0.0", lifespan=lifespan)
 settings = get_settings()
 allowed_origins = [settings.frontend_url]
+deployed_frontend_origin = "https://air-sense-web.vercel.app"
+if deployed_frontend_origin not in allowed_origins:
+    allowed_origins.append(deployed_frontend_origin)
 if settings.environment == "development":
     allowed_origins.extend(
         origin for origin in ("http://localhost:5500", "http://127.0.0.1:5500")
