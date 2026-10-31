@@ -96,6 +96,9 @@ const currentStateText = document.querySelector("[data-current-state-text]");
 const currentRetryBtn = document.querySelector("[data-current-retry]");
 const hourlyCards = document.querySelectorAll(".hourly-cards .hour-card");
 const hourlyCardsContainer = document.querySelector(".hourly-cards");
+const weekCardsEl = document.querySelector("[data-week-cards]");
+const weekMessageEl = document.querySelector("[data-week-message]");
+const weekStatusEl = document.querySelector("[data-week-status]");
 
 let currentHeroWeather = null;
 let heroPosition = null;
@@ -589,6 +592,15 @@ function forecastIconMarkup(code) {
   return cloud;
 }
 
+function createForecastIcon(code, extraClass = "") {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 80 64");
+  svg.setAttribute("focusable", "false");
+  svg.setAttribute("class", `weather-icon ${forecastConditionClass(code)} ${extraClass}`.trim());
+  svg.innerHTML = forecastIconMarkup(code);
+  return svg;
+}
+
 function renderHourlyForecast(weather) {
   if (!hourlyCards.length) {
     return;
@@ -660,6 +672,96 @@ function renderHourlyForecast(weather) {
   });
 }
 
+function aggregateDailyForecast(weather) {
+  const points = Array.isArray(weather?.hourly) ? weather.hourly : [];
+  const timezoneOffset = Number(weather?.timezone_offset) || 0;
+  const days = new Map();
+
+  points.forEach((point) => {
+    if (!Number.isFinite(point?.timestamp) || !Number.isFinite(point?.temperature)) {
+      return;
+    }
+    const localDate = new Date((point.timestamp + timezoneOffset) * 1000);
+    const dateKey = localDate.toISOString().slice(0, 10);
+    const day = days.get(dateKey) || {
+      dateKey,
+      temperatures: [],
+      precipitation: [],
+      rain: 0,
+      representative: point,
+    };
+    day.temperatures.push(point.temperature);
+    if (Number.isFinite(point.precipitation_probability)) {
+      day.precipitation.push(point.precipitation_probability);
+    }
+    day.rain += Number(point.rain_3h) || 0;
+    if (point.timestamp < day.representative.timestamp ||
+        (point.weather_code >= 200 && point.weather_code <= 804 &&
+         !(day.representative.weather_code >= 200 && day.representative.weather_code <= 804))) {
+      day.representative = point;
+    }
+    days.set(dateKey, day);
+  });
+
+  return [...days.values()].slice(0, 5).map((day) => ({
+    ...day,
+    high: Math.max(...day.temperatures),
+    low: Math.min(...day.temperatures),
+    precipitation: day.precipitation.length ? Math.max(...day.precipitation) : null,
+  }));
+}
+
+function renderDailyForecast(weather) {
+  if (!weekCardsEl) return;
+  const days = aggregateDailyForecast(weather);
+  if (!days.length) {
+    weekCardsEl.replaceChildren();
+    const message = document.createElement("p");
+    message.className = "week-forecast__message";
+    message.textContent = "Live forecast unavailable";
+    weekCardsEl.append(message);
+    if (weekStatusEl) weekStatusEl.textContent = "Unavailable";
+    return;
+  }
+
+  weekCardsEl.replaceChildren();
+  days.slice(0, 5).forEach((day, index) => {
+    const date = new Date(`${day.dateKey}T12:00:00Z`);
+    const card = document.createElement("article");
+    card.className = `week-card${index === 0 ? " active" : ""}`;
+    const dayName = index === 0
+      ? "Today"
+      : date.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+    const condition = forecastConditionLabel(day.representative);
+    const icon = createForecastIcon(day.representative.weather_code, "week-card__icon");
+    icon.setAttribute("aria-label", condition);
+    icon.setAttribute("role", "img");
+
+    const dayEl = document.createElement("p");
+    dayEl.className = "week-card__day";
+    dayEl.textContent = dayName;
+    const conditionEl = document.createElement("p");
+    conditionEl.className = "week-card__condition";
+    conditionEl.textContent = condition;
+    const tempsEl = document.createElement("div");
+    tempsEl.className = "week-card__temps";
+    tempsEl.innerHTML = `<span class="week-card__high">${formatTemperature(day.high)}°</span>` +
+      `<span class="week-card__low">${formatTemperature(day.low)}°</span>`;
+    const meta = document.createElement("div");
+    meta.className = "week-card__meta";
+    meta.append(conditionEl, tempsEl);
+    const row = document.createElement("div");
+    row.className = "week-card__row";
+    row.append(icon, meta);
+    card.append(dayEl, row);
+    if (day.precipitation !== null) {
+      card.title = `Maximum precipitation probability: ${day.precipitation}%`;
+    }
+    weekCardsEl.append(card);
+  });
+  if (weekStatusEl) weekStatusEl.textContent = "Live forecast";
+}
+
 function renderCurrentWeather(weather) {
   if (!weather) {
     return;
@@ -670,6 +772,7 @@ function renderCurrentWeather(weather) {
   renderAirQuality(weather);
   updateTemperatureUnitUI();
   renderHourlyForecast(weather);
+  renderDailyForecast(weather);
 
   if (currentLocationEl) {
     currentLocationEl.textContent = formatLocation(weather);

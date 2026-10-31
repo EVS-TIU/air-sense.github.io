@@ -6,7 +6,7 @@
     <meta name="description" content="AirSense - live weather dashboard with a location-aware background.">
     <meta name="airsense-api-base" content="http://localhost:8000/api/v1">
     <title>AirSense - Weather Dashboard</title>
-    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/style.css?v=20261031-14">
 
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css?v=20261031-3">
@@ -265,11 +265,19 @@ sudo usermod -aG docker "$USER"
         </section>
 
         <!-- 7 Days Weather -->
-        <section class="week-forecast panel" aria-label="7 Days Weather"></section>
+        <section class="week-forecast panel" aria-labelledby="week-forecast-title">
+            <div class="section-header">
+                <h2 id="week-forecast-title">5 Day Forecast</h2>
+                <span class="week-forecast__status" data-week-status>Live forecast</span>
+            </div>
+            <div class="week-forecast__cards" data-week-cards aria-live="polite">
+                <p class="week-forecast__message" data-week-message>Loading live forecast...</p>
+            </div>
+        </section>
 
     </div>
 
-    <script src="./js/app.js?v=20261031-12" defer></script>
+    <script src="./js/app.js?v=20261031-14" defer></script>
     <script src="./js/topbar.js?v=20261031-2" defer></script>
 </body>
 </html>
