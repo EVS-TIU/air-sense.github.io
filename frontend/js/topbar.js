@@ -167,18 +167,52 @@
     });
 
     /* ----------------------------------------------------------------------
-       Location selector
+       Location selector / Current device location button
        ---------------------------------------------------------------------- */
-    const locationRoot = topbar.querySelector('.location-select');
+    const locationBtn = topbar.querySelector('#current-location-btn, .location-btn');
     const locationLabel = document.getElementById('location-label');
     const locationMenu = document.getElementById('location-menu');
+    const locationRoot = topbar.querySelector('.location-select.dropdown');
 
-    const locationDropdown = createDropdown(locationRoot, (id) => {
-        const city = state.searchResults.find((item) => item.id === id);
-        if (city) setLocation(city);
+    let locationDropdown = null;
+    if (locationRoot && locationMenu) {
+        locationDropdown = createDropdown(locationRoot, (id) => {
+            const city = state.searchResults.find((item) => item.id === id);
+            if (city) setLocation(city);
+        });
+    }
+
+    if (locationBtn) {
+        locationBtn.addEventListener('click', () => {
+            if (locationBtn.classList.contains('is-loading')) return;
+            if (window.AirSense?.fetchDeviceLocationWeather) {
+                window.AirSense.fetchDeviceLocationWeather({ explicitClick: true }).catch(() => {});
+            } else {
+                document.dispatchEvent(new CustomEvent('weatherly:request-device-location'));
+            }
+        });
+    }
+
+    document.addEventListener('weatherly:device-location-active', (event) => {
+        state.location = {
+            id: `${event.detail.latitude},${event.detail.longitude}`,
+            name: event.detail.name,
+            region: event.detail.country,
+            lat: event.detail.latitude,
+            lon: event.detail.longitude
+        };
+        writeStorage(STORAGE_KEYS.location, state.location.id);
+        if (locationBtn) {
+            locationBtn.classList.add('is-active');
+            locationBtn.setAttribute('title', `Current location: ${event.detail.name || 'Device'} (Click to refresh)`);
+        }
+        if (locationLabel) {
+            locationLabel.textContent = 'Current Location';
+        }
     });
 
     function renderLocationMenu(cities) {
+        if (!locationMenu || !locationDropdown) return;
         locationMenu.replaceChildren();
         cities.forEach((city) => {
             const li = el('li', 'dropdown__item');
@@ -191,26 +225,35 @@
             li.append(text);
             locationMenu.append(li);
         });
-        locationDropdown.setSelected(state.location.id);
+        if (state.location?.id) {
+            locationDropdown.setSelected(state.location.id);
+        }
     }
 
     function setLocation(city) {
         state.location = city;
-        locationLabel.textContent = city.name;
+        if (locationLabel) {
+            locationLabel.textContent = 'Current Location';
+        }
+        if (locationBtn) {
+            locationBtn.classList.remove('is-active');
+            locationBtn.setAttribute('title', 'Fetch current device location weather');
+        }
         writeStorage(STORAGE_KEYS.location, city.id);
 
-        // Make sure a searched city is available (and ticked) in the dropdown.
-        if (!locationMenu.querySelector('[data-value="' + city.id + '"]')) {
-            const li = el('li', 'dropdown__item');
-            li.setAttribute('role', 'option');
-            li.tabIndex = -1;
-            li.dataset.value = city.id;
-            const text = el('div');
-            text.append(el('span', null, city.name), el('small', null, city.region));
-            li.append(text);
-            locationMenu.prepend(li);
+        if (locationMenu && locationDropdown) {
+            if (!locationMenu.querySelector('[data-value="' + city.id + '"]')) {
+                const li = el('li', 'dropdown__item');
+                li.setAttribute('role', 'option');
+                li.tabIndex = -1;
+                li.dataset.value = city.id;
+                const text = el('div');
+                text.append(el('span', null, city.name), el('small', null, city.region));
+                li.append(text);
+                locationMenu.prepend(li);
+            }
+            locationDropdown.setSelected(city.id);
         }
-        locationDropdown.setSelected(city.id);
 
         emit('location-change', city);
     }
@@ -386,7 +429,9 @@
     /* ----------------------------------------------------------------------
        Init + public API
        ---------------------------------------------------------------------- */
-    renderLocationMenu([]);
+    if (locationMenu && locationDropdown) {
+        renderLocationMenu([]);
+    }
     setUnit(state.unit);
 
     window.WeatherlyTopbar = {

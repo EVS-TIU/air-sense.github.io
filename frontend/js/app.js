@@ -965,6 +965,109 @@ async function updateCurrentWeatherHero(position) {
   applyFallbackBackground();
 }
 
+async function fetchDeviceLocationWeather(options = {}) {
+  const isExplicitClick = Boolean(options.explicitClick);
+  const locationBtn = document.getElementById("current-location-btn");
+  const locationLabel = document.getElementById("location-label");
+
+  if (locationBtn) {
+    locationBtn.classList.add("is-loading");
+    locationBtn.setAttribute("aria-busy", "true");
+  }
+  if (locationLabel && isExplicitClick) {
+    locationLabel.textContent = "Locating...";
+  }
+
+  try {
+    const position = await getBrowserPosition(
+      isExplicitClick ? { enableHighAccuracy: true, maximumAge: 0 } : {}
+    );
+    heroPosition = {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+    };
+    lastPosition = heroPosition;
+
+    if (isExplicitClick) {
+      sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
+    }
+
+    setHeroLoading(true);
+    let weather = !isExplicitClick
+      ? readCachedWeatherHero(heroPosition.latitude, heroPosition.longitude)
+      : null;
+
+    if (!weather) {
+      weather = await fetchCurrentWeatherHero(
+        heroPosition.latitude,
+        heroPosition.longitude
+      );
+      writeCachedWeatherHero(
+        heroPosition.latitude,
+        heroPosition.longitude,
+        weather
+      );
+    }
+
+    renderCurrentWeather(weather);
+    updateWeatherForPosition(heroPosition).catch(() => {});
+
+    if (locationBtn) {
+      locationBtn.classList.remove("is-loading");
+      locationBtn.classList.add("is-active");
+      locationBtn.removeAttribute("aria-busy");
+      const label = formatLocation(weather);
+      locationBtn.setAttribute("title", `Current Location: ${label} (Click to refresh)`);
+    }
+    if (locationLabel) {
+      locationLabel.textContent = "Current Location";
+    }
+
+    document.dispatchEvent(
+      new CustomEvent("weatherly:device-location-active", {
+        detail: {
+          latitude: heroPosition.latitude,
+          longitude: heroPosition.longitude,
+          name: weather.location_name || weather.location_label || "Current Location",
+          country: weather.location_country || "",
+        },
+      })
+    );
+
+    return weather;
+  } catch (error) {
+    console.warn("Device location weather error:", error.message || error);
+    if (locationBtn) {
+      locationBtn.classList.remove("is-loading");
+      locationBtn.removeAttribute("aria-busy");
+    }
+    if (locationLabel) {
+      locationLabel.textContent = "Current Location";
+    }
+
+    if (isExplicitClick) {
+      let message = "Unable to fetch device location weather.";
+      if (error?.code === 1) {
+        message =
+          "Location permission was denied. Please allow location access in your browser settings to fetch device weather.";
+      } else if (error?.code === 2) {
+        message =
+          "Device location is currently unavailable. Please check your network or GPS.";
+      } else if (error?.code === 3) {
+        message = "Location request timed out. Please try again.";
+      } else if (error?.message) {
+        message = error.message;
+      }
+      alert(message);
+    }
+
+    if (!currentHeroWeather) {
+      setHeroError("Location permission or network connection is required to load live weather.");
+    }
+    throw error;
+  }
+}
+
 async function initialiseCurrentWeatherHero() {
   if (!currentWeatherCard) {
     return;
@@ -990,7 +1093,7 @@ async function initialiseCurrentWeatherHero() {
         sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
         updateCurrentWeatherHero(heroPosition);
       } else {
-        initialiseCurrentWeatherHero();
+        fetchDeviceLocationWeather({ explicitClick: true }).catch(() => {});
       }
     });
   }
@@ -1003,14 +1106,7 @@ async function initialiseCurrentWeatherHero() {
   }
 
   try {
-    const position = await getBrowserPosition();
-    heroPosition = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-    };
-    lastPosition = heroPosition;
-
-    await updateCurrentWeatherHero(heroPosition);
+    await fetchDeviceLocationWeather({ explicitClick: false });
   } catch (error) {
     console.error("Live weather unavailable:", error);
     setHeroError("Unable to load live weather. Check your connection or try again.");
@@ -1152,7 +1248,7 @@ async function getGeolocationPermissionState() {
   }
 }
 
-function getBrowserPosition() {
+function getBrowserPosition(options = {}) {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
       reject(new Error("Geolocation is not supported by this browser."));
@@ -1160,9 +1256,12 @@ function getBrowserPosition() {
     }
 
     navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      timeout: 10 * 1000,
-      maximumAge: 15 * 60 * 1000,
+      enableHighAccuracy: Boolean(options.enableHighAccuracy),
+      timeout: options.timeout || 10 * 1000,
+      maximumAge:
+        typeof options.maximumAge === "number"
+          ? options.maximumAge
+          : 15 * 60 * 1000,
     });
   });
 }
@@ -1225,6 +1324,10 @@ document.addEventListener("weatherly:location-change", (event) => {
   ) {
     return;
   }
+  const locationBtn = document.getElementById("current-location-btn");
+  if (locationBtn) {
+    locationBtn.classList.remove("is-active");
+  }
   heroPosition = {
     latitude: Number(location.lat),
     longitude: Number(location.lon),
@@ -1235,6 +1338,13 @@ document.addEventListener("weatherly:location-change", (event) => {
     console.warn("Selected location weather unavailable:", error.message);
   });
 });
+
+document.addEventListener("weatherly:request-device-location", () => {
+  fetchDeviceLocationWeather({ explicitClick: true }).catch(() => {});
+});
+
+window.AirSense = window.AirSense || {};
+window.AirSense.fetchDeviceLocationWeather = fetchDeviceLocationWeather;
 
 loadTemperatureUnitPreference();
 initialiseCurrentWeatherHero();

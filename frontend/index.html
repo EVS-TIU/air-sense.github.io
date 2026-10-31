@@ -11,12 +11,9 @@
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css?v=20261031-3">
     <!-- Top Navigation component styles -->
-    <link rel="stylesheet" href="./css/topbar.css">
+    <link rel="stylesheet" href="./css/topbar.css?v=20261101-1">
 </head>
-<body>sudo apt-get update
-sudo apt-get install -y docker.io
-sudo systemctl enable --now docker
-sudo usermod -aG docker "$USER"
+<body>
 
     <!-- Location-aware weather background (cross-fades between local images) -->
     <div class="weather-background" id="weather-background" aria-hidden="true">
@@ -42,20 +39,15 @@ sudo usermod -aG docker "$USER"
                 <ul id="search-results" class="search-box__results" role="listbox"
                     aria-label="Location suggestions" hidden></ul>
             </div>
-            <div class="dropdown location-select">
-                <button class="dropdown__trigger" type="button" aria-label="Select location"
-                    aria-haspopup="listbox" aria-expanded="false" aria-controls="location-menu">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/>
-                        <circle cx="12" cy="10" r="2.3"/>
-                    </svg>
-                    <span class="dropdown__label" id="location-label">Select location</span>
-                    <svg class="dropdown__chevron" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M6 9l6 6 6-6"/>
-                    </svg>
-                </button>
-                <ul class="dropdown__menu" id="location-menu" role="listbox" aria-label="Locations" hidden></ul>
-            </div>
+            <button class="location-btn" id="current-location-btn" type="button"
+                aria-label="Fetch current device location weather"
+                title="Fetch current device location weather">
+                <svg class="location-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/>
+                    <circle cx="12" cy="10" r="2.3"/>
+                </svg>
+                <span class="location-btn__label" id="location-label">Current Location</span>
+            </button>
             <nav class="topbar-nav" aria-label="Dashboard sections">
                 <a href="#weather-now" class="is-active" aria-current="page" data-view="now" data-target=".current-weather">Weather Now</a>
                 <a href="#todays-detail" data-view="today" data-target=".hourly-forecast">Today's Detail</a>
@@ -277,7 +269,7 @@ sudo usermod -aG docker "$USER"
 
     </div>
 
-    <script src="./js/app.js?v=20261031-14" defer></script>
-    <script src="./js/topbar.js?v=20261031-2" defer></script>
+    <script src="./js/app.js?v=20261101-1" defer></script>
+    <script src="./js/topbar.js?v=20261101-1" defer></script>
 </body>
 </html>

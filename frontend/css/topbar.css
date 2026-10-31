@@ -296,7 +296,97 @@
     color: var(--muted);
 }
 
-/* Location selector */
+/* --------------------------------------------------------------------------
+   Current Location Button
+   -------------------------------------------------------------------------- */
+
+.location-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+
+    height: 44px;
+    padding: 0 14px;
+    min-width: 148px;
+
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+
+    background: rgba(8, 26, 42, 0.72);
+    border: 1px solid rgba(116, 174, 213, 0.16);
+    border-radius: 14px;
+    cursor: pointer;
+
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.location-btn:hover {
+    background: rgba(18, 48, 72, 0.85);
+    border-color: rgba(33, 169, 255, 0.45);
+    color: #ffffff;
+}
+
+.location-btn:active {
+    transform: scale(0.97);
+}
+
+.location-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.location-btn.is-active {
+    border-color: rgba(33, 169, 255, 0.35);
+    background: rgba(18, 50, 78, 0.65);
+    color: #cfe8ff;
+}
+
+.location-btn__icon {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    color: #cfe8ff;
+    transition: transform 0.2s ease, stroke 0.2s ease;
+}
+
+.location-btn:hover .location-btn__icon {
+    stroke: #21a9ff;
+}
+
+.location-btn.is-loading {
+    cursor: wait;
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.location-btn.is-loading .location-btn__icon {
+    animation: location-btn-spin 1s linear infinite;
+    stroke: var(--accent);
+}
+
+@keyframes location-btn-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.location-btn__label {
+    flex: 1;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Location selector dropdown (legacy/fallback) */
 
 .location-select .dropdown__trigger {
     min-width: 168px;
@@ -466,10 +556,12 @@
         flex: 1 1 100%;
     }
 
+    .location-btn,
     .location-select {
         order: 2;
         flex: 1 1 0;
         min-width: 0;
+        width: 100%;
     }
 
     .location-select .dropdown__trigger {
@@ -523,5 +615,6 @@
     .topbar *,
     .topbar *::after {
         transition: none !important;
+        animation: none !important;
     }
 }
