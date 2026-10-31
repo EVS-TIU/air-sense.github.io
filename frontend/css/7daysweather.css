@@ -1,0 +1,153 @@
+.week-weather {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: rgba(20, 36, 58, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 14px 20px;
+}
+
+.ww-head {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.ww-head h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.ww-grid {
+    display: grid;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 8px;
+}
+
+.ww-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: 8px 4px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+}
+
+.ww-day.today {
+    border-color: #3b8cff;
+}
+
+.ww-name {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.ww-date {
+    margin-bottom: 2px;
+    font-size: 12px;
+    opacity: 0.65;
+}
+
+.ww-icon {
+    display: block;
+    flex: 0 0 auto;
+    width: 52px;
+    height: 48px;
+    margin: 2px auto;
+    overflow: visible;
+}
+
+.ww-sun-rays {
+    fill: none;
+    stroke: #ffb703;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.ww-sun {
+    fill: #ffc933;
+}
+
+.ww-lightning {
+    fill: #ffd23f;
+}
+
+.ww-snow {
+    fill: #20aaff;
+}
+
+.ww-fog {
+    fill: none;
+    stroke: #9fb3cc;
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.ww-temp {
+    margin: 4px 0 2px;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ww-temp span {
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.ww-rain {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    color: #7cc4ff;
+}
+
+.ww-bar {
+    flex: 0 0 auto;
+    height: 4px;
+    margin: 6px 6px 0;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    align-self: stretch;
+}
+
+.ww-bar i {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+}
+
+.ww-msg {
+    grid-column: 1 / -1;
+    padding: 20px;
+    text-align: center;
+    opacity: 0.7;
+}
+
+@media (max-width: 760px) {
+    .ww-grid {
+        grid-template-columns: repeat(7, 110px);
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 6px;
+    }
+}
