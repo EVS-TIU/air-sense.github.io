@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     )
 
     openweather_api_key: str = Field(default="", validation_alias="OPENWEATHER_API_KEY")
+    geoapify_api_key: str = Field(default="", validation_alias="GEOAPIFY_API_KEY")
+    maptiler_api_key: str = Field(default="", validation_alias="MAPTILER_API_KEY")
     frontend_url: str = Field(default="http://localhost:5500", validation_alias="FRONTEND_URL")
     environment: str = Field(default="development", validation_alias="ENVIRONMENT")
     port: int = Field(default=8000, validation_alias="PORT", ge=1, le=65535)

@@ -201,4 +201,32 @@ def test_location_search_endpoint(client):
     assert response.json()["results"][0]["district"] == "North 24 Parganas"
 
 
+def test_search_prioritizes_exact_major_city_over_partial_matches():
+    import asyncio
+    service = WeatherClient(Settings(openweather_api_key="test-key"))
+    service._get = AsyncMock(return_value=[
+        {"name": "Dubai", "state": "Dubai", "country": "AE", "lat": 25.26, "lon": 55.29},
+        {"name": "Living Legends", "state": "Dubai", "country": "AE", "lat": 25.08, "lon": 55.30},
+        {"name": "Dubai", "state": "Bay", "country": "SO", "lat": 2.80, "lon": 44.08},
+    ])
+    mock_client = AsyncMock()
+    mock_resp = AsyncMock()
+    mock_resp.status_code = 200
+    mock_resp.json = lambda: [
+        {"name": "Dubai", "address": {"city": "Dubai", "state": "Dubai Emirate", "country": "United Arab Emirates", "country_code": "ae"}, "importance": 0.75, "lat": "25.2647", "lon": "55.2924", "type": "city"},
+        {"name": "Dubal", "address": {"state": "Bay", "country": "Somalia", "country_code": "so"}, "importance": 0.2, "lat": "2.80", "lon": "44.08", "type": "village"},
+    ]
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    service.client = mock_client
+
+    results = asyncio.run(service.search("Dubai"))
+    assert len(results) >= 1
+    assert results[0]["name"] == "Dubai"
+    assert results[0]["country"] == "United Arab Emirates" or results[0]["country_code"] == "AE"
+    # Ensure Dubal Somalia is not prioritized
+    if len(results) > 1:
+        assert results[0]["name"] == "Dubai"
+
+
+
 
