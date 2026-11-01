@@ -16,6 +16,9 @@
     <link rel="stylesheet" href="./css/forecast-hourly.css?v=20261031-3">
     <!-- Top Navigation component styles -->
     <link rel="stylesheet" href="./css/topbar.css?v=20261101-2">
+    <link rel="stylesheet" href="./css/topbar.css?v=20261101-1">
+    <!-- Left Sidebar component styles -->
+    <link rel="stylesheet" href="./css/sidebar.css?v=20261101-2">
 </head>
 <body>
 
@@ -40,6 +43,12 @@
 
         <!-- Top Navigation -->
         <header class="topbar panel" aria-label="Top navigation">
+            <button class="sidebar-menu-toggle" type="button" aria-label="Open navigation menu"
+                aria-controls="dashboard-sidebar" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
             <div class="search-box" role="search">
                 <svg class="search-box__icon" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="11" cy="11" r="7"/>
@@ -202,6 +211,87 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true" width="12" height="12"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
                     <span>Click anywhere on map to select</span>
                 </div>
+        <button class="sidebar-backdrop" type="button" aria-label="Close navigation menu"
+            tabindex="-1" aria-hidden="true"></button>
+        <aside class="sidebar panel" id="dashboard-sidebar" aria-label="Dashboard navigation">
+            <div class="sidebar-content__brand">
+                <svg class="sidebar-content__brand-icon" viewBox="0 0 48 48" aria-hidden="true">
+                    <path d="M13 30h22a8 8 0 0 0 .4-16A12 12 0 0 0 12 18a6 6 0 0 0 1 12Z"/>
+                    <path d="m17 35-2 4m11-4-2 4m11-4-2 4"/>
+                </svg>
+                <span class="sidebar-content__brand-copy">
+                    <strong>Weatherly.</strong>
+                    <small>Real-time weather insights</small>
+                </span>
+                <button class="sidebar-close" type="button" aria-label="Close navigation menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 6 12 12M18 6 6 18"/>
+                    </svg>
+                </button>
+            </div>
+
+            <nav class="sidebar-content__nav" aria-label="Weather sections">
+                <a class="sidebar-content__link is-active" href="#weather-now"
+                    aria-current="page" data-view="now" data-target=".current-weather">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m3 11 9-8 9 8"/>
+                        <path d="M5 10v10h14V10M9 20v-6h6v6"/>
+                    </svg>
+                    <span>Current Weather</span>
+                </a>
+                <a class="sidebar-content__link" href="#ai-recommendation" data-view="recommendation">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z"/>
+                        <path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/>
+                    </svg>
+                    <span>AI Recommendation</span>
+                </a>
+                <a class="sidebar-content__link" href="#hotspot-map" data-view="hotspot-map">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/>
+                        <circle cx="12" cy="10" r="2.5"/>
+                    </svg>
+                    <span>Hotspot Map</span>
+                </a>
+                <a class="sidebar-content__link" href="#weather-history" data-view="history">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 20v-7h4v7H4Zm6 0V4h4v16h-4Zm6 0V9h4v11h-4Z"/>
+                    </svg>
+                    <span>History Analysis</span>
+                </a>
+                <a class="sidebar-content__link" href="#smart-alert" data-view="smart-alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/>
+                    </svg>
+                    <span>Smart Alert</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-content__account">
+                <div class="sidebar-content__user">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 21a8 8 0 0 1 16 0"/>
+                    </svg>
+                    <span>
+                        <strong>Roshan Mallick</strong>
+                        <small>Weather Enthusiast</small>
+                    </span>
+                </div>
+                <a class="sidebar-content__link" href="#settings" data-view="settings">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>
+                        <path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.8 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.8-1l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.8-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.8 1l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1-.1 2Z"/>
+                    </svg>
+                    <span>Settings</span>
+                </a>
+                <a class="sidebar-content__link" href="#about-support" data-view="about-support">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M12 11v5m0-8h.01"/>
+                    </svg>
+                    <span>About / Support</span>
+                </a>
             </div>
         </aside>
 
@@ -507,5 +597,8 @@
     <script src="./js/map.js?v=20261101-1"></script>
     <script src="./js/app.js?v=20261101-16" defer></script>
     <script src="./js/topbar.js?v=20261101-3" defer></script>
+    <script src="./js/app.js?v=20261101-15" defer></script>
+    <script src="./js/topbar.js?v=20261101-2" defer></script>
+    <script src="./js/sidebar.js?v=20261101-2" defer></script>
 </body>
 </html>
