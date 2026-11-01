@@ -165,3 +165,19 @@ def test_us_epa_aqi_62_is_moderate():
 
 def test_epa_aqi_requires_averaging_period_and_units():
     assert calculate_epa_aqi({"pm25": {"value": 35.4, "unit": "ug/m3"}}) is None
+
+
+def test_current_reverse_geocode_fallback_when_name_missing():
+    import asyncio
+    service = WeatherClient(Settings(openweather_api_key="test-key"))
+    service._get = AsyncMock(side_effect=[
+        {"name": "", "coord": {"lat": 20, "lon": 85}, "weather": [{"id": 800, "icon": "01d"}], "main": {}, "wind": {}, "sys": {}},
+        {"city": {"coord": {"lat": 20, "lon": 85}}, "list": []},
+        Exception("no uv"),
+        Exception("no air"),
+        [{"name": "Fallback Locality", "country": "IN"}],
+    ])
+    result = asyncio.run(service.current(20, 85))
+    assert result["location_name"] == "Fallback Locality"
+    assert result["location_country"] == "IN"
+

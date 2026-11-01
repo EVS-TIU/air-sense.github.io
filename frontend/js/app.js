@@ -45,7 +45,7 @@ const CONDITION_BACKGROUNDS = {
 };
 
 const CONDITION_ILLUSTRATIONS = {
-  clear: "cloudy.png",
+  clear: "sunny.png",
   partly_cloudy: "partly-cloudy.png",
   cloudy: "cloudy.png",
   overcast: "cloudy.png",
@@ -460,16 +460,17 @@ function resolveIllustration(weather) {
     return DEFAULT_ILLUSTRATION;
   }
 
-  if (weather.condition === "clear") {
-    return CONDITION_ILLUSTRATIONS.clear;
+  const isDay = resolveIsDaytime(weather);
+  const condition =
+    typeof weather.condition === "string" ? weather.condition : "unknown";
+
+  if (condition === "clear") {
+    return isDay ? "sunny.png" : "night.png";
   }
 
   if (typeof weather.illustration === "string" && weather.illustration.trim()) {
     return normaliseIllustrationName(weather.illustration);
   }
-
-  const condition =
-    typeof weather.condition === "string" ? weather.condition : "unknown";
 
   return CONDITION_ILLUSTRATIONS[condition] || DEFAULT_ILLUSTRATION;
 }
@@ -1522,9 +1523,11 @@ async function fetchDeviceLocationWeather(options = {}) {
   }
 
   try {
-    const position = await getBrowserPosition(
-      isExplicitClick ? { enableHighAccuracy: true, maximumAge: 0 } : {}
-    );
+    const position = await getBrowserPosition({
+      enableHighAccuracy: true,
+      maximumAge: isExplicitClick ? 0 : 30000,
+      forceFresh: isExplicitClick,
+    });
     heroPosition = {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
@@ -1630,6 +1633,21 @@ async function initialiseCurrentWeatherHero() {
         fetchDeviceLocationWeather({ explicitClick: true }).catch(() => {});
       }
     });
+  }
+
+  if (navigator.permissions?.query) {
+    navigator.permissions
+      .query({ name: "geolocation" })
+      .then((status) => {
+        status.addEventListener("change", () => {
+          if (status.state === "granted") {
+            fetchDeviceLocationWeather({ explicitClick: false }).catch(() => {});
+          } else if (status.state === "denied") {
+            setHeroError("Location permission is required to load live weather.");
+          }
+        });
+      })
+      .catch(() => {});
   }
 
   const permission = await getGeolocationPermissionState();
@@ -1782,22 +1800,64 @@ async function getGeolocationPermissionState() {
   }
 }
 
+let pendingPositionPromise = null;
+
 function getBrowserPosition(options = {}) {
-  return new Promise((resolve, reject) => {
+  if (pendingPositionPromise && !options.forceFresh) {
+    return pendingPositionPromise;
+  }
+
+  const wantHighAccuracy = options.enableHighAccuracy !== false;
+  const timeout = typeof options.timeout === "number" ? options.timeout : 12000;
+  const maxAge = typeof options.maximumAge === "number" ? options.maximumAge : 0;
+
+  pendingPositionPromise = new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
+      pendingPositionPromise = null;
       reject(new Error("Geolocation is not supported by this browser."));
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: Boolean(options.enableHighAccuracy),
-      timeout: options.timeout || 10 * 1000,
-      maximumAge:
-        typeof options.maximumAge === "number"
-          ? options.maximumAge
-          : 15 * 60 * 1000,
-    });
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        pendingPositionPromise = null;
+        resolve(position);
+      },
+      (error) => {
+        // If high accuracy timed out or was unavailable on this device, retry once with standard accuracy
+        if (
+          wantHighAccuracy &&
+          (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)
+        ) {
+          navigator.geolocation.getCurrentPosition(
+            (fallbackPos) => {
+              pendingPositionPromise = null;
+              resolve(fallbackPos);
+            },
+            (fallbackErr) => {
+              pendingPositionPromise = null;
+              reject(fallbackErr);
+            },
+            {
+              enableHighAccuracy: false,
+              timeout: 8000,
+              maximumAge: 60000,
+            }
+          );
+        } else {
+          pendingPositionPromise = null;
+          reject(error);
+        }
+      },
+      {
+        enableHighAccuracy: wantHighAccuracy,
+        timeout: timeout,
+        maximumAge: maxAge,
+      }
+    );
   });
+
+  return pendingPositionPromise;
 }
 
 async function initialiseWeatherBackground() {
@@ -1813,7 +1873,7 @@ async function initialiseWeatherBackground() {
   }
 
   try {
-    const position = await getBrowserPosition();
+    const position = await getBrowserPosition({ enableHighAccuracy: true });
     lastPosition = {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,

@@ -144,6 +144,16 @@ class WeatherClient:
             logger.info("UV data is unavailable from the configured OpenWeather plan")
             uv_response = None
         air = None if isinstance(air_response, Exception) else normalize_air_quality(air_response, lat, lon)
+        if not current.get("name"):
+            try:
+                geo = await self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 1})
+                if isinstance(geo, list) and len(geo) > 0 and isinstance(geo[0], dict):
+                    if geo[0].get("name"):
+                        current["name"] = geo[0].get("name")
+                    if geo[0].get("country") and not (current.get("sys") or {}).get("country"):
+                        current.setdefault("sys", {})["country"] = geo[0].get("country")
+            except Exception:
+                pass
         result = normalize_current(current, forecast, uv_response, air)
         await self.cache.set(key, result)
         return result
