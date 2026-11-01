@@ -82,7 +82,7 @@
     const sidebarCityEl = document.getElementById('sidebar-city');
     const sidebarRegionEl = document.getElementById('sidebar-region');
     const sidebarCoordsEl = document.getElementById('sidebar-coords');
-    const sidebarFlagEl = document.getElementById('sidebar-flag');
+    const sidebarFlagEl = null; // removed from UI
 
     let currentLat = 25.2647;
     let currentLon = 55.2924;
