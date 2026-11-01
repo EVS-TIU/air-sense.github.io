@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weatherly Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="weather-app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-icon"></div>
+          <div class="brand-text">
+            <span>Weatherly.</span>
+            <small>Real-time weather insights</small>
+          </div>
+        </div>
+
+        <nav class="sidebar-nav">
+          <button class="nav-item active">
+            <span class="nav-icon home"></span>
+            <span>Current Weather</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-icon radar"></span>
+            <span>AI Recommendation</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-icon hotspot"></span>
+            <span>Hotspot Map</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-icon chart"></span>
+            <span>History Analysis</span>
+          </button>
+          <button class="nav-item">
+            <span class="nav-icon smart"></span>
+            <span>Smart Alert</span>
+          </button>
+        </nav>
+
+        <div class="profile-block">
+          <div class="mini-profile">
+            <div class="profile-avatar"></div>
+            <div class="profile-meta">
+              <strong>Roshan Malik</strong>
+              <small>Weather insider</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="nav-item settings-item">
+            <span class="nav-icon settings"></span>
+            <span>Settings</span>
+          </button>
+          <button class="nav-item settings-item">
+            <span class="nav-icon info"></span>
+            <span>About &amp; Support</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <header class="topbar">
+          <div class="search-box">
+            <span class="search-icon"></span>
+            <input type="text" value="Search your location" aria-label="Search your location" />
+          </div>
+
+          <div class="location-selection">
+            <span class="location-marker"></span>
+            <span>Oklahoma City</span>
+          </div>
+
+          <div class="topnav">
+            <span class="active">Weather Now</span>
+            <span>Today's Detail</span>
+            <span>Weekly Forecast</span>
+            <span>Weather History</span>
+          </div>
+
+          <div class="header-tools">
+            <button class="circle-button celsius">°C</button>
+            <div class="header-user"></div>
+            <button class="circle-button menu-button">☰</button>
+          </div>
+        </header>
+
+        <div class="dashboard-grid">
+          <div class="left-stack">
+            <div class="card current-weather">
+              <div class="card-callout">6</div>
+              <div class="card-header">
+                <div>
+                  <span class="title">Current Weather</span>
+                </div>
+                <div class="weather-tag">Live</div>
+              </div>
+
+              <div class="location-row">
+                <div class="loc-name">Oklahoma City</div>
+                <div class="country-tag">United States</div>
+              </div>
+              <div class="current-date">Friday, 3 Jan 2023, 8:45 AM</div>
+
+              <div class="temp-row">
+                <div class="big-temp">20<span>°c</span></div>
+                <div class="feels">Feels like 17°</div>
+              </div>
+
+              <div class="status-row">
+                <div class="status-box">
+                  <span class="metric-label">Humidity</span>
+                  <strong>78%</strong>
+                </div>
+                <div class="status-box">
+                  <span class="metric-label">Wind</span>
+                  <strong>24 km/h</strong>
+                </div>
+                <div class="status-box">
+                  <span class="metric-label">Visibility</span>
+                  <strong>8 km</strong>
+                </div>
+              </div>
+
+              <div class="bottom-cta">
+                <button class="primary-btn">OM PART</button>
+              </div>
+            </div>
+
+            <div class="card week-card">
+              <div class="card-callout card-callout--small">7</div>
+              <div class="card-heading-row">
+                <span class="title">7 Days Weather</span>
+                <button class="mini-action">View Details</button>
+              </div>
+
+              <div class="week-grid">
+                <div class="day-tile">
+                  <span class="weekday">Sun</span>
+                  <span class="date">3 Jan</span>
+                  <div class="weather-emoji">☁️</div>
+                  <div class="day-temp">20° / 14°</div>
+                  <div class="rain">80%</div>
+                </div>
+                <div class="day-tile">
+                  <span class="weekday">Mon</span>
+                  <span class="date">4 Jan</span>
+                  <div class="weather-emoji">🌤️</div>
+                  <div class="day-temp">23° / 16°</div>
+                  <div class="rain">40%</div>
+                </div>
+                <div class="day-tile">
+                  <span class="weekday">Tue</span>
+                  <span class="date">5 Jan</span>
+                  <div class="weather-emoji">🌧️</div>
+                  <div class="day-temp">25° / 17°</div>
+                  <div class="rain">20%</div>
+                </div>
+                <div class="day-tile">
+                  <span class="weekday">Wed</span>
+                  <span class="date">6 Jan</span>
+                  <div class="weather-emoji">⛅</div>
+                  <div class="day-temp">21° / 15°</div>
+                  <div class="rain">65%</div>
+                </div>
+                <div class="day-tile">
+                  <span class="weekday">Thu</span>
+                  <span class="date">7 Jan</span>
+                  <div class="weather-emoji">☀️</div>
+                  <div class="day-temp">19° / 13°</div>
+                  <div class="rain">85%</div>
+                </div>
+                <div class="day-tile">
+                  <span class="weekday">Fri</span>
+                  <span class="date">8 Jan</span>
+                  <div class="weather-emoji">🌤️</div>
+                  <div class="day-temp">22° / 14°</div>
+                  <div class="rain">40%</div>
+                </div>
+                <div class="day-tile">
+                  <span class="weekday">Sat</span>
+                  <span class="date">9 Jan</span>
+                  <div class="weather-emoji">🌦️</div>
+                  <div class="day-temp">24° / 16°</div>
+                  <div class="rain">10%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="right-stack">
+            <div class="card hourly-card">
+              <div class="card-callout">5</div>
+              <div class="card-heading-row">
+                <div class="title-wrap">
+                  <div class="title">Forecast Hourly</div>
+                </div>
+                <button class="mini-action">View More</button>
+              </div>
+
+              <div class="hourly-strip">
+                <div class="hour-item active">
+                  <span class="hour">9 AM</span>
+                  <div class="mini-emoji">⛅</div>
+                  <strong>19°</strong>
+                  <small>85%</small>
+                </div>
+                <div class="hour-item">
+                  <span class="hour">12 PM</span>
+                  <div class="mini-emoji">🌧️</div>
+                  <strong>21°</strong>
+                  <small>70%</small>
+                </div>
+                <div class="hour-item">
+                  <span class="hour">3 PM</span>
+                  <div class="mini-emoji">🌦️</div>
+                  <strong>23°</strong>
+                  <small>40%</small>
+                </div>
+                <div class="hour-item">
+                  <span class="hour">6 PM</span>
+                  <div class="mini-emoji">☁️</div>
+                  <strong>20°</strong>
+                  <small>55%</small>
+                </div>
+                <div class="hour-item">
+                  <span class="hour">9 PM</span>
+                  <div class="mini-emoji">🌧️</div>
+                  <strong>18°</strong>
+                  <small>30%</small>
+                </div>
+                <div class="hour-item">
+                  <span class="hour">12 AM</span>
+                  <div class="mini-emoji">🌙</div>
+                  <strong>16°</strong>
+                  <small>20%</small>
+                </div>
+              </div>
+            </div>
+
+            <div class="card summary-card">
+              <div class="card-callout">1</div>
+              <div class="summary-header">
+                <span class="title">NEEL</span>
+                <div class="summary-indicator"></div>
+              </div>
+
+              <div class="summary-grid">
+                <div class="metric-item">
+                  <span class="metric-title">UV index</span>
+                  <strong>3</strong>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-title">Air Quality</span>
+                  <strong>Moderate</strong>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-title">Precipitation</span>
+                  <strong>62%</strong>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-title">Moon Phase</span>
+                  <strong>Waxing Gibbous</strong>
+                </div>
+              </div>
+
+              <div class="summary-footer">
+                <div class="sun-data">
+                  <span>Sunrise</span>
+                  <strong>5:58 AM</strong>
+                </div>
+                <div class="sun-data">
+                  <span>Sunset</span>
+                  <strong>6:17 PM</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
