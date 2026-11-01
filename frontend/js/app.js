@@ -480,6 +480,7 @@ const FORECAST_CONDITION_META = {
   sunny: { label: "Sunny", icon: "sunny.svg" },
   "clear-night": { label: "Clear Night", icon: "clear-night.svg" },
   "partly-cloudy": { label: "Partly Cloudy", icon: "partly-cloudy.svg" },
+  "partly-cloudy-night": { label: "Partly Cloudy", icon: "partly-cloudy-night.svg" },
   cloudy: { label: "Cloudy", icon: "cloudy.svg" },
   overcast: { label: "Overcast", icon: "overcast.svg" },
   fog: { label: "Fog", icon: "fog.svg" },
@@ -568,7 +569,7 @@ function conditionKeyFromWeatherCode(code, isDay = true) {
       return isDay ? "sunny" : "clear-night";
     }
     if (code === 1 || code === 2) {
-      return "partly-cloudy";
+      return isDay ? "partly-cloudy" : "partly-cloudy-night";
     }
     if (code === 3) {
       return "overcast";
@@ -636,7 +637,7 @@ function conditionKeyFromWeatherCode(code, isDay = true) {
     return isDay ? "sunny" : "clear-night";
   }
   if (code === 801 || code === 802) {
-    return "partly-cloudy";
+    return isDay ? "partly-cloudy" : "partly-cloudy-night";
   }
   if (code === 803) {
     return "cloudy";
@@ -655,7 +656,7 @@ function conditionKeyFromConditionGroup(condition, isDay = true) {
       return isDay ? "sunny" : "clear-night";
     case "partly_cloudy":
     case "partly-cloudy":
-      return "partly-cloudy";
+      return isDay ? "partly-cloudy" : "partly-cloudy-night";
     case "cloudy":
       return "cloudy";
     case "overcast":
@@ -1020,7 +1021,7 @@ function forecastConditionClass(code) {
   if (key === "sunny" || key === "clear-night") {
     return "clear";
   }
-  if (key === "partly-cloudy") {
+  if (key === "partly-cloudy" || key === "partly-cloudy-night") {
     return "partly-cloudy";
   }
   if (key === "thunderstorm") {
