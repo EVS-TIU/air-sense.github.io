@@ -912,21 +912,40 @@ function clearHeroState() {
   }
 }
 
-function formatDateTime(isoString, timezone) {
+function formatDateTime(isoString, timezone, timezoneOffset) {
   try {
     const date = isoString ? new Date(isoString) : new Date();
-    const options = {
+    if (typeof timezone === "string" && timezone.trim()) {
+      return date.toLocaleString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: timezone,
+      });
+    }
+    if (typeof timezoneOffset === "number" && Number.isFinite(timezoneOffset)) {
+      const utcTime = date.getTime() + date.getTimezoneOffset() * 60000;
+      const targetTime = new Date(utcTime + timezoneOffset * 1000);
+      return targetTime.toLocaleString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+    return date.toLocaleString("en-US", {
       weekday: "long",
       month: "long",
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-    };
-    if (timezone) {
-      options.timeZone = timezone;
-    }
-    return date.toLocaleString("en-US", options);
+    });
   } catch {
     return new Date().toLocaleString("en-US");
   }
@@ -937,6 +956,7 @@ function updateCurrentDatetime() {
     currentDatetimeEl.textContent = formatDateTime(
       null,
       currentHeroWeather?.timezone,
+      currentHeroWeather?.timezone_offset,
     );
   }
 }
@@ -1936,6 +1956,12 @@ document.addEventListener("weatherly:location-change", (event) => {
     longitude: Number(location.lon),
   };
   lastPosition = heroPosition;
+  if (currentLocationEl && location.name) {
+    currentLocationEl.textContent = location.name;
+  }
+  if (currentCountryEl && (location.region || location.country)) {
+    currentCountryEl.textContent = location.region || location.country;
+  }
   sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
   updateCurrentWeatherHero(heroPosition).catch((error) => {
     console.warn("Selected location weather unavailable:", error.message);

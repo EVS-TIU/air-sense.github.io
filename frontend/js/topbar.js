@@ -54,8 +54,11 @@
                         id: `${item.latitude},${item.longitude}`,
                         name: name,
                         region: parts.join(', '),
+                        country: item.country || '',
+                        countryCode: item.country_code || '',
                         lat: Number(item.latitude),
                         lon: Number(item.longitude),
+                        type: item.type || 'place',
                     };
                 }));
         }
@@ -66,6 +69,48 @@
        ---------------------------------------------------------------------- */
     const STORAGE_KEYS = { location: 'weatherly.location', unit: 'weatherly.unit' };
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function getCountryFlag(countryCode) {
+        if (!countryCode || countryCode.length !== 2) return '📍';
+        try {
+            const codePoints = countryCode
+                .toUpperCase()
+                .split('')
+                .map((c) => 127397 + c.charCodeAt(0));
+            return String.fromCodePoint(...codePoints);
+        } catch {
+            return '📍';
+        }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text).replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[m]));
+    }
+
+    function highlightMatches(text, query) {
+        if (!text) return '';
+        if (!query) return escapeHtml(text);
+        const tokens = query.trim().split(/[, \t]+/).filter((t) => t.length > 0);
+        if (!tokens.length) return escapeHtml(text);
+
+        const escapedTokens = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const pattern = new RegExp(`(${escapedTokens.join('|')})`, 'gi');
+        const parts = text.split(pattern);
+
+        return parts.map((part) => {
+            if (tokens.some((t) => t.toLowerCase() === part.toLowerCase())) {
+                return `<mark class="search-box__match">${escapeHtml(part)}</mark>`;
+            }
+            return escapeHtml(part);
+        }).join('');
+    }
 
     function readStorage(key) {
         try { return window.localStorage.getItem(key); } catch (e) { return null; }
@@ -253,6 +298,9 @@
         if (locationLabel) {
             locationLabel.textContent = city.name || 'Current Location';
         }
+        if (searchInput && document.activeElement !== searchInput) {
+            searchInput.value = city.name || '';
+        }
         if (locationBtn) {
             locationBtn.classList.remove('is-active');
             locationBtn.setAttribute('title', 'Fetch current device location weather');
@@ -281,10 +329,18 @@
        ---------------------------------------------------------------------- */
     const searchInput = document.getElementById('location-search');
     const searchList = document.getElementById('search-results');
+    const searchSpinner = document.getElementById('search-spinner');
     let searchResults = [];
     let activeIndex = -1;
     let requestId = 0;
     let debounceTimer = null;
+    const DEBOUNCE_DELAY_MS = 350;
+
+    function setSearching(loading) {
+        if (searchSpinner) {
+            searchSpinner.hidden = !loading;
+        }
+    }
 
     function closeSearchResults() {
         searchList.hidden = true;
@@ -307,20 +363,33 @@
     }
 
     function renderSearchResults(results, query) {
-        searchResults = results;
-        state.searchResults = results;
+        searchResults = results.slice(0, 7);
+        state.searchResults = searchResults;
         searchList.replaceChildren();
 
-        if (!results.length) {
-            const empty = el('li', 'search-box__empty', 'No locations found for \u201C' + query + '\u201D');
+        if (!searchResults.length) {
+            const empty = el('li', 'search-box__empty');
             empty.setAttribute('role', 'presentation');
+            empty.textContent = query ? `No locations found for \u201C${query}\u201D` : 'No locations found';
             searchList.append(empty);
         } else {
-            results.forEach((city, i) => {
+            searchResults.forEach((city, i) => {
                 const li = el('li', 'search-box__option');
                 li.id = 'search-option-' + i;
                 li.setAttribute('role', 'option');
-                li.append(el('strong', null, city.name), el('span', null, city.region));
+
+                const flag = el('span', 'search-box__option-flag', getCountryFlag(city.countryCode));
+                flag.setAttribute('aria-hidden', 'true');
+
+                const content = el('div', 'search-box__option-content');
+                const title = el('div', 'search-box__option-title');
+                title.innerHTML = highlightMatches(city.name, query);
+
+                const sub = el('div', 'search-box__option-sub');
+                sub.innerHTML = highlightMatches(city.region || city.country, query);
+
+                content.append(title, sub);
+                li.append(flag, content);
                 li.addEventListener('click', () => chooseSearchResult(city));
                 searchList.append(li);
             });
@@ -328,55 +397,106 @@
 
         searchList.hidden = false;
         searchInput.setAttribute('aria-expanded', 'true');
-        setActiveResult(results.length ? 0 : -1);
+        setActiveResult(searchResults.length ? 0 : -1);
     }
 
     function chooseSearchResult(city) {
         setLocation(city);
-        searchInput.value = '';
+        searchInput.value = city.name;
         closeSearchResults();
+        setSearching(false);
         searchInput.blur();
     }
 
     function runSearch() {
         const query = searchInput.value.trim();
-        if (!query) { closeSearchResults(); return; }
+        if (query.length < 2) {
+            setSearching(false);
+            closeSearchResults();
+            return;
+        }
 
+        setSearching(true);
         const thisRequest = ++requestId;
         LocationService.search(query).then((results) => {
-            if (thisRequest !== requestId) return;  // a newer search superseded this one
+            if (thisRequest !== requestId) return; // a newer search superseded this one
+            setSearching(false);
             renderSearchResults(results, query);
+        }).catch(() => {
+            if (thisRequest !== requestId) return;
+            setSearching(false);
+            renderSearchResults([], query);
         });
     }
 
     searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim();
+        if (query.length < 2) {
+            clearTimeout(debounceTimer);
+            setSearching(false);
+            closeSearchResults();
+            return;
+        }
+        setSearching(true);
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(runSearch, 150);
+        debounceTimer = setTimeout(runSearch, DEBOUNCE_DELAY_MS);
     });
 
-    searchInput.addEventListener('focus', () => closeAllDropdowns(null));
+    searchInput.addEventListener('focus', () => {
+        closeAllDropdowns(null);
+        if (searchInput.value.trim().length >= 2 && searchResults.length > 0) {
+            searchList.hidden = false;
+            searchInput.setAttribute('aria-expanded', 'true');
+        }
+    });
 
     searchInput.addEventListener('keydown', (e) => {
         const open = !searchList.hidden && searchResults.length > 0;
         switch (e.key) {
             case 'ArrowDown':
-                if (open) { e.preventDefault(); setActiveResult((activeIndex + 1) % searchResults.length); }
+                if (open) {
+                    e.preventDefault();
+                    setActiveResult((activeIndex + 1) % searchResults.length);
+                } else if (searchInput.value.trim().length >= 2) {
+                    runSearch();
+                }
                 break;
             case 'ArrowUp':
-                if (open) { e.preventDefault(); setActiveResult((activeIndex - 1 + searchResults.length) % searchResults.length); }
+                if (open) {
+                    e.preventDefault();
+                    setActiveResult((activeIndex - 1 + searchResults.length) % searchResults.length);
+                }
                 break;
             case 'Enter':
-                if (open && searchResults[activeIndex]) {
-                    e.preventDefault();
-                    chooseSearchResult(searchResults[activeIndex]);
+                e.preventDefault();
+                if (open) {
+                    const target = activeIndex >= 0 ? searchResults[activeIndex] : searchResults[0];
+                    if (target) chooseSearchResult(target);
+                } else {
+                    const query = searchInput.value.trim();
+                    if (query.length >= 2) {
+                        clearTimeout(debounceTimer);
+                        setSearching(true);
+                        LocationService.search(query).then((results) => {
+                            setSearching(false);
+                            if (results.length > 0) {
+                                chooseSearchResult(results[0]);
+                            } else {
+                                renderSearchResults([], query);
+                            }
+                        }).catch(() => setSearching(false));
+                    }
                 }
                 break;
             case 'Escape':
-                if (!searchList.hidden || searchInput.value) {
-                    e.preventDefault();
-                    searchInput.value = '';
-                    closeSearchResults();
+                e.preventDefault();
+                clearTimeout(debounceTimer);
+                setSearching(false);
+                closeSearchResults();
+                if (state.location?.name) {
+                    searchInput.value = state.location.name;
                 }
+                searchInput.blur();
                 break;
         }
     });
@@ -454,6 +574,7 @@
 
     window.WeatherlyTopbar = {
         getLocation: () => state.location,
+        setLocation: setLocation,
         getUnit: () => state.unit,
         toDisplayTemp: toDisplayTemp
     };
