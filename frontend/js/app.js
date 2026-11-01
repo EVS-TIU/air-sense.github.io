@@ -74,6 +74,7 @@ const currentCountryEl = document.querySelector("[data-current-country]");
 const currentDatetimeEl = document.querySelector("[data-current-datetime]");
 const currentStatusEl = document.querySelector("[data-current-status]");
 const currentTempEl = document.querySelector("[data-current-temp]");
+const currentTempUnitEl = document.querySelector("[data-current-temp-unit]");
 const currentFeelsEl = document.querySelector("[data-current-feels]");
 const currentFeelsMetricEl = document.querySelector("[data-current-feels-metric]");
 const currentConditionEl = document.querySelector("[data-current-condition]");
@@ -100,7 +101,6 @@ const aqiScaleMarkerEl = document.querySelector("[data-aqi-scale-marker]");
 const aqiScaleValueEl = document.querySelector("[data-aqi-scale-value]");
 const UV_SCALE_MAX = 11;
 const AQI_SCALE_MAX = 500;
-const tempUnitToggle = document.querySelector("[data-temp-unit-toggle]");
 const feelsUnitEls = document.querySelectorAll("[data-feels-unit]");
 const feelsMetricUnitEls = document.querySelectorAll("[data-feels-metric-unit]");
 const rangeUnitHighEls = document.querySelectorAll("[data-range-unit-high]");
@@ -347,12 +347,37 @@ function formatTemperature(value) {
   return String(rounded);
 }
 
+function updateTemperatureDisplay(element) {
+  const rawValue = element.dataset.temperatureCelsius;
+  const value = rawValue === "" ? null : Number(rawValue);
+  element.textContent =
+    `${formatTemperature(value)}${element.dataset.temperatureSuffix || ""}`;
+}
+
+function setTemperatureDisplay(element, value, suffix = "") {
+  if (!element) {
+    return;
+  }
+  element.dataset.temperatureCelsius = Number.isFinite(value) ? String(value) : "";
+  element.dataset.temperatureSuffix = suffix;
+  updateTemperatureDisplay(element);
+}
+
+function updateTemperatureDisplays() {
+  document.querySelectorAll("[data-temperature-celsius]").forEach((element) => {
+    updateTemperatureDisplay(element);
+  });
+}
+
 function getTemperatureUnitSymbol() {
   return temperatureUnit === "f" ? "F" : "C";
 }
 
 function updateTemperatureUnitUI() {
   const symbol = getTemperatureUnitSymbol();
+  if (currentTempUnitEl) {
+    currentTempUnitEl.textContent = `°${symbol}`;
+  }
   if (feelsUnitEls.length) {
     feelsUnitEls.forEach((el) => {
       el.textContent = symbol;
@@ -781,7 +806,7 @@ function renderHourlyForecast(weather) {
       );
     }
     if (temperatureEl) {
-      temperatureEl.textContent = `${Math.round(point.temperature)}°`;
+      setTemperatureDisplay(temperatureEl, point.temperature, "°");
     }
     if (probabilityEl) {
       probabilityEl.textContent = conditionLabel;
@@ -877,8 +902,13 @@ function renderDailyForecast(weather) {
     conditionEl.textContent = condition;
     const tempsEl = document.createElement("div");
     tempsEl.className = "week-card__temps";
-    tempsEl.innerHTML = `<span class="week-card__high">${formatTemperature(day.high)}°</span>` +
-      `<span class="week-card__low">${formatTemperature(day.low)}°</span>`;
+    const highEl = document.createElement("span");
+    highEl.className = "week-card__high";
+    setTemperatureDisplay(highEl, day.high, "°");
+    const lowEl = document.createElement("span");
+    lowEl.className = "week-card__low";
+    setTemperatureDisplay(lowEl, day.low, "°");
+    tempsEl.append(highEl, lowEl);
     const meta = document.createElement("div");
     meta.className = "week-card__meta";
     meta.append(conditionEl, tempsEl);
@@ -927,15 +957,15 @@ function renderCurrentWeather(weather) {
   }
 
   if (currentTempEl) {
-    currentTempEl.textContent = formatTemperature(weather.temperature);
+    setTemperatureDisplay(currentTempEl, weather.temperature);
   }
 
   if (currentFeelsEl) {
-    currentFeelsEl.textContent = formatTemperature(weather.apparent_temperature);
+    setTemperatureDisplay(currentFeelsEl, weather.apparent_temperature);
   }
 
   if (currentFeelsMetricEl) {
-    currentFeelsMetricEl.textContent = formatTemperature(weather.apparent_temperature);
+    setTemperatureDisplay(currentFeelsMetricEl, weather.apparent_temperature);
   }
 
   if (currentConditionEl) {
@@ -948,11 +978,11 @@ function renderCurrentWeather(weather) {
   }
 
   if (currentHighEl) {
-    currentHighEl.textContent = formatTemperature(weather.temperature_max);
+    setTemperatureDisplay(currentHighEl, weather.temperature_max);
   }
 
   if (currentLowEl) {
-    currentLowEl.textContent = formatTemperature(weather.temperature_min);
+    setTemperatureDisplay(currentLowEl, weather.temperature_min);
   }
 
   if (currentHumidityEl) {
@@ -1212,17 +1242,6 @@ async function initialiseCurrentWeatherHero() {
   loadTemperatureUnitPreference();
   updateTemperatureUnitUI();
 
-  if (tempUnitToggle) {
-    tempUnitToggle.addEventListener("click", () => {
-      temperatureUnit = temperatureUnit === "c" ? "f" : "c";
-      saveTemperatureUnitPreference();
-      updateTemperatureUnitUI();
-      if (currentHeroWeather) {
-        renderCurrentWeather(currentHeroWeather);
-      }
-    });
-  }
-
   if (currentRetryBtn) {
     currentRetryBtn.addEventListener("click", () => {
       if (heroPosition) {
@@ -1473,6 +1492,13 @@ document.addEventListener("weatherly:location-change", (event) => {
   updateCurrentWeatherHero(heroPosition).catch((error) => {
     console.warn("Selected location weather unavailable:", error.message);
   });
+});
+
+document.addEventListener("weatherly:unit-change", (event) => {
+  temperatureUnit = event.detail?.unit === "F" ? "f" : "c";
+  saveTemperatureUnitPreference();
+  updateTemperatureUnitUI();
+  updateTemperatureDisplays();
 });
 
 document.addEventListener("weatherly:request-device-location", () => {
