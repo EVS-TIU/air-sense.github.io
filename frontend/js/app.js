@@ -942,15 +942,11 @@ function updateCurrentDatetime() {
 }
 
 function formatLocation(weather) {
+  if (typeof weather?.location_name === "string" && weather.location_name.trim()) {
+    return weather.location_name.trim();
+  }
   if (typeof weather?.location_label === "string" && weather.location_label.trim()) {
     return weather.location_label.trim();
-  }
-  if (typeof weather?.location_name === "string" && weather.location_name.trim()) {
-    const name = weather.location_name.trim();
-    if (typeof weather?.location_country === "string" && weather.location_country.trim()) {
-      return `${name}, ${weather.location_country.trim()}`;
-    }
-    return name;
   }
   if (typeof weather?.timezone === "string" && weather.timezone) {
     return weather.timezone.replace(/_/g, " ");
@@ -1318,10 +1314,22 @@ function renderCurrentWeather(weather) {
     currentLocationEl.textContent = formatLocation(weather);
   }
   if (currentCountryEl) {
-    currentCountryEl.textContent =
-      typeof weather.location_country === "string"
-        ? weather.location_country
-        : "";
+    const parts = [];
+    if (
+      typeof weather.location_state === "string" &&
+      weather.location_state.trim() &&
+      weather.location_state.trim().toLowerCase() !==
+        (weather.location_name || "").trim().toLowerCase()
+    ) {
+      parts.push(weather.location_state.trim());
+    }
+    if (
+      typeof weather.location_country === "string" &&
+      weather.location_country.trim()
+    ) {
+      parts.push(weather.location_country.trim());
+    }
+    currentCountryEl.textContent = parts.join(", ");
   }
 
   if (currentDatetimeEl) {
@@ -1568,7 +1576,8 @@ async function fetchDeviceLocationWeather(options = {}) {
       locationBtn.setAttribute("title", `Current Location: ${label} (Click to refresh)`);
     }
     if (locationLabel) {
-      locationLabel.textContent = "Current Location";
+      locationLabel.textContent =
+        weather.location_name || weather.location_label || "Current Location";
     }
 
     document.dispatchEvent(

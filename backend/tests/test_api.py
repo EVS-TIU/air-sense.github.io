@@ -171,13 +171,23 @@ def test_current_reverse_geocode_fallback_when_name_missing():
     import asyncio
     service = WeatherClient(Settings(openweather_api_key="test-key"))
     service._get = AsyncMock(side_effect=[
-        {"name": "", "coord": {"lat": 20, "lon": 85}, "weather": [{"id": 800, "icon": "01d"}], "main": {}, "wind": {}, "sys": {}},
-        {"city": {"coord": {"lat": 20, "lon": 85}}, "list": []},
+        {"name": "Coarse Metro", "coord": {"lat": 22.58, "lon": 88.42}, "weather": [{"id": 800, "icon": "01d"}], "main": {}, "wind": {}, "sys": {"country": "IN"}},
+        {"city": {"coord": {"lat": 22.58, "lon": 88.42}}, "list": []},
         Exception("no uv"),
         Exception("no air"),
-        [{"name": "Fallback Locality", "country": "IN"}],
+        [{"name": "Bidhannagar", "state": "West Bengal", "country": "IN"}],
     ])
-    result = asyncio.run(service.current(20, 85))
-    assert result["location_name"] == "Fallback Locality"
+    result = asyncio.run(service.current(22.58, 88.42))
+    assert result["location_name"] == "Bidhannagar"
+    assert result["location_state"] == "West Bengal"
     assert result["location_country"] == "IN"
+    assert result["station_name"] == "Coarse Metro"
+
+
+def test_location_reverse_endpoint(client):
+    app.state.weather.reverse = AsyncMock(return_value=[{"name": "Bidhannagar", "country": "IN", "state": "West Bengal"}])
+    response = client.get("/api/v1/location/reverse?latitude=22.58&longitude=88.42")
+    assert response.status_code == 200
+    assert response.json()["results"][0]["name"] == "Bidhannagar"
+
 

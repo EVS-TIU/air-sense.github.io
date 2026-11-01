@@ -212,7 +212,7 @@
             locationBtn.setAttribute('title', `Current location: ${event.detail.name || 'Device'} (Click to refresh)`);
         }
         if (locationLabel) {
-            locationLabel.textContent = 'Current Location';
+            locationLabel.textContent = event.detail.name || 'Current Location';
         }
     });
 
@@ -238,7 +238,7 @@
     function setLocation(city) {
         state.location = city;
         if (locationLabel) {
-            locationLabel.textContent = 'Current Location';
+            locationLabel.textContent = city.name || 'Current Location';
         }
         if (locationBtn) {
             locationBtn.classList.remove('is-active');

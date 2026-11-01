@@ -126,7 +126,7 @@ class WeatherClient:
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
-        current, forecast, uv_response, air_response = await asyncio.gather(
+        current, forecast, uv_response, air_response, geo_response = await asyncio.gather(
             self._get("/data/2.5/weather", {"lat": lat, "lon": lon, "units": "metric"}),
             self._get("/data/2.5/forecast", {"lat": lat, "lon": lon, "units": "metric"}),
             self._get(
@@ -134,6 +134,7 @@ class WeatherClient:
                 {"lat": lat, "lon": lon, "exclude": "minutely,hourly,daily,alerts", "units": "metric"},
             ),
             self._get("/data/2.5/air_pollution", {"lat": lat, "lon": lon}),
+            self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 1}),
             return_exceptions=True,
         )
         if isinstance(current, Exception):
@@ -144,17 +145,12 @@ class WeatherClient:
             logger.info("UV data is unavailable from the configured OpenWeather plan")
             uv_response = None
         air = None if isinstance(air_response, Exception) else normalize_air_quality(air_response, lat, lon)
-        if not current.get("name"):
-            try:
-                geo = await self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 1})
-                if isinstance(geo, list) and len(geo) > 0 and isinstance(geo[0], dict):
-                    if geo[0].get("name"):
-                        current["name"] = geo[0].get("name")
-                    if geo[0].get("country") and not (current.get("sys") or {}).get("country"):
-                        current.setdefault("sys", {})["country"] = geo[0].get("country")
-            except Exception:
-                pass
-        result = normalize_current(current, forecast, uv_response, air)
+        geo_item = (
+            geo_response[0]
+            if isinstance(geo_response, list) and len(geo_response) > 0 and isinstance(geo_response[0], dict)
+            else None
+        )
+        result = normalize_current(current, forecast, uv_response, air, geo_item)
         await self.cache.set(key, result)
         return result
 
@@ -184,6 +180,11 @@ class WeatherClient:
         return [{"name": item.get("name"), "country": item.get("country"), "state": item.get("state"),
                  "latitude": item.get("lat"), "longitude": item.get("lon")} for item in raw]
 
+    async def reverse(self, lat: float, lon: float) -> list[dict[str, Any]]:
+        raw = await self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 5})
+        return [{"name": item.get("name"), "country": item.get("country"), "state": item.get("state"),
+                 "latitude": item.get("lat"), "longitude": item.get("lon")} for item in raw]
+
 
 def normalize_forecast(raw: dict[str, Any]) -> dict[str, Any]:
     points = []
@@ -209,12 +210,18 @@ def normalize_current(
     forecast: dict[str, Any],
     uv_response: dict[str, Any] | None = None,
     air: dict[str, Any] | None = None,
+    geo_item: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     main, wind = raw.get("main", {}), raw.get("wind", {})
     weather = (raw.get("weather") or [{}])[0]
     sys = raw.get("sys", {})
     normalized_forecast = normalize_forecast(forecast)
-    return {"location_label": raw.get("name"), "location_name": raw.get("name"), "location_country": sys.get("country"),
+    precise_name = (geo_item.get("name") if geo_item else None) or raw.get("name")
+    country = (geo_item.get("country") if geo_item else None) or sys.get("country")
+    state = geo_item.get("state") if geo_item else None
+    return {"location_label": precise_name, "location_name": precise_name,
+            "location_state": state, "location_country": country,
+            "station_name": raw.get("name"),
             "latitude": raw.get("coord", {}).get("lat"), "longitude": raw.get("coord", {}).get("lon"),
             "timezone": None, "timezone_offset": raw.get("timezone", 0), "observed_at": raw.get("dt"),
             "is_day": (weather.get("icon") or "").endswith("d") if isinstance(weather.get("icon"), str) and weather.get("icon").endswith(("d", "n")) else None,

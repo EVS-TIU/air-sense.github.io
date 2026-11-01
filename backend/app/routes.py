@@ -74,6 +74,11 @@ async def location_search(request: Request, q: Annotated[str, Query(min_length=2
     return {"results": await provider_call(service(request).search(q.strip()))}
 
 
+@router.get("/location/reverse")
+async def location_reverse(request: Request, location: Annotated[Coordinates, Depends(coordinates)]) -> dict:
+    return {"results": await provider_call(service(request).reverse(location.latitude, location.longitude))}
+
+
 @router.get("/recommendations")
 async def recommendations(request: Request, location: Annotated[Coordinates, Depends(coordinates)]) -> dict:
     weather = await provider_call(service(request).current(location.latitude, location.longitude))
