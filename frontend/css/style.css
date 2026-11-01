@@ -705,6 +705,42 @@ button {
 
     padding: 22px 24px;
     overflow: hidden;
+    position: relative;
+    border-radius: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background:
+        linear-gradient(165deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.015) 40%, rgba(8, 20, 34, 0.03) 100%);
+    backdrop-filter: blur(38px) saturate(108%) brightness(0.98);
+    -webkit-backdrop-filter: blur(38px) saturate(108%) brightness(0.98);
+    box-shadow:
+        0 40px 80px -40px rgba(30, 100, 200, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    isolation: isolate;
+}
+
+.current-weather::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(140% 140% at 15% -10%, rgba(190, 225, 255, 0.06) 0%, transparent 56%);
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+
+.current-weather::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(26px - 1px);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 48%);
+    pointer-events: none;
+    mix-blend-mode: screen;
+}
+
+.current-weather > * {
+    position: relative;
+    z-index: 1;
 }
 
 .current-weather__header {
@@ -1819,9 +1855,30 @@ button {
     z-index: 0;
     overflow: hidden;
     pointer-events: none;
-
-    /* Fallback gradient shown until a local weather image is available. */
     background: #061523;
+}
+
+.weather-background__video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vw;
+    height: 100vh;
+    min-width: 100%;
+    min-height: 100%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    pointer-events: none;
+    animation: slow-motion 60s linear infinite;
+}
+
+@keyframes slow-motion {
+    from {
+        filter: none;
+    }
+    to {
+        filter: none;
+    }
 }
 
 .weather-background__layer {
@@ -1856,10 +1913,21 @@ button {
     z-index: 1;
 }
 
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .current-weather {
+        background: rgba(8, 20, 34, 0.32);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .weather-background__layer {
         transform: none;
         transition: opacity 0.2s linear;
+    }
+    .weather-background__video {
+        animation: none;
     }
 }
 
@@ -1873,15 +1941,16 @@ button {
     flex-direction: column;
     padding: 26px 28px 22px;
     overflow: hidden;
+    border-radius: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
     background:
-        radial-gradient(circle at 78% 18%, rgba(41, 148, 255, 0.16), transparent 38%),
-        radial-gradient(circle at 12% 100%, rgba(33, 169, 255, 0.12), transparent 42%),
-        var(--panel-bg);
-    border-color: rgba(130, 190, 230, 0.3);
+        radial-gradient(120% 120% at 10% 0%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.08) 38%, transparent 68%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 48%, rgba(10, 24, 38, 0.08) 100%);
+    backdrop-filter: blur(28px) saturate(120%);
+    -webkit-backdrop-filter: blur(28px) saturate(120%);
     box-shadow:
-        0 24px 60px rgba(2, 12, 23, 0.42),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1),
-        inset 0 0 40px rgba(55, 137, 183, 0.08);
+        0 40px 80px -40px rgba(60, 150, 255, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
     isolation: isolate;
 }
 
@@ -1889,11 +1958,20 @@ button {
     content: "";
     position: absolute;
     inset: 0;
+    border-radius: inherit;
     pointer-events: none;
-    background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 28%),
-        linear-gradient(180deg, transparent 62%, rgba(2, 13, 25, 0.22));
-    z-index: -1;
+    background: radial-gradient(circle at 20% -10%, rgba(220, 244, 255, 0.24), transparent 60%);
+    mix-blend-mode: screen;
+}
+
+.current-weather::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(26px - 1px);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%);
+    pointer-events: none;
+    mix-blend-mode: screen;
 }
 
 .current-weather__header {
