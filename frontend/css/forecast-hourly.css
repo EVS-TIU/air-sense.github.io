@@ -161,10 +161,15 @@
 /* Weather SVG */
 
 .weather-icon {
+    display: block;
     width: 57px;
     height: 52px;
-    margin-bottom: 6px;
+    margin: 0 0 6px;
+    object-fit: contain;
     overflow: visible;
+    flex: 0 0 auto;
+    pointer-events: none;
+    user-select: none;
 }
 
 .cloud {

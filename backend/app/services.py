@@ -71,7 +71,9 @@ def condition_group(condition_id: int | None) -> str:
         return "clear"
     if condition_id in (801, 802):
         return "partly_cloudy"
-    if condition_id in (803, 804):
+    if condition_id == 803:
+        return "cloudy"
+    if condition_id == 804:
         return "overcast"
     return "unknown"
 
@@ -179,10 +181,13 @@ def normalize_forecast(raw: dict[str, Any]) -> dict[str, Any]:
         weather = (item.get("weather") or [{}])[0]
         rain = item.get("rain", {}).get("3h", 0) if isinstance(item.get("rain"), dict) else 0
         snow = item.get("snow", {}).get("3h", 0) if isinstance(item.get("snow"), dict) else 0
+        icon = weather.get("icon")
         points.append({"time": item.get("dt_txt"), "timestamp": item.get("dt"), "temperature": item.get("main", {}).get("temp"),
                        "feels_like": item.get("main", {}).get("feels_like"), "humidity": item.get("main", {}).get("humidity"),
                        "weather_code": weather.get("id"), "condition": condition_group(weather.get("id")),
-                       "description": weather.get("description"), "precipitation_probability": round((item.get("pop") or 0) * 100),
+                       "description": weather.get("description"), "icon": icon,
+                       "is_day": icon.endswith("d") if isinstance(icon, str) and icon.endswith(("d", "n")) else None,
+                       "precipitation_probability": round((item.get("pop") or 0) * 100),
                        "rain_3h": rain, "snow_3h": snow, "wind_speed": (item.get("wind") or {}).get("speed", 0) * 3.6})
     return {"location": {"latitude": raw.get("city", {}).get("coord", {}).get("lat"),
                          "longitude": raw.get("city", {}).get("coord", {}).get("lon")},
@@ -202,7 +207,8 @@ def normalize_current(
     return {"location_label": raw.get("name"), "location_name": raw.get("name"), "location_country": sys.get("country"),
             "latitude": raw.get("coord", {}).get("lat"), "longitude": raw.get("coord", {}).get("lon"),
             "timezone": None, "timezone_offset": raw.get("timezone", 0), "observed_at": raw.get("dt"),
-            "is_day": None, "uv_index": uv_response.get("current", {}).get("uvi") if uv_response else None,
+            "is_day": (weather.get("icon") or "").endswith("d") if isinstance(weather.get("icon"), str) and weather.get("icon").endswith(("d", "n")) else None,
+            "uv_index": uv_response.get("current", {}).get("uvi") if uv_response else None,
             "temperature": main.get("temp"), "apparent_temperature": main.get("feels_like"),
             "temperature_min": main.get("temp_min"), "temperature_max": main.get("temp_max"),
             "humidity": main.get("humidity"), "pressure": main.get("pressure"), "visibility": raw.get("visibility"),

@@ -101,16 +101,20 @@ def test_cache():
 
 
 def test_current_weather_includes_normalized_hourly_forecast():
-    current = {"name": "Test City", "coord": {"lat": 1, "lon": 2}, "weather": [{"id": 800}],
+    current = {"name": "Test City", "coord": {"lat": 1, "lon": 2}, "weather": [{"id": 800, "icon": "01d"}],
                "main": {}, "wind": {}, "sys": {}}
     forecast = {"city": {"coord": {"lat": 1, "lon": 2}}, "list": [
         {"dt": 1, "dt_txt": "2026-10-31 12:00:00", "main": {"temp": 20},
-         "weather": [{"id": 801}], "pop": 0.6}
+         "weather": [{"id": 801, "description": "few clouds", "icon": "02d"}], "pop": 0.6}
     ]}
     result = normalize_current(current, forecast)
     assert len(result["hourly"]) == 1
     assert result["hourly"][0]["temperature"] == 20
     assert result["hourly"][0]["precipitation_probability"] == 60
+    assert result["hourly"][0]["weather_code"] == 801
+    assert result["hourly"][0]["icon"] == "02d"
+    assert result["hourly"][0]["is_day"] is True
+    assert result["is_day"] is True
 
 
 def test_current_weather_maps_uv_and_location_sun_times():

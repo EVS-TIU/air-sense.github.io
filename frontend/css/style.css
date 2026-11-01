@@ -1444,6 +1444,7 @@ button {
     width: 54px;
     height: 44px;
     margin: 0;
+    object-fit: contain;
     overflow: visible;
 }
 
@@ -2183,6 +2184,17 @@ button {
     z-index: 1;
     margin-top: 0;
     text-align: left;
+}
+
+.current-weather__condition-icon {
+    display: block;
+    width: clamp(100px, 11vw, 120px);
+    height: clamp(100px, 11vw, 120px);
+    margin: 0 auto 10px;
+    object-fit: contain;
+    filter: drop-shadow(0 14px 22px rgba(3, 17, 31, 0.42));
+    pointer-events: none;
+    user-select: none;
 }
 
 .current-weather__condition-panel .current-weather__condition {

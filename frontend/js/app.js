@@ -16,9 +16,11 @@ const API_BASE_URL = (
 
 const WEATHER_ASSET_ROOT = "./assets/images/weather/";
 const WEATHER_ILLUSTRATION_ROOT = "./assets/images/weather-illustrations/";
+const WEATHER_ICON_ROOT = "./assets/icons/weather/";
 const DEFAULT_BACKGROUND = "Clear_day.jpg";
 const NIGHT_BACKGROUND = "Clear_night.jpg";
 const DEFAULT_ILLUSTRATION = "cloudy.png";
+const DEFAULT_CONDITION_ICON = "default.svg";
 const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 const WEATHER_REQUEST_TIMEOUT_MS = 12 * 1000;
 const WEATHER_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -30,6 +32,7 @@ const UNITS_STORAGE_KEY = "airsense:units";
 const CONDITION_BACKGROUNDS = {
   clear: "Clear_day.jpg",
   partly_cloudy: "Partly_cloudy_day.jpg",
+  cloudy: "Overcast.jpg",
   overcast: "Overcast.jpg",
   fog: "Dense_fog.jpg",
   drizzle: "Drizzle.jpg",
@@ -44,6 +47,7 @@ const CONDITION_BACKGROUNDS = {
 const CONDITION_ILLUSTRATIONS = {
   clear: "cloudy.png",
   partly_cloudy: "partly-cloudy.png",
+  cloudy: "cloudy.png",
   overcast: "cloudy.png",
   fog: "fog.png",
   drizzle: "rain.png",
@@ -86,6 +90,7 @@ const currentWindDirEl = document.querySelector("[data-current-wind-dir]");
 const currentVisibilityEl = document.querySelector("[data-current-visibility]");
 const currentVisibilityUnitEl = document.querySelector("[data-current-visibility-unit]");
 const currentIllustrationEl = document.querySelector("[data-current-illustration]");
+const currentConditionIconEl = document.querySelector("[data-current-condition-icon]");
 const uvIconEl = document.querySelector("[data-uv-icon]");
 const uvLabelEl = document.querySelector("[data-uv-label]");
 const uvValueEl = document.querySelector("[data-uv-value]");
@@ -469,6 +474,302 @@ function resolveIllustration(weather) {
   return CONDITION_ILLUSTRATIONS[condition] || DEFAULT_ILLUSTRATION;
 }
 
+/* Central forecast/current mapping: one key owns both label and icon. */
+const FORECAST_CONDITION_META = {
+  sunny: { label: "Sunny", icon: "sunny.svg" },
+  "clear-night": { label: "Clear Night", icon: "clear-night.svg" },
+  "partly-cloudy": { label: "Partly Cloudy", icon: "partly-cloudy.svg" },
+  cloudy: { label: "Cloudy", icon: "cloudy.svg" },
+  overcast: { label: "Overcast", icon: "overcast.svg" },
+  fog: { label: "Fog", icon: "fog.svg" },
+  drizzle: { label: "Drizzle", icon: "drizzle.svg" },
+  rain: { label: "Rain", icon: "rain.svg" },
+  "heavy-rain": { label: "Heavy Rain", icon: "heavy-rain.svg" },
+  thunderstorm: { label: "Thunderstorm", icon: "thunderstorm.svg" },
+  snow: { label: "Snow", icon: "snow.svg" },
+  sleet: { label: "Sleet", icon: "sleet.svg" },
+  windy: { label: "Windy", icon: "windy.svg" },
+  default: { label: "Weather unavailable", icon: DEFAULT_CONDITION_ICON },
+};
+
+function forecastPointCode(point) {
+  if (!point || typeof point !== "object") {
+    return NaN;
+  }
+  const raw = point.weather_code ?? point.condition_code ?? point.weathercode;
+  return typeof raw === "number" || typeof raw === "string" ? Number(raw) : NaN;
+}
+
+/**
+ * Day/night for THIS forecast item only.
+ * Uses the item's own is_day / OpenWeather icon suffix, then its timestamp.
+ * Never borrows current-weather is_day/icon.
+ * Moon is applied later only for clear-sky codes — not for every night hour.
+ */
+function resolveForecastIsDaytime(point, weather = null) {
+  const source = point && typeof point === "object" ? point : {};
+
+  if (source.is_day === true) {
+    return true;
+  }
+  if (source.is_day === false) {
+    return false;
+  }
+
+  if (typeof source.icon === "string") {
+    if (/[dn]$/i.test(source.icon)) {
+      return source.icon.toLowerCase().endsWith("d");
+    }
+  }
+
+  const timestamp = Number(source.timestamp ?? source.observed_at);
+  const context = weather && typeof weather === "object" ? weather : {};
+  const sunrise = Number(context.sunrise);
+  const sunset = Number(context.sunset);
+
+  if (
+    Number.isFinite(timestamp) &&
+    Number.isFinite(sunrise) &&
+    Number.isFinite(sunset)
+  ) {
+    const pointTod = ((timestamp % 86400) + 86400) % 86400;
+    const sunriseTod = ((sunrise % 86400) + 86400) % 86400;
+    const sunsetTod = ((sunset % 86400) + 86400) % 86400;
+    if (sunsetTod > sunriseTod) {
+      return pointTod >= sunriseTod && pointTod < sunsetTod;
+    }
+    return pointTod >= sunriseTod || pointTod < sunsetTod;
+  }
+
+  const timezoneOffset = Number(context.timezone_offset);
+  if (Number.isFinite(timestamp) && Number.isFinite(timezoneOffset)) {
+    const localHour =
+      ((((timestamp + timezoneOffset) % 86400) + 86400) % 86400) / 3600;
+    return localHour >= 6 && localHour < 18;
+  }
+
+  return true;
+}
+
+/**
+ * Map a numeric API condition code → condition key.
+ * Supports OpenWeather IDs (200–804) and WMO codes (0–99).
+ * Day/night variants exist only for clear sky.
+ */
+function conditionKeyFromWeatherCode(code, isDay = true) {
+  if (!Number.isFinite(code)) {
+    return null;
+  }
+
+  // WMO Weather interpretation codes (e.g. Open-Meteo weathercode).
+  if (code >= 0 && code <= 99) {
+    if (code === 0) {
+      return isDay ? "sunny" : "clear-night";
+    }
+    if (code === 1 || code === 2) {
+      return "partly-cloudy";
+    }
+    if (code === 3) {
+      return "overcast";
+    }
+    if (code === 45 || code === 48) {
+      return "fog";
+    }
+    if (code >= 51 && code <= 57) {
+      return "drizzle";
+    }
+    if (code === 66 || code === 67) {
+      return "sleet";
+    }
+    if (code >= 61 && code <= 65) {
+      return code >= 65 ? "heavy-rain" : "rain";
+    }
+    if (code >= 71 && code <= 77) {
+      return "snow";
+    }
+    if (code >= 80 && code <= 82) {
+      return code === 82 ? "heavy-rain" : "rain";
+    }
+    if (code === 85 || code === 86) {
+      return "snow";
+    }
+    if (code >= 95 && code <= 99) {
+      return "thunderstorm";
+    }
+    return null;
+  }
+
+  // OpenWeather condition IDs.
+  if (code >= 200 && code <= 232) {
+    return "thunderstorm";
+  }
+  if (code >= 300 && code <= 321) {
+    return "drizzle";
+  }
+  if (
+    code === 511 ||
+    code === 611 ||
+    code === 612 ||
+    code === 613 ||
+    code === 615 ||
+    code === 616
+  ) {
+    return "sleet";
+  }
+  if (code === 502 || code === 503 || code === 504 || code === 522) {
+    return "heavy-rain";
+  }
+  if (code >= 500 && code <= 531) {
+    return "rain";
+  }
+  if (code >= 600 && code <= 622) {
+    return "snow";
+  }
+  if (code === 771 || code === 781) {
+    return "windy";
+  }
+  if (code >= 700 && code <= 781) {
+    return "fog";
+  }
+  if (code === 800) {
+    return isDay ? "sunny" : "clear-night";
+  }
+  if (code === 801 || code === 802) {
+    return "partly-cloudy";
+  }
+  if (code === 803) {
+    return "cloudy";
+  }
+  if (code === 804) {
+    return "overcast";
+  }
+
+  return null;
+}
+
+/** Fallback when a numeric weather code is absent — API condition group only. */
+function conditionKeyFromConditionGroup(condition, isDay = true) {
+  switch (String(condition || "").toLowerCase()) {
+    case "clear":
+      return isDay ? "sunny" : "clear-night";
+    case "partly_cloudy":
+    case "partly-cloudy":
+      return "partly-cloudy";
+    case "cloudy":
+      return "cloudy";
+    case "overcast":
+      return "overcast";
+    case "fog":
+      return "fog";
+    case "drizzle":
+      return "drizzle";
+    case "rain":
+    case "rain_showers":
+      return "rain";
+    case "heavy_rain":
+    case "heavy-rain":
+      return "heavy-rain";
+    case "thunderstorm":
+      return "thunderstorm";
+    case "snow":
+    case "snow_showers":
+      return "snow";
+    case "sleet":
+      return "sleet";
+    case "windy":
+      return "windy";
+    default:
+      return null;
+  }
+}
+
+function resolveForecastConditionKey(point, { isDay = true } = {}) {
+  if (!point || typeof point !== "object") {
+    return "default";
+  }
+
+  const fromCode = conditionKeyFromWeatherCode(forecastPointCode(point), isDay);
+  if (fromCode) {
+    return fromCode;
+  }
+
+  const fromGroup = conditionKeyFromConditionGroup(point.condition, isDay);
+  if (fromGroup) {
+    return fromGroup;
+  }
+
+  return "default";
+}
+
+function resolveForecastCondition(point, context = {}) {
+  const weatherContext = context.weather ?? null;
+  const isDay =
+    typeof context.isDay === "boolean"
+      ? context.isDay
+      : resolveForecastIsDaytime(point, weatherContext);
+  const key = resolveForecastConditionKey(point, { isDay });
+  const meta = FORECAST_CONDITION_META[key] || FORECAST_CONDITION_META.default;
+  return {
+    key,
+    label: meta.label,
+    icon: meta.icon,
+  };
+}
+
+function resolveIsDaytime(weather) {
+  return resolveForecastIsDaytime(weather, weather);
+}
+
+function resolveConditionIcon(weather) {
+  if (!weather || typeof weather !== "object") {
+    return DEFAULT_CONDITION_ICON;
+  }
+
+  const point = {
+    weather_code: weather.condition_code,
+    condition_code: weather.condition_code,
+    condition: weather.condition,
+    is_day: weather.is_day,
+    icon: weather.icon,
+    timestamp: weather.observed_at,
+    observed_at: weather.observed_at,
+  };
+  return resolveForecastCondition(point, {
+    weather,
+    isDay: resolveForecastIsDaytime(point, weather),
+  }).icon;
+}
+
+function updateConditionIcon(weather) {
+  if (!currentConditionIconEl) {
+    return;
+  }
+
+  const filename = resolveConditionIcon(weather);
+  const url = `${WEATHER_ICON_ROOT}${filename}`;
+  const label =
+    typeof weather?.description === "string" && weather.description.trim()
+      ? weather.description.trim()
+      : typeof weather?.condition === "string"
+        ? weather.condition.replace(/_/g, " ")
+        : "Current weather";
+
+  currentConditionIconEl.alt = label;
+  currentConditionIconEl.onerror = () => {
+    currentConditionIconEl.onerror = null;
+    currentConditionIconEl.src = `${WEATHER_ICON_ROOT}${DEFAULT_CONDITION_ICON}`;
+  };
+
+  try {
+    const fullUrl = new URL(url, window.location.href).href;
+    if (currentConditionIconEl.src !== fullUrl) {
+      currentConditionIconEl.src = url;
+    }
+  } catch {
+    currentConditionIconEl.src = url;
+  }
+}
+
 function loadBackgroundImage(filename) {
   const url = `${WEATHER_ASSET_ROOT}${filename}`;
 
@@ -698,64 +999,30 @@ function formatForecastHour(time, timestamp, timezoneOffset = 0) {
 }
 
 function forecastConditionClass(code) {
-  const weatherCode = Number(code);
-  if (weatherCode === 800) {
+  const key = conditionKeyFromWeatherCode(Number(code), true);
+  if (key === "sunny" || key === "clear-night") {
     return "clear";
   }
-  if (weatherCode === 801 || weatherCode === 802) {
+  if (key === "partly-cloudy") {
     return "partly-cloudy";
   }
-  if (weatherCode === 803 || weatherCode === 804) {
-    return "cloudy";
-  }
-  if (weatherCode >= 200 && weatherCode <= 232) {
+  if (key === "thunderstorm") {
     return "storm";
   }
-  if (weatherCode >= 300 && weatherCode <= 321) {
+  if (key === "drizzle" || key === "rain" || key === "heavy-rain" || key === "sleet") {
     return "rain";
   }
-  if (weatherCode >= 500 && weatherCode <= 531) {
-    return "rain";
-  }
-  if (weatherCode >= 600 && weatherCode <= 622) {
+  if (key === "snow") {
     return "snow";
   }
-  if (weatherCode >= 700 && weatherCode <= 781) {
+  if (key === "fog") {
     return "fog";
-  }
-  if (weatherCode >= 95 && weatherCode <= 99) {
-    return "storm";
   }
   return "cloudy";
 }
 
-function forecastConditionLabel(point) {
-  const code = Number(point?.weather_code);
-  if (code === 800) {
-    return "Sunny";
-  }
-  if (code >= 801 && code <= 804) {
-    return "Cloudy";
-  }
-  if (code >= 200 && code <= 232) {
-    return "Thunderstorm";
-  }
-  if (code >= 300 && code <= 321) {
-    return "Drizzle";
-  }
-  if (code >= 500 && code <= 531) {
-    return "Rain";
-  }
-  if (code >= 600 && code <= 622) {
-    return "Snow";
-  }
-  if (code >= 700 && code <= 781) {
-    return "Foggy";
-  }
-  if (typeof point?.description === "string" && point.description.trim()) {
-    return point.description.trim().replace(/\b\w/g, (letter) => letter.toUpperCase());
-  }
-  return "Weather unavailable";
+function forecastConditionLabel(point, context = {}) {
+  return resolveForecastCondition(point, context).label;
 }
 
 function forecastIconMarkup(code) {
@@ -786,6 +1053,41 @@ function createForecastIcon(code, extraClass = "") {
   svg.setAttribute("class", `weather-icon ${forecastConditionClass(code)} ${extraClass}`.trim());
   svg.innerHTML = forecastIconMarkup(code);
   return svg;
+}
+
+function setForecastConditionIcon(iconEl, resolved, className = "weather-icon") {
+  if (!iconEl) {
+    return;
+  }
+
+  const meta =
+    resolved && typeof resolved === "object"
+      ? resolved
+      : FORECAST_CONDITION_META.default;
+  const filename = meta.icon || DEFAULT_CONDITION_ICON;
+  const label = meta.label || FORECAST_CONDITION_META.default.label;
+  const url = `${WEATHER_ICON_ROOT}${filename}`;
+
+  iconEl.hidden = false;
+  iconEl.className = className;
+  if ("alt" in iconEl) {
+    iconEl.alt = label;
+  }
+  iconEl.dataset.conditionKey = meta.key || "";
+  iconEl.dataset.conditionIcon = filename;
+  iconEl.onerror = () => {
+    iconEl.onerror = null;
+    iconEl.src = `${WEATHER_ICON_ROOT}${DEFAULT_CONDITION_ICON}`;
+  };
+
+  try {
+    const fullUrl = new URL(url, window.location.href).href;
+    if (iconEl.src !== fullUrl) {
+      iconEl.src = url;
+    }
+  } catch {
+    iconEl.src = url;
+  }
 }
 
 function renderHourlyForecast(weather) {
@@ -823,10 +1125,12 @@ function renderHourlyForecast(weather) {
     card.classList.toggle("active", index === 0);
     const hourEl = card.querySelector(".hour");
     const iconEl = card.querySelector(".weather-icon");
-    const moonEl = card.querySelector(".moon-icon");
     const temperatureEl = card.querySelector("h3");
     const probabilityEl = card.querySelector(".humidity");
-    const conditionLabel = forecastConditionLabel(point);
+    const resolved = resolveForecastCondition(point, {
+      weather,
+      isDay: resolveForecastIsDaytime(point, weather),
+    });
 
     if (hourEl) {
       hourEl.textContent = formatForecastHour(
@@ -839,7 +1143,7 @@ function renderHourlyForecast(weather) {
       setTemperatureDisplay(temperatureEl, point.temperature, "°");
     }
     if (probabilityEl) {
-      probabilityEl.textContent = conditionLabel;
+      probabilityEl.textContent = resolved.label;
       probabilityEl.setAttribute(
         "aria-label",
         Number.isFinite(point.precipitation_probability)
@@ -847,16 +1151,45 @@ function renderHourlyForecast(weather) {
           : "Chance of rain unavailable",
       );
     }
-    if (iconEl) {
-      const iconClass = forecastConditionClass(point.weather_code);
-      iconEl.className = `weather-icon ${iconClass}`;
-      iconEl.innerHTML = forecastIconMarkup(point.weather_code);
-      iconEl.hidden = !point.is_day && Boolean(moonEl);
-    }
-    if (moonEl) {
-      moonEl.hidden = Boolean(point.is_day);
+    // Label + icon come from the same resolved mapping for this hour's weather_code.
+    setForecastConditionIcon(iconEl, resolved);
+  });
+}
+
+function forecastPointLocalHour(point, timezoneOffset) {
+  const timestamp = Number(point?.timestamp);
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+  return ((((timestamp + timezoneOffset) % 86400) + 86400) % 86400) / 3600;
+}
+
+function forecastPointIsDaytime(point, weather) {
+  return resolveForecastIsDaytime(point, weather);
+}
+
+function pickDailyRepresentative(points, weather, timezoneOffset) {
+  if (!points.length) {
+    return null;
+  }
+
+  let best = points[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  points.forEach((point) => {
+    const localHour = forecastPointLocalHour(point, timezoneOffset);
+    const noonDistance =
+      localHour === null ? 12 : Math.abs(localHour - 12);
+    const isDay = forecastPointIsDaytime(point, weather);
+    // Prefer daytime API slots near local noon so daily icons match daytime conditions.
+    const score = (isDay ? 0 : 100) + noonDistance;
+    if (score < bestScore) {
+      best = point;
+      bestScore = score;
     }
   });
+
+  return best;
 }
 
 function aggregateDailyForecast(weather) {
@@ -875,27 +1208,33 @@ function aggregateDailyForecast(weather) {
       temperatures: [],
       precipitation: [],
       rain: 0,
-      representative: point,
+      points: [],
     };
     day.temperatures.push(point.temperature);
+    day.points.push(point);
     if (Number.isFinite(point.precipitation_probability)) {
       day.precipitation.push(point.precipitation_probability);
     }
     day.rain += Number(point.rain_3h) || 0;
-    if (point.timestamp < day.representative.timestamp ||
-        (point.weather_code >= 200 && point.weather_code <= 804 &&
-         !(day.representative.weather_code >= 200 && day.representative.weather_code <= 804))) {
-      day.representative = point;
-    }
     days.set(dateKey, day);
   });
 
-  return [...days.values()].slice(0, 5).map((day) => ({
-    ...day,
-    high: Math.max(...day.temperatures),
-    low: Math.min(...day.temperatures),
-    precipitation: day.precipitation.length ? Math.max(...day.precipitation) : null,
-  }));
+  return [...days.values()].slice(0, 5).map((day) => {
+    const representative = pickDailyRepresentative(
+      day.points,
+      weather,
+      timezoneOffset,
+    );
+    return {
+      ...day,
+      representative,
+      high: Math.max(...day.temperatures),
+      low: Math.min(...day.temperatures),
+      precipitation: day.precipitation.length
+        ? Math.max(...day.precipitation)
+        : null,
+    };
+  });
 }
 
 function renderDailyForecast(weather) {
@@ -919,17 +1258,22 @@ function renderDailyForecast(weather) {
     const dayName = index === 0
       ? "Today"
       : date.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
-    const condition = forecastConditionLabel(day.representative);
-    const icon = createForecastIcon(day.representative.weather_code, "week-card__icon");
-    icon.setAttribute("aria-label", condition);
-    icon.setAttribute("role", "img");
+    const resolved = resolveForecastCondition(day.representative, {
+      weather,
+      isDay: resolveForecastIsDaytime(day.representative, weather),
+    });
+    const icon = document.createElement("img");
+    icon.width = 54;
+    icon.height = 44;
+    icon.decoding = "async";
+    setForecastConditionIcon(icon, resolved, "weather-icon week-card__icon");
 
     const dayEl = document.createElement("p");
     dayEl.className = "week-card__day";
     dayEl.textContent = dayName;
     const conditionEl = document.createElement("p");
     conditionEl.className = "week-card__condition";
-    conditionEl.textContent = condition;
+    conditionEl.textContent = resolved.label;
     const tempsEl = document.createElement("div");
     tempsEl.className = "week-card__temps";
     const highEl = document.createElement("span");
@@ -1007,6 +1351,8 @@ function renderCurrentWeather(weather) {
           ? weather.condition.replace(/_/g, " ")
           : "--";
   }
+
+  updateConditionIcon(weather);
 
   if (currentHighEl) {
     setTemperatureDisplay(currentHighEl, weather.temperature_max);
