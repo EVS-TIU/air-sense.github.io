@@ -1822,6 +1822,19 @@ button {
     background: #061523;
 }
 
+.weather-background__video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vw;
+    height: 100vh;
+    min-width: 100%;
+    min-height: 100%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    pointer-events: none;
+}
+
 .weather-background__layer {
     display: none;
 }
@@ -1859,6 +1872,10 @@ button {
         transform: none;
         transition: opacity 0.2s linear;
     }
+
+    .weather-background__video {
+        display: none;
+    }
 }
 
 /* ==========================================================================
@@ -1871,15 +1888,24 @@ button {
     flex-direction: column;
     padding: 26px 28px 22px;
     overflow: hidden;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     background:
-        radial-gradient(circle at 78% 18%, rgba(41, 148, 255, 0.16), transparent 38%),
-        radial-gradient(circle at 12% 100%, rgba(33, 169, 255, 0.12), transparent 42%),
-        var(--panel-bg);
-    border-color: rgba(130, 190, 230, 0.3);
+        radial-gradient(120% 120% at 10% 0%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.06) 38%, transparent 68%),
+        linear-gradient(
+            165deg,
+            rgba(255, 255, 255, 0.1) 0%,
+            rgba(255, 255, 255, 0.04) 48%,
+            rgba(8, 20, 34, 0.08) 100%
+        );
+    backdrop-filter: blur(30px) saturate(120%);
+    -webkit-backdrop-filter: blur(30px) saturate(120%);
     box-shadow:
-        0 24px 60px rgba(2, 12, 23, 0.42),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1),
-        inset 0 0 40px rgba(55, 137, 183, 0.08);
+        0 28px 64px -28px rgba(2, 12, 23, 0.45),
+        0 40px 80px -40px rgba(60, 150, 255, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+        inset 0 0 40px rgba(255, 255, 255, 0.03);
     isolation: isolate;
 }
 
@@ -1887,11 +1913,39 @@ button {
     content: "";
     position: absolute;
     inset: 0;
+    border-radius: inherit;
     pointer-events: none;
-    background:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 28%),
-        linear-gradient(180deg, transparent 62%, rgba(2, 13, 25, 0.22));
-    z-index: -1;
+    background: radial-gradient(circle at 18% -8%, rgba(220, 244, 255, 0.22), transparent 58%);
+    mix-blend-mode: screen;
+}
+
+.current-weather::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(24px - 1px);
+    pointer-events: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 42%);
+    mix-blend-mode: screen;
+}
+
+.current-weather > * {
+    position: relative;
+    z-index: 1;
+}
+
+.current-weather > .current-weather__state {
+    z-index: 10;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .current-weather {
+        background:
+            radial-gradient(120% 120% at 10% 0%, rgba(255, 255, 255, 0.12) 0%, transparent 60%),
+            rgba(8, 20, 34, 0.42);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
 }
 
 .current-weather__header {

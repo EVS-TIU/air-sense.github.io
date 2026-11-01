@@ -1541,6 +1541,29 @@ document.addEventListener("weatherly:request-device-location", () => {
 window.AirSense = window.AirSense || {};
 window.AirSense.fetchDeviceLocationWeather = fetchDeviceLocationWeather;
 
+const bgVideo = document.getElementById("bg-video");
+if (bgVideo) {
+  bgVideo.muted = true;
+  bgVideo.defaultMuted = true;
+  bgVideo.playsInline = true;
+  try {
+    bgVideo.playbackRate = 0.55;
+  } catch (error) {
+    // Some browsers may reject custom rates; keep default playback.
+  }
+  const tryPlay = () => {
+    const playPromise = bgVideo.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
+  };
+  if (bgVideo.readyState >= 2) {
+    tryPlay();
+  } else {
+    bgVideo.addEventListener("loadeddata", tryPlay, { once: true });
+  }
+}
+
 loadTemperatureUnitPreference();
 initialiseCurrentWeatherHero();
 scheduleHeroWeatherRefresh();
