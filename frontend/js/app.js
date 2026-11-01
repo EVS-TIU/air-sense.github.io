@@ -1516,15 +1516,6 @@ document.addEventListener("weatherly:request-device-location", () => {
 window.AirSense = window.AirSense || {};
 window.AirSense.fetchDeviceLocationWeather = fetchDeviceLocationWeather;
 
-const bgVideo = document.getElementById("bg-video");
-if (bgVideo) {
-  try {
-    bgVideo.playbackRate = 0.45;
-  } catch (e) {
-    // ignore
-  }
-}
-
 loadTemperatureUnitPreference();
 initialiseCurrentWeatherHero();
 scheduleHeroWeatherRefresh();

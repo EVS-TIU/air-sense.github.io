@@ -1602,19 +1602,6 @@ button {
     background: #061523;
 }
 
-.weather-background__video {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 100vw;
-    height: 100vh;
-    min-width: 100%;
-    min-height: 100%;
-    transform: translate(-50%, -50%);
-    object-fit: cover;
-    pointer-events: none;
-}
-
 .weather-background__layer {
     display: none;
 }
