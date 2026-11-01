@@ -47,6 +47,13 @@ async def health(request: Request) -> dict:
             "services": {"api": "available", "openweather": "configured" if client.settings.openweather_api_key else "not_configured"}}
 
 
+@router.get("/health/")
+async def health_slash(request: Request) -> dict:
+    client: WeatherClient = request.app.state.weather
+    return {"status": "ok", "environment": request.app.state.settings.environment,
+            "services": {"api": "available", "openweather": "configured" if client.settings.openweather_api_key else "not_configured"}}
+
+
 @router.get("/weather/current")
 async def current_weather(request: Request, location: Annotated[Coordinates, Depends(coordinates)]) -> dict:
     return await provider_call(service(request).current(location.latitude, location.longitude))

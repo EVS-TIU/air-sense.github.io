@@ -41,6 +41,16 @@ app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credenti
 app.include_router(router)
 
 
+@app.get("/health")
+async def root_health():
+    return {"status": "ok"}
+
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "AIR_SENSE Weather Intelligence API"}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=int(os.getenv("PORT", settings.port)))

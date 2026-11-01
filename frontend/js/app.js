@@ -3,12 +3,15 @@
    Dynamic, location-aware weather background + Current Weather Hero Card
    ========================================================================== */
 
-const DEFAULT_API_BASE_URL = "https://airsense-backend-docker.getvoroa.com/api/v1";
 const apiBaseMeta = document.querySelector('meta[name="airsense-api-base"]');
+const DEFAULT_API_BASE_URL = "https://airsense-backend-docker.getvoroa.com/api/v1";
+const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+const isLocalFrontend =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
 const API_BASE_URL = (
   window.AIRSENSE_API_BASE_URL ||
-  apiBaseMeta?.content ||
-  DEFAULT_API_BASE_URL
+  (isLocalFrontend ? LOCAL_API_BASE_URL : apiBaseMeta?.content || DEFAULT_API_BASE_URL)
 ).replace(/\/+$/, "");
 
 const WEATHER_ASSET_ROOT = "./assets/images/weather/";
@@ -86,7 +89,17 @@ const currentIllustrationEl = document.querySelector("[data-current-illustration
 const uvIconEl = document.querySelector("[data-uv-icon]");
 const uvLabelEl = document.querySelector("[data-uv-label]");
 const uvValueEl = document.querySelector("[data-uv-value]");
-const airQualityValueEl = document.querySelector("[data-air-quality-value]");
+const airQualityIndexEl = document.querySelector("[data-air-quality-index]");
+const airQualityStatusEl = document.querySelector("[data-air-quality-status]");
+const airQualityPm25El = document.querySelector("[data-air-quality-pm25]");
+const airQualityPm10El = document.querySelector("[data-air-quality-pm10]");
+const airQualityRecommendationEl = document.querySelector("[data-air-quality-recommendation]");
+const uvScaleMarkerEl = document.querySelector("[data-uv-scale-marker]");
+const uvScaleValueEl = document.querySelector("[data-uv-scale-value]");
+const aqiScaleMarkerEl = document.querySelector("[data-aqi-scale-marker]");
+const aqiScaleValueEl = document.querySelector("[data-aqi-scale-value]");
+const UV_SCALE_MAX = 11;
+const AQI_SCALE_MAX = 500;
 const tempUnitToggle = document.querySelector("[data-temp-unit-toggle]");
 const feelsUnitEls = document.querySelectorAll("[data-feels-unit]");
 const feelsMetricUnitEls = document.querySelectorAll("[data-feels-metric-unit]");
@@ -139,24 +152,45 @@ function setMoonUvIcon() {
     '<path d="M4 19c4.5-1.5 7.5-4.5 9-9"/>';
 }
 
-function renderAirQuality(weather) {
-  if (!airQualityValueEl) return;
-  const air = weather?.air_quality;
-  if (Number.isFinite(air?.epa_aqi?.value)) {
-    airQualityValueEl.textContent = `${air.epa_aqi.value} · ${air.epa_aqi.category}`;
-    airQualityValueEl.title = "US EPA AQI";
+function setIndexScaleMarker(markerEl, valueEl, value, max, labelPrefix) {
+  if (valueEl) {
+    valueEl.textContent = Number.isFinite(value)
+      ? `${labelPrefix}: ${Math.round(value)}`
+      : `${labelPrefix}: --`;
+  }
+  if (!markerEl) return;
+  if (!Number.isFinite(value) || max <= 0) {
+    markerEl.hidden = true;
     return;
   }
-  if (Number.isFinite(air?.provider_index)) {
-    airQualityValueEl.textContent = `${air.provider_index} · OpenWeather (1–5)`;
-    airQualityValueEl.title = "OpenWeather air pollution index; not US EPA AQI";
-    return;
-  }
-  airQualityValueEl.textContent = "Unavailable";
-  airQualityValueEl.title = "Air-quality index unavailable";
+  const percent = Math.max(0, Math.min(value, max)) / max * 100;
+  markerEl.style.left = `${percent}%`;
+  markerEl.hidden = false;
+}
+
+function renderUvScale(weather) {
+  const uv = weather?.uv_index;
+  setIndexScaleMarker(
+    uvScaleMarkerEl,
+    uvScaleValueEl,
+    typeof uv === "number" && Number.isFinite(uv) ? uv : null,
+    UV_SCALE_MAX,
+    "Current UV"
+  );
+}
+
+function renderAqiScale(aqi) {
+  setIndexScaleMarker(
+    aqiScaleMarkerEl,
+    aqiScaleValueEl,
+    Number.isFinite(aqi) ? aqi : null,
+    AQI_SCALE_MAX,
+    "Current AQI"
+  );
 }
 
 function renderUvIndex(weather) {
+  renderUvScale(weather);
   if (!uvLabelEl || !uvValueEl) return;
   const daytime = isLocationDaytime(weather);
   if (daytime === false) {
@@ -178,6 +212,135 @@ function renderUvIndex(weather) {
   const uv = weather.uv_index;
   uvLabelEl.textContent = "UV Index";
   uvValueEl.textContent = `${uv} · ${uvRiskCategory(uv)}`;
+}
+
+function classifyAirQuality(aqi) {
+  if (!Number.isFinite(aqi) || aqi < 0 || aqi > 500) return null;
+  if (aqi <= 50) {
+    return {
+      key: "good",
+      category: "Good",
+      recommendation: "Air is clean. Enjoy outdoor activities.",
+    };
+  }
+  if (aqi <= 100) {
+    return {
+      key: "moderate",
+      category: "Moderate",
+      recommendation: "Most people can enjoy outdoor activities. Sensitive individuals should take care.",
+    };
+  }
+  if (aqi <= 150) {
+    return {
+      key: "sensitive",
+      category: "Unhealthy for Sensitive Groups",
+      recommendation: "Sensitive individuals should limit prolonged outdoor exertion.",
+    };
+  }
+  if (aqi <= 200) {
+    return {
+      key: "unhealthy",
+      category: "Unhealthy",
+      recommendation: "Limit outdoor activities. Consider an N95 mask outdoors.",
+    };
+  }
+  if (aqi <= 300) {
+    return {
+      key: "very-unhealthy",
+      category: "Very Unhealthy",
+      recommendation: "Avoid outdoor exertion. Use an N95 mask if going outside.",
+    };
+  }
+  return {
+    key: "hazardous",
+    category: "Hazardous",
+    recommendation: "Avoid outdoor exposure. Stay indoors.",
+  };
+}
+
+function renderAirQualityStatus(aqi) {
+  if (!airQualityStatusEl || !airQualityRecommendationEl) return;
+  const classification = classifyAirQuality(aqi);
+  if (!classification) {
+    airQualityStatusEl.textContent = "Unavailable";
+    airQualityStatusEl.removeAttribute("data-aqi-level");
+    airQualityRecommendationEl.hidden = true;
+    return;
+  }
+
+  airQualityStatusEl.textContent = classification.category;
+  airQualityStatusEl.dataset.aqiLevel = classification.key;
+  airQualityRecommendationEl.textContent = classification.recommendation;
+  airQualityRecommendationEl.hidden = false;
+}
+
+async function updateUvIndexFromOpenMeteo(latitude, longitude) {
+  try {
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", lat.toFixed(4));
+    url.searchParams.set("longitude", lon.toFixed(4));
+    url.searchParams.set("current", "uv_index");
+    url.searchParams.set("timezone", "auto");
+
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`UV request failed (${response.status})`);
+    const payload = await response.json();
+    const uv = payload?.current?.uv_index;
+    if (!Number.isFinite(uv)) throw new Error("UV is unavailable");
+    if (currentHeroWeather) {
+      currentHeroWeather.uv_index = uv;
+      renderUvIndex(currentHeroWeather);
+      renderUvScale(currentHeroWeather);
+    } else if (uvLabelEl && uvValueEl) {
+      uvLabelEl.textContent = "UV Index";
+      uvValueEl.textContent = `${uv} · ${uvRiskCategory(uv)}`;
+      renderUvScale({ uv_index: uv });
+    }
+    return uv;
+  } catch (error) {
+    console.warn("UV index unavailable:", error.message);
+    return null;
+  }
+}
+
+async function updateAirQualityIndex(latitude, longitude) {
+  if (!airQualityIndexEl || !airQualityStatusEl) return;
+  renderAirQualityStatus(null);
+  renderAqiScale(null);
+  const url = new URL("https://air-quality-api.open-meteo.com/v1/air-quality");
+  url.searchParams.set("latitude", Number(latitude).toFixed(4));
+  url.searchParams.set("longitude", Number(longitude).toFixed(4));
+  url.searchParams.set("current", "us_aqi,pm2_5,pm10");
+
+  try {
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`AQI request failed (${response.status})`);
+    const payload = await response.json();
+    const aqi = payload?.current?.us_aqi;
+    if (!Number.isFinite(aqi)) throw new Error("AQI is unavailable");
+    airQualityIndexEl.textContent = String(Math.round(aqi));
+    renderAirQualityStatus(aqi);
+    renderAqiScale(aqi);
+    if (airQualityPm25El) {
+      airQualityPm25El.textContent = Number.isFinite(payload?.current?.pm2_5)
+        ? `${payload.current.pm2_5} μg/m³`
+        : "-- μg/m³";
+    }
+    if (airQualityPm10El) {
+      airQualityPm10El.textContent = Number.isFinite(payload?.current?.pm10)
+        ? `${payload.current.pm10} μg/m³`
+        : "-- μg/m³";
+    }
+  } catch (error) {
+    console.warn("Air quality unavailable:", error.message);
+    airQualityIndexEl.textContent = "--";
+    renderAirQualityStatus(null);
+    renderAqiScale(null);
+    if (airQualityPm25El) airQualityPm25El.textContent = "-- μg/m³";
+    if (airQualityPm10El) airQualityPm10El.textContent = "-- μg/m³";
+  }
 }
 
 function loadTemperatureUnitPreference() {
@@ -769,7 +932,10 @@ function renderCurrentWeather(weather) {
 
   currentHeroWeather = weather;
   renderUvIndex(weather);
-  renderAirQuality(weather);
+  if (Number.isFinite(weather.latitude) && Number.isFinite(weather.longitude)) {
+    updateAirQualityIndex(weather.latitude, weather.longitude);
+    updateUvIndexFromOpenMeteo(weather.latitude, weather.longitude);
+  }
   updateTemperatureUnitUI();
   renderHourlyForecast(weather);
   renderDailyForecast(weather);
@@ -961,6 +1127,8 @@ async function updateCurrentWeatherHero(position) {
   }
 
   renderCurrentWeather(weather);
+  updateAirQualityIndex(latitude, longitude);
+  updateUvIndexFromOpenMeteo(latitude, longitude);
 
   applyFallbackBackground();
 }
@@ -1010,6 +1178,8 @@ async function fetchDeviceLocationWeather(options = {}) {
     }
 
     renderCurrentWeather(weather);
+    updateAirQualityIndex(heroPosition.latitude, heroPosition.longitude);
+    updateUvIndexFromOpenMeteo(heroPosition.latitude, heroPosition.longitude);
     updateWeatherForPosition(heroPosition).catch(() => {});
 
     if (locationBtn) {
@@ -1345,6 +1515,15 @@ document.addEventListener("weatherly:request-device-location", () => {
 
 window.AirSense = window.AirSense || {};
 window.AirSense.fetchDeviceLocationWeather = fetchDeviceLocationWeather;
+
+const bgVideo = document.getElementById("bg-video");
+if (bgVideo) {
+  try {
+    bgVideo.playbackRate = 0.45;
+  } catch (e) {
+    // ignore
+  }
+}
 
 loadTemperatureUnitPreference();
 initialiseCurrentWeatherHero();
