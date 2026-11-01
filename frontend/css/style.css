@@ -1819,8 +1819,6 @@ button {
     z-index: 0;
     overflow: hidden;
     pointer-events: none;
-
-    /* Fallback gradient shown until a local weather image is available. */
     background: #061523;
 }
 

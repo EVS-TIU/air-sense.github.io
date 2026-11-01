@@ -273,6 +273,37 @@ function renderAirQualityStatus(aqi) {
   airQualityRecommendationEl.hidden = false;
 }
 
+async function updateUvIndexFromOpenMeteo(latitude, longitude) {
+  try {
+    const lat = Number(latitude);
+    const lon = Number(longitude);
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", lat.toFixed(4));
+    url.searchParams.set("longitude", lon.toFixed(4));
+    url.searchParams.set("current", "uv_index");
+    url.searchParams.set("timezone", "auto");
+
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`UV request failed (${response.status})`);
+    const payload = await response.json();
+    const uv = payload?.current?.uv_index;
+    if (!Number.isFinite(uv)) throw new Error("UV is unavailable");
+    if (currentHeroWeather) {
+      currentHeroWeather.uv_index = uv;
+      renderUvIndex(currentHeroWeather);
+      renderUvScale(currentHeroWeather);
+    } else if (uvLabelEl && uvValueEl) {
+      uvLabelEl.textContent = "UV Index";
+      uvValueEl.textContent = `${uv} · ${uvRiskCategory(uv)}`;
+      renderUvScale({ uv_index: uv });
+    }
+    return uv;
+  } catch (error) {
+    console.warn("UV index unavailable:", error.message);
+    return null;
+  }
+}
+
 async function updateAirQualityIndex(latitude, longitude) {
   if (!airQualityIndexEl || !airQualityStatusEl) return;
   renderAirQualityStatus(null);
@@ -932,6 +963,7 @@ function renderCurrentWeather(weather) {
   renderUvIndex(weather);
   if (Number.isFinite(weather.latitude) && Number.isFinite(weather.longitude)) {
     updateAirQualityIndex(weather.latitude, weather.longitude);
+    updateUvIndexFromOpenMeteo(weather.latitude, weather.longitude);
   }
   updateTemperatureUnitUI();
   renderHourlyForecast(weather);
@@ -1125,6 +1157,7 @@ async function updateCurrentWeatherHero(position) {
 
   renderCurrentWeather(weather);
   updateAirQualityIndex(latitude, longitude);
+  updateUvIndexFromOpenMeteo(latitude, longitude);
 
   applyFallbackBackground();
 }
@@ -1175,6 +1208,7 @@ async function fetchDeviceLocationWeather(options = {}) {
 
     renderCurrentWeather(weather);
     updateAirQualityIndex(heroPosition.latitude, heroPosition.longitude);
+    updateUvIndexFromOpenMeteo(heroPosition.latitude, heroPosition.longitude);
     updateWeatherForPosition(heroPosition).catch(() => {});
 
     if (locationBtn) {
