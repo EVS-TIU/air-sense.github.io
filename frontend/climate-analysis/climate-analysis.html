@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AirSense - Climate Analysis with date-range picker, weather prediction, trend analysis, and AQI outlook.">
+    <meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
+    <title>AirSense - Climate Analysis</title>
+
+    <!-- Shared dashboard styles (design tokens, resets, panels, etc.) -->
+    <link rel="stylesheet" href="../css/style.css?v=20261101-22">
+    <!-- Top Navigation component styles -->
+    <link rel="stylesheet" href="../css/topbar.css?v=20261101-2">
+    <!-- Left Sidebar component styles -->
+    <link rel="stylesheet" href="../css/sidebar.css?v=20261101-2">
+    <!-- Leaflet interactive map styles -->
+    <link rel="stylesheet" href="../assets/vendor/leaflet/leaflet.css">
+    <!-- Map component styles -->
+    <link rel="stylesheet" href="../css/map.css?v=20261101-1">
+    <!-- Climate Analysis module styles -->
+    <link rel="stylesheet" href="./climate-analysis.css?v=20261102-2">
+
+    <!-- Page-specific overrides: make Climate Analysis always visible on this page -->
+    <style>
+        /* On this standalone page the Climate Analysis section is always shown
+           and occupies the full main area (no weather panels to compete with). */
+        .climate-analysis {
+            display: flex !important;
+            grid-column: 2 / -1;
+            grid-row: 2 / -1;
+        }
+
+        /* Hide dashboard weather sections that don't belong on this page
+           (markup isn't here, but just in case shared JS adds them). */
+        .current-weather,
+        .hourly-forecast,
+        .weather-details,
+        .week-forecast {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Location-aware weather background -->
+    <div class="weather-background" id="weather-background" aria-hidden="true">
+        <video
+            class="weather-background__video"
+            id="bg-video"
+            src="../assets/video/cloudy.mp4"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="auto"
+        ></video>
+        <div class="weather-background__layer" data-weather-layer="a"></div>
+        <div class="weather-background__layer" data-weather-layer="b"></div>
+        <div class="weather-background__scrim"></div>
+    </div>
+
+    <div class="dashboard">
+
+        <!-- Top Navigation -->
+        <header class="topbar panel" aria-label="Top navigation">
+            <button class="sidebar-menu-toggle" type="button" aria-label="Open navigation menu"
+                aria-controls="dashboard-sidebar" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <div class="search-box" role="search">
+                <svg class="search-box__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-3.5-3.5"/>
+                </svg>
+                <input id="location-search" type="text" placeholder="Search your location"
+                    role="combobox" aria-label="Search your location" aria-autocomplete="list"
+                    aria-expanded="false" aria-controls="search-results"
+                    autocomplete="off" spellcheck="false">
+                <span class="search-box__spinner" id="search-spinner" aria-hidden="true" hidden></span>
+                <kbd aria-hidden="true">/</kbd>
+                <ul id="search-results" class="search-box__results" role="listbox"
+                    aria-label="Location suggestions" hidden></ul>
+            </div>
+            <button class="location-btn" id="current-location-btn" type="button"
+                aria-label="Fetch current device location weather"
+                title="Fetch current device location weather">
+                <svg class="location-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/>
+                    <circle cx="12" cy="10" r="2.3"/>
+                </svg>
+                <span class="location-btn__label" id="location-label">Current Location</span>
+            </button>
+            <nav class="topbar-nav" aria-label="Dashboard sections">
+                <a href="../index.html" data-view="current-weather">Dashboard</a>
+                <a href="#climate-analysis" class="is-active" aria-current="page" data-view="climate-analysis">Climate Analysis</a>
+            </nav>
+            <div class="dropdown dropdown--end unit-select">
+                <button class="dropdown__trigger" type="button" aria-label="Temperature unit"
+                    aria-haspopup="listbox" aria-expanded="false" aria-controls="unit-menu">
+                    <span class="dropdown__label" id="unit-label">°C</span>
+                    <svg class="dropdown__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu" id="unit-menu" role="listbox" aria-label="Temperature unit" hidden>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="C" aria-selected="true">Celsius (°C)</li>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="F" aria-selected="false">Fahrenheit (°F)</li>
+                </ul>
+            </div>
+            <div class="dropdown dropdown--end profile">
+                <button class="dropdown__trigger" type="button" aria-label="Account menu"
+                    aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="8.5" r="4"/>
+                        <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu" id="profile-menu" role="menu" aria-label="Account" hidden>
+                    <li class="dropdown__menu-head" role="presentation">
+                        <strong>Roshan Mallick</strong>
+                        <span>Weather Enthusiast</span>
+                    </li>
+                    <li class="dropdown__item" role="menuitem" tabindex="-1" data-value="profile">My profile</li>
+                    <li class="dropdown__item" role="menuitem" tabindex="-1" data-value="settings">Settings</li>
+                    <li class="dropdown__item dropdown__item--danger" role="menuitem" tabindex="-1" data-value="signout">Sign out</li>
+                </ul>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <button class="sidebar-backdrop" type="button" aria-label="Close navigation menu"
+            tabindex="-1" aria-hidden="true"></button>
+        <aside class="sidebar panel" id="dashboard-sidebar" aria-label="Dashboard navigation">
+            <!-- 1. AirSense Logo -->
+            <div class="sidebar__brand">
+                <div class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                    </svg>
+                </div>
+                <span class="sidebar__brand-name">AirSense</span>
+            </div>
+
+            <!-- 2. Current Location Card -->
+            <div class="sidebar__location-card">
+                <div class="sidebar__location-header">
+                    <span class="sidebar__location-flag" id="sidebar-flag" aria-hidden="true">🇦🇪</span>
+                    <div class="sidebar__location-details">
+                        <span class="sidebar__location-eyebrow">CURRENT LOCATION</span>
+                        <strong id="sidebar-city">Dubai</strong>
+                        <span id="sidebar-region">Dubai, United Arab Emirates</span>
+                    </div>
+                </div>
+                <div class="sidebar__coords-badge" id="sidebar-coords">25.26° N, 55.29° E</div>
+            </div>
+
+            <!-- 3. Sidebar Navigation -->
+            <nav class="sidebar__nav" aria-label="Main sidebar navigation">
+                <a href="../index.html" data-nav="current-weather" data-view="current-weather">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <span>Current Weather</span>
+                </a>
+                <a href="#ai-recommendation" data-nav="ai-recommendation">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                    </svg>
+                    <span>AI Recommendation</span>
+                </a>
+                <a href="#hotspot-map" data-nav="hotspot-map">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 1 6"/>
+                        <line x1="8" y1="2" x2="8" y2="18"/>
+                        <line x1="16" y1="6" x2="16" y2="22"/>
+                    </svg>
+                    <span>Hotspot Map</span>
+                </a>
+                <a href="#history-analysis" data-nav="history-analysis">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span>History Analysis</span>
+                </a>
+                <a href="#smart-alert" data-nav="smart-alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <span>Smart Alert</span>
+                </a>
+                <a href="#settings" data-nav="settings">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <!-- 4. Interactive Map (at bottom of sidebar) -->
+            <div class="sidebar__map-section">
+                <div class="sidebar__map-header">
+                    <div class="sidebar__map-title">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 1 6"/>
+                            <line x1="8" y1="2" x2="8" y2="18"/>
+                            <line x1="16" y1="6" x2="16" y2="22"/>
+                        </svg>
+                        <span>Interactive Map</span>
+                    </div>
+                    <button type="button" class="sidebar__map-expand-btn" id="map-expand-btn" title="Expand world map" aria-label="Expand world map">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="interactive-map" class="interactive-map" role="region" aria-label="Interactive world map"></div>
+                <div class="sidebar__map-hint">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" width="12" height="12"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                    <span>Click anywhere on map to select</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ================================================================
+             Climate Analysis Module — the main content of this page
+             ================================================================ -->
+        <section class="climate-analysis" id="climate-analysis-section" aria-label="Climate Analysis">
+
+            <!-- Two-column body -->
+            <div class="ca-body">
+
+                <!-- Left: persistent calendar section -->
+                <div class="ca-left">
+                    <div class="ca-calendar-card">
+
+                        <!-- Calendar header with navigation -->
+                        <div class="ca-calendar__header">
+                            <h3 class="ca-calendar__title">Select Date Range</h3>
+                            <div class="ca-calendar__nav">
+                                <button class="ca-calendar__nav-btn" type="button" aria-label="Previous month">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                                </button>
+                                <button class="ca-calendar__nav-btn" type="button" aria-label="Next month">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Calendar grid container -->
+                        <div class="ca-calendar__grid" role="grid" aria-label="Date selection calendar">
+                            <div class="ca-calendar__month-label"></div>
+                            <div class="ca-calendar__weekdays">
+                                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                            </div>
+                            <div class="ca-calendar__days"></div>
+                        </div>
+
+                    </div>
+
+                    <!-- Generate Analysis button -->
+                    <button class="ca-generate-btn" type="button">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        Generate Analysis
+                    </button>
+
+                    <!-- AI Summary card (shown after generate) -->
+                    <div class="ca-summary" id="ca-summary" style="display:none;">
+                        <div class="ca-summary__header">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                            </svg>
+                            <span>AI Summary</span>
+                        </div>
+                        <div class="ca-summary__body" id="ca-summary-body">
+                            <!-- Filled by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: dynamic tabbed content -->
+                <div class="ca-right">
+
+                    <!-- Tab navigation -->
+                    <div class="ca-tabs" role="tablist" aria-label="Climate analysis views">
+                        <button class="ca-tabs__btn is-active" type="button" role="tab"
+                            data-tab="ca-weather-prediction"
+                            aria-selected="true" aria-controls="ca-weather-prediction">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+                            </svg>
+                            Weather Prediction
+                        </button>
+                        <button class="ca-tabs__btn" type="button" role="tab"
+                            data-tab="ca-climate-trend"
+                            aria-selected="false" aria-controls="ca-climate-trend">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                            Climate Trend
+                        </button>
+                        <button class="ca-tabs__btn" type="button" role="tab"
+                            data-tab="ca-aqi-outlook"
+                            aria-selected="false" aria-controls="ca-aqi-outlook">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M3 9h8a3 3 0 1 0-3-3"/>
+                                <path d="M3 14h13a4 4 0 1 0-4-4"/>
+                                <path d="M3 19h7a3 3 0 1 1-3 3"/>
+                            </svg>
+                            AQI Outlook
+                        </button>
+                    </div>
+
+                    <!-- Tab content panels -->
+                    <div class="ca-content">
+                        <div class="ca-tab-panel is-active" id="ca-weather-prediction"
+                            role="tabpanel" aria-hidden="false" aria-label="Weather Prediction"></div>
+                        <div class="ca-tab-panel" id="ca-climate-trend"
+                            role="tabpanel" aria-hidden="true" aria-label="Climate Trend"></div>
+                        <div class="ca-tab-panel" id="ca-aqi-outlook"
+                            role="tabpanel" aria-hidden="true" aria-label="AQI Outlook"></div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Expanded World Map Modal -->
+    <div class="map-modal" id="map-modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="map-modal-title">
+        <div class="map-modal__backdrop" id="map-modal-backdrop"></div>
+        <div class="map-modal__dialog">
+            <header class="map-modal__header">
+                <div class="map-modal__title-group">
+                    <h3 id="map-modal-title">Global Weather Map</h3>
+                    <p class="map-modal__subtitle">Click any location on Earth to update live weather and forecasts</p>
+                </div>
+                <button type="button" class="map-modal__close" id="map-modal-close" aria-label="Close world map">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </header>
+            <div id="modal-map" class="modal-map" role="region" aria-label="Expanded world map"></div>
+            <footer class="map-modal__footer">
+                <span class="map-modal__selected" id="modal-map-status">Selected: None (Click anywhere to choose)</span>
+                <button type="button" class="map-modal__btn" id="modal-map-done">Done</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Leaflet Map library -->
+    <script src="../assets/vendor/leaflet/leaflet.js"></script>
+    <!-- Map synchronization & interaction component -->
+    <script src="../js/map.js?v=20261101-1"></script>
+    <script src="../js/app.js?v=20261101-16" defer></script>
+    <script src="../js/topbar.js?v=20261101-3" defer></script>
+    <!-- Climate Analysis module -->
+    <script src="./climate-analysis.js?v=20261102-2" defer></script>
+</body>
+</html>

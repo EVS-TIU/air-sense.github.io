@@ -137,15 +137,132 @@
     stroke-linejoin: round;
 }
 
-/* Calendar grid area — empty container for future calendar implementation */
+/* Calendar grid area */
 .ca-calendar__grid {
     flex: 1;
     min-height: 200px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px;
 
     border-radius: 12px;
     background: rgba(8, 26, 42, 0.45);
     border: 1px solid rgba(116, 174, 213, 0.12);
     box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Month / year label */
+.ca-calendar__month-label {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #cfeaff;
+    letter-spacing: 0.3px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(116, 174, 213, 0.10);
+}
+
+/* Weekday headers */
+.ca-calendar__weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(168, 195, 216, 0.65);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 0;
+}
+
+/* Day cells container */
+.ca-calendar__days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    flex: 1;
+    align-content: start;
+}
+
+/* Individual day cell */
+.ca-calendar__day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    aspect-ratio: 1;
+    font-size: 12px;
+    font-weight: 500;
+    color: #d3e2ef;
+
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    user-select: none;
+}
+
+.ca-calendar__day:hover {
+    background: rgba(33, 169, 255, 0.12);
+    color: #ffffff;
+}
+
+/* Days from other months */
+.ca-calendar__day.is-outside {
+    color: rgba(168, 195, 216, 0.25);
+}
+
+.ca-calendar__day.is-outside:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(168, 195, 216, 0.4);
+}
+
+/* Today */
+.ca-calendar__day.is-today {
+    border-color: rgba(33, 169, 255, 0.45);
+    color: #21a9ff;
+    font-weight: 700;
+}
+
+/* Selected start / end */
+.ca-calendar__day.is-selected {
+    background: linear-gradient(135deg, #21a9ff, #0b7fd4);
+    color: #ffffff;
+    font-weight: 700;
+    border-color: rgba(33, 169, 255, 0.5);
+    box-shadow: 0 2px 8px rgba(33, 169, 255, 0.3);
+}
+
+/* Range between start and end */
+.ca-calendar__day.is-in-range {
+    background: rgba(33, 169, 255, 0.14);
+    color: #cfeaff;
+    border-radius: 4px;
+}
+
+/* Month / Year picker cells (3×4 grid) */
+.ca-calendar__cell--large {
+    aspect-ratio: auto;
+    padding: 10px 0;
+    font-size: 12.5px;
+    border-radius: 10px;
+}
+
+.ca-calendar__days:has(.ca-calendar__cell--large) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    align-content: center;
+}
+
+/* Make month-year label look clickable */
+.ca-calendar__month-label {
+    cursor: pointer;
+}
+
+.ca-calendar__month-label:hover {
+    color: #21a9ff;
 }
 
 /* Generate Analysis button */

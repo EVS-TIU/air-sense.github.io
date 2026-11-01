@@ -510,8 +510,14 @@
                             </div>
                         </div>
 
-                        <!-- Calendar grid container (empty — layout only) -->
-                        <div class="ca-calendar__grid" role="grid" aria-label="Date selection calendar"></div>
+                        <!-- Calendar grid container -->
+                        <div class="ca-calendar__grid" role="grid" aria-label="Date selection calendar">
+                            <div class="ca-calendar__month-label"></div>
+                            <div class="ca-calendar__weekdays">
+                                <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
+                            </div>
+                            <div class="ca-calendar__days"></div>
+                        </div>
 
                     </div>
 
@@ -523,6 +529,19 @@
                         </svg>
                         Generate Analysis
                     </button>
+
+                    <!-- AI Summary card (shown after generate) -->
+                    <div class="ca-summary" id="ca-summary" style="display:none;">
+                        <div class="ca-summary__header">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                            </svg>
+                            <span>AI Summary</span>
+                        </div>
+                        <div class="ca-summary__body" id="ca-summary-body">
+                            <!-- Filled by JS -->
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Right: dynamic tabbed content -->
