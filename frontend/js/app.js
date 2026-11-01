@@ -16,8 +16,8 @@ const API_BASE_URL = (
 
 const WEATHER_ASSET_ROOT = "./assets/images/weather/";
 const WEATHER_ILLUSTRATION_ROOT = "./assets/images/weather-illustrations/";
-const DEFAULT_BACKGROUND = "cloudy.jpg";
-const NIGHT_BACKGROUND = "night.jpg";
+const DEFAULT_BACKGROUND = "Clear_day.jpg";
+const NIGHT_BACKGROUND = "Clear_night.jpg";
 const DEFAULT_ILLUSTRATION = "cloudy.png";
 const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 const WEATHER_REQUEST_TIMEOUT_MS = 12 * 1000;
@@ -26,19 +26,18 @@ const WEATHER_CACHE_KEY = "airsense:weather:v2";
 const HERO_WEATHER_CACHE_KEY = "airsense:hero-weather:v4";
 const UNITS_STORAGE_KEY = "airsense:units";
 
-/* Keep this in sync with backend/app/services.py. It is only used when the
-   API response does not already include a background filename. */
+/* Keep this in sync with backend/app/services.py. */
 const CONDITION_BACKGROUNDS = {
-  clear: "cloudy.jpg",
-  partly_cloudy: "partly-cloudy.jpg",
-  overcast: "cloudy.jpg",
-  fog: "fog.jpg",
-  drizzle: "rain.jpg",
-  rain: "rain.jpg",
-  snow: "snow.jpg",
-  rain_showers: "rain.jpg",
-  snow_showers: "snow.jpg",
-  thunderstorm: "storm.jpg",
+  clear: "Clear_day.jpg",
+  partly_cloudy: "Partly_cloudy_day.jpg",
+  overcast: "Overcast.jpg",
+  fog: "Dense_fog.jpg",
+  drizzle: "Drizzle.jpg",
+  rain: "Moderate_rain.jpg",
+  snow: "Moderate_snow.jpg",
+  rain_showers: "Heavy_rain.jpg",
+  snow_showers: "Snow_showers.jpg",
+  thunderstorm: "Thunder_storm.jpg",
   unknown: DEFAULT_BACKGROUND,
 };
 
