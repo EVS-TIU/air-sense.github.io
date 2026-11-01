@@ -372,6 +372,10 @@
             e.preventDefault();
             document.querySelectorAll('.sidebar__nav a').forEach((l) => l.classList.remove('is-active'));
             link.classList.add('is-active');
+
+            document.dispatchEvent(new CustomEvent('weatherly:navigate', {
+                detail: { view: link.dataset.view || link.dataset.nav },
+            }));
         });
     });
 
