@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+import re
 from .config import Settings
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,45 @@ def condition_group(condition_id: int | None) -> str:
     if condition_id == 804:
         return "overcast"
     return "unknown"
+
+
+
+COUNTRY_NAMES: dict[str, str] = {
+    "AD": "Andorra", "AE": "United Arab Emirates", "AF": "Afghanistan", "AG": "Antigua and Barbuda",
+    "AL": "Albania", "AM": "Armenia", "AO": "Angola", "AR": "Argentina", "AT": "Austria", "AU": "Australia",
+    "AZ": "Azerbaijan", "BA": "Bosnia and Herzegovina", "BB": "Barbados", "BD": "Bangladesh", "BE": "Belgium",
+    "BF": "Burkina Faso", "BG": "Bulgaria", "BH": "Bahrain", "BI": "Burundi", "BJ": "Benin", "BN": "Brunei",
+    "BO": "Bolivia", "BR": "Brazil", "BS": "Bahamas", "BT": "Bhutan", "BW": "Botswana", "BY": "Belarus",
+    "BZ": "Belize", "CA": "Canada", "CD": "DR Congo", "CF": "Central African Republic", "CG": "Republic of the Congo",
+    "CH": "Switzerland", "CI": "Ivory Coast", "CL": "Chile", "CM": "Cameroon", "CN": "China", "CO": "Colombia",
+    "CR": "Costa Rica", "CU": "Cuba", "CV": "Cape Verde", "CY": "Cyprus", "CZ": "Czech Republic", "DE": "Germany",
+    "DJ": "Djibouti", "DK": "Denmark", "DM": "Dominica", "DO": "Dominican Republic", "DZ": "Algeria", "EC": "Ecuador",
+    "EE": "Estonia", "EG": "Egypt", "ER": "Eritrea", "ES": "Spain", "ET": "Ethiopia", "FI": "Finland", "FJ": "Fiji",
+    "FM": "Micronesia", "FR": "France", "GA": "Gabon", "GB": "United Kingdom", "GD": "Grenada", "GE": "Georgia",
+    "GH": "Ghana", "GM": "Gambia", "GN": "Guinea", "GR": "Greece", "GT": "Guatemala", "GW": "Guinea-Bissau",
+    "GY": "Guyana", "HN": "Honduras", "HR": "Croatia", "HT": "Haiti", "HU": "Hungary", "ID": "Indonesia",
+    "IE": "Ireland", "IL": "Israel", "IN": "India", "IQ": "Iraq", "IR": "Iran", "IS": "Iceland", "IT": "Italy",
+    "JM": "Jamaica", "JO": "Jordan", "JP": "Japan", "KE": "Kenya", "KG": "Kyrgyzstan", "KH": "Cambodia",
+    "KI": "Kiribati", "KM": "Comoros", "KN": "Saint Kitts and Nevis", "KP": "North Korea", "KR": "South Korea",
+    "KW": "Kuwait", "KZ": "Kazakhstan", "LA": "Laos", "LB": "Lebanon", "LC": "Saint Lucia", "LI": "Liechtenstein",
+    "LK": "Sri Lanka", "LR": "Liberia", "LS": "Lesotho", "LT": "Lithuania", "LU": "Luxembourg", "LV": "Latvia",
+    "LY": "Libya", "MA": "Morocco", "MC": "Monaco", "MD": "Moldova", "ME": "Montenegro", "MG": "Madagascar",
+    "MH": "Marshall Islands", "MK": "North Macedonia", "ML": "Mali", "MM": "Myanmar", "MN": "Mongolia",
+    "MR": "Mauritania", "MT": "Malta", "MU": "Mauritius", "MV": "Maldives", "MW": "Malawi", "MX": "Mexico",
+    "MY": "Malaysia", "MZ": "Mozambique", "NA": "Namibia", "NE": "Niger", "NG": "Nigeria", "NI": "Nicaragua",
+    "NL": "Netherlands", "NO": "Norway", "NP": "Nepal", "NR": "Nauru", "NZ": "New Zealand", "OM": "Oman",
+    "PA": "Panama", "PE": "Peru", "PG": "Papua New Guinea", "PH": "Philippines", "PK": "Pakistan", "PL": "Poland",
+    "PR": "Puerto Rico", "PT": "Portugal", "PW": "Palau", "PY": "Paraguay", "QA": "Qatar", "RO": "Romania",
+    "RS": "Serbia", "RU": "Russia", "RW": "Rwanda", "SA": "Saudi Arabia", "SB": "Solomon Islands", "SC": "Seychelles",
+    "SD": "Sudan", "SE": "Sweden", "SG": "Singapore", "SI": "Slovenia", "SK": "Slovakia", "SL": "Sierra Leone",
+    "SM": "San Marino", "SN": "Senegal", "SO": "Somalia", "SR": "Suriname", "SS": "South Sudan", "ST": "Sao Tome and Principe",
+    "SV": "El Salvador", "SY": "Syria", "SZ": "Eswatini", "TD": "Chad", "TG": "Togo", "TH": "Thailand",
+    "TJ": "Tajikistan", "TL": "Timor-Leste", "TM": "Turkmenistan", "TN": "Tunisia", "TO": "Tonga", "TR": "Turkey",
+    "TT": "Trinidad and Tobago", "TV": "Tuvalu", "TW": "Taiwan", "TZ": "Tanzania", "UA": "Ukraine", "UG": "Uganda",
+    "US": "United States", "UY": "Uruguay", "UZ": "Uzbekistan", "VA": "Vatican City", "VC": "Saint Vincent and the Grenadines",
+    "VE": "Venezuela", "VN": "Vietnam", "VU": "Vanuatu", "WS": "Samoa", "YE": "Yemen", "ZA": "South Africa",
+    "ZM": "Zambia", "ZW": "Zimbabwe",
+}
 
 
 class WeatherClient:
@@ -175,11 +215,12 @@ class WeatherClient:
         await self.cache.set(key, result)
         return result
 
+
     async def search(self, query: str) -> list[dict[str, Any]]:
         clean_q = query.strip()
         if not clean_q:
             return []
-        key = f"search:{clean_q.lower()}"
+        key = f"search:v2:{clean_q.lower()}"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
@@ -188,13 +229,14 @@ class WeatherClient:
             await self.startup()
         assert self.client is not None
 
-        query_tokens = [w.lower() for w in clean_q.replace(",", " ").split() if len(w.strip()) > 1]
+        q_lower = clean_q.lower()
+        query_tokens = [w for w in re.split(r"[, \t]+", q_lower) if len(w) > 0]
 
         async def fetch_nominatim() -> list[dict[str, Any]]:
             try:
                 resp = await self.client.get(
                     "https://nominatim.openstreetmap.org/search",
-                    params={"q": clean_q, "format": "jsonv2", "addressdetails": 1, "limit": 6},
+                    params={"q": clean_q, "format": "jsonv2", "addressdetails": 1, "limit": 10, "accept-language": "en"},
                     headers={"User-Agent": "AirSenseWeatherApp/1.0"},
                 )
                 if resp.status_code == 200:
@@ -205,22 +247,37 @@ class WeatherClient:
                             item.get("name")
                             or addr.get("city")
                             or addr.get("town")
+                            or addr.get("village")
                             or addr.get("suburb")
                             or addr.get("state_district")
                             or addr.get("state")
                         )
-                        district = addr.get("state_district") or addr.get("county") or addr.get("district")
-                        state = addr.get("state")
-                        country = addr.get("country")
-                        country_code = (addr.get("country_code") or "").upper()
-                        if name and item.get("lat") and item.get("lon"):
+                        city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality")
+                        district = addr.get("suburb") or addr.get("neighbourhood") or addr.get("state_district") or addr.get("county")
+                        state = addr.get("state") or addr.get("region")
+                        country = addr.get("country") or ""
+                        cc = (addr.get("country_code") or "").upper()
+                        if cc and not country:
+                            country = COUNTRY_NAMES.get(cc, cc)
+                        elif cc and cc in COUNTRY_NAMES and not country:
+                            country = COUNTRY_NAMES[cc]
+                        importance = float(item.get("importance") or 0.3)
+                        place_type = item.get("type") or item.get("category") or "place"
+                        lat_val = item.get("lat")
+                        lon_val = item.get("lon")
+                        if name and lat_val and lon_val:
                             candidates.append({
                                 "name": name,
+                                "city": city or name,
                                 "district": district if district != name else None,
                                 "state": state if state != name else None,
-                                "country": country or country_code,
-                                "latitude": float(item["lat"]),
-                                "longitude": float(item["lon"]),
+                                "country": country or (COUNTRY_NAMES.get(cc, cc) if cc else ""),
+                                "country_code": cc,
+                                "latitude": float(lat_val),
+                                "longitude": float(lon_val),
+                                "type": place_type,
+                                "importance": importance,
+                                "source": "nominatim",
                             })
                     return candidates
             except Exception:
@@ -229,66 +286,303 @@ class WeatherClient:
 
         async def fetch_openweather() -> list[dict[str, Any]]:
             try:
-                raw = await self._get("/geo/1.0/direct", {"q": clean_q, "limit": 5})
+                raw = await self._get("/geo/1.0/direct", {"q": clean_q, "limit": 6})
                 if isinstance(raw, list):
-                    return [
-                        {
-                            "name": item.get("name"),
-                            "district": None,
-                            "state": item.get("state"),
-                            "country": item.get("country"),
-                            "latitude": float(item.get("lat")),
-                            "longitude": float(item.get("lon")),
-                        }
-                        for item in raw
-                        if item.get("name") and item.get("lat") is not None and item.get("lon") is not None
-                    ]
+                    candidates = []
+                    for item in raw:
+                        name = item.get("name")
+                        lat = item.get("lat")
+                        lon = item.get("lon")
+                        if name and lat is not None and lon is not None:
+                            cc = (item.get("country") or "").upper()
+                            country = COUNTRY_NAMES.get(cc, cc)
+                            state = item.get("state")
+                            candidates.append({
+                                "name": name,
+                                "city": name,
+                                "district": None,
+                                "state": state if state != name else None,
+                                "country": country,
+                                "country_code": cc,
+                                "latitude": float(lat),
+                                "longitude": float(lon),
+                                "type": "city",
+                                "importance": 0.7,
+                                "source": "openweather",
+                            })
+                    return candidates
             except Exception:
                 pass
             return []
 
-        nom_candidates, ow_candidates = await asyncio.gather(
-            fetch_nominatim(),
-            fetch_openweather(),
-            return_exceptions=True,
-        )
+        async def fetch_geoapify() -> list[dict[str, Any]]:
+            if not self.settings.geoapify_api_key:
+                return []
+            try:
+                resp = await self.client.get(
+                    "https://api.geoapify.com/v1/geocode/autocomplete",
+                    params={"text": clean_q, "apiKey": self.settings.geoapify_api_key, "limit": 8},
+                )
+                if resp.status_code == 200:
+                    candidates = []
+                    for feature in resp.json().get("features", []):
+                        props = feature.get("properties", {})
+                        geom = feature.get("geometry", {})
+                        coords = geom.get("coordinates") or []
+                        if len(coords) >= 2 and props.get("name"):
+                            cc = (props.get("country_code") or "").upper()
+                            candidates.append({
+                                "name": props.get("name") or props.get("city"),
+                                "city": props.get("city") or props.get("name"),
+                                "district": props.get("district") or props.get("suburb"),
+                                "state": props.get("state"),
+                                "country": props.get("country") or COUNTRY_NAMES.get(cc, cc),
+                                "country_code": cc,
+                                "latitude": float(coords[1]),
+                                "longitude": float(coords[0]),
+                                "type": props.get("result_type") or "place",
+                                "importance": props.get("rank", {}).get("confidence", 0.5),
+                                "source": "geoapify",
+                            })
+                    return candidates
+            except Exception:
+                pass
+            return []
 
-        all_candidates = []
-        if isinstance(nom_candidates, list):
-            all_candidates.extend(nom_candidates)
-        if isinstance(ow_candidates, list):
-            all_candidates.extend(ow_candidates)
+        async def fetch_maptiler() -> list[dict[str, Any]]:
+            if not self.settings.maptiler_api_key:
+                return []
+            try:
+                resp = await self.client.get(
+                    f"https://api.maptiler.com/geocoding/{clean_q}.json",
+                    params={"key": self.settings.maptiler_api_key, "limit": 8},
+                )
+                if resp.status_code == 200:
+                    candidates = []
+                    for feature in resp.json().get("features", []):
+                        center = feature.get("center") or []
+                        text = feature.get("text")
+                        if len(center) >= 2 and text:
+                            context = feature.get("context") or []
+                            country_part = next((c.get("text") for c in context if "country" in (c.get("id") or "")), None)
+                            cc_part = next((c.get("short_code", "").upper() for c in context if "country" in (c.get("id") or "")), "")
+                            region_part = next((c.get("text") for c in context if "region" in (c.get("id") or "")), None)
+                            candidates.append({
+                                "name": text,
+                                "city": text,
+                                "district": None,
+                                "state": region_part,
+                                "country": country_part or COUNTRY_NAMES.get(cc_part, cc_part),
+                                "country_code": cc_part,
+                                "latitude": float(center[1]),
+                                "longitude": float(center[0]),
+                                "type": (feature.get("place_type") or ["place"])[0],
+                                "importance": feature.get("relevance", 0.5),
+                                "source": "maptiler",
+                            })
+                    return candidates
+            except Exception:
+                pass
+            return []
 
-        def score(cand: dict[str, Any]) -> int:
-            text = f"{cand.get('name') or ''} {cand.get('district') or ''} {cand.get('state') or ''} {cand.get('country') or ''}".lower()
-            return sum(1 for token in query_tokens if token in text)
+        tasks = [fetch_nominatim(), fetch_openweather()]
+        if self.settings.geoapify_api_key:
+            tasks.append(fetch_geoapify())
+        if self.settings.maptiler_api_key:
+            tasks.append(fetch_maptiler())
 
+        gathered = await asyncio.gather(*tasks, return_exceptions=True)
+
+        all_candidates: list[dict[str, Any]] = []
+        for res_list in gathered:
+            if isinstance(res_list, list):
+                all_candidates.extend(res_list)
+
+        def score(cand: dict[str, Any]) -> float:
+            s = 0.0
+            name = (cand.get("name") or "").lower()
+            city = (cand.get("city") or "").lower()
+            state = (cand.get("state") or "").lower()
+            country = (cand.get("country") or "").lower()
+            cc = (cand.get("country_code") or "").lower()
+
+            # Exact match prioritization
+            if name == q_lower or city == q_lower:
+                s += 1200
+            elif name.startswith(q_lower) or city.startswith(q_lower):
+                s += 600
+            elif any(tok == name or tok == city for tok in query_tokens):
+                s += 450
+            elif any(tok in name or tok in city for tok in query_tokens):
+                s += 200
+            else:
+                s -= 400
+
+            # Well-known / populated importance weight
+            s += cand.get("importance", 0.3) * 500
+
+            # Place type weighting
+            ptype = str(cand.get("type") or "").lower()
+            if ptype in ("city", "capital"):
+                s += 160
+            elif ptype in ("administrative", "town", "state"):
+                s += 80
+            elif ptype in ("landmark", "tourism", "historic", "attraction", "tower", "monument"):
+                s += 190
+            elif ptype in ("postcode", "postal_code"):
+                s += 100
+
+            # Multi-token queries (e.g. "Paris, Texas", "Dubai, UAE")
+            if len(query_tokens) > 1:
+                for tok in query_tokens:
+                    if tok != name and tok != city:
+                        if tok in country or tok == cc:
+                            s += 350
+                        elif tok in state:
+                            s += 250
+
+            # Explicit disambiguation boost for global major metropolises
+            if name == "dubai" and (cc == "ae" or "emirates" in country):
+                s += 400
+                if cand.get("state") and "dubai" in cand["state"].lower():
+                    s += 100
+
+            return s
+
+        all_candidates.sort(key=score, reverse=True)
+
+        # Deduplication preserving highest-scoring provider coordinates
         seen_coords = set()
+        seen_ident = set()
         deduped = []
         for cand in all_candidates:
             coord_key = (round(cand["latitude"], 2), round(cand["longitude"], 2))
-            if coord_key not in seen_coords:
-                seen_coords.add(coord_key)
-                deduped.append(cand)
+            ident_key = (
+                (cand.get("name") or "").lower(),
+                (cand.get("state") or "").lower(),
+                (cand.get("country_code") or "").lower(),
+            )
+            if coord_key in seen_coords or ident_key in seen_ident:
+                continue
+            seen_coords.add(coord_key)
+            seen_ident.add(ident_key)
+            deduped.append({
+                "name": cand.get("name"),
+                "city": cand.get("city"),
+                "district": cand.get("district"),
+                "state": cand.get("state"),
+                "country": cand.get("country"),
+                "country_code": cand.get("country_code"),
+                "latitude": cand["latitude"],
+                "longitude": cand["longitude"],
+                "type": cand.get("type"),
+            })
 
-        if deduped and query_tokens:
-            scored = [(score(c), c) for c in deduped]
-            best_score = max(s for s, _ in scored)
-            if best_score > 1:
-                scored = [(s, c) for s, c in scored if s >= 2]
-            scored.sort(key=lambda x: x[0], reverse=True)
-            results = [c for _, c in scored][:6]
-        else:
-            deduped.sort(key=score, reverse=True)
-            results = deduped[:6]
-
+        results = deduped[:7]
         await self.cache.set(key, results)
         return results
 
     async def reverse(self, lat: float, lon: float) -> list[dict[str, Any]]:
-        raw = await self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 5})
-        return [{"name": item.get("name"), "country": item.get("country"), "state": item.get("state"),
-                 "latitude": item.get("lat"), "longitude": item.get("lon")} for item in raw]
+        key = f"reverse:v2:{lat:.3f}:{lon:.3f}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+
+        if self.client is None:
+            await self.startup()
+        assert self.client is not None
+
+        async def fetch_nominatim_reverse() -> list[dict[str, Any]]:
+            try:
+                resp = await self.client.get(
+                    "https://nominatim.openstreetmap.org/reverse",
+                    params={"lat": lat, "lon": lon, "format": "jsonv2", "addressdetails": 1, "accept-language": "en"},
+                    headers={"User-Agent": "AirSenseWeatherApp/1.0"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    addr = data.get("address") or {}
+                    name = (
+                        addr.get("city")
+                        or addr.get("town")
+                        or addr.get("village")
+                        or addr.get("municipality")
+                        or data.get("name")
+                        or addr.get("suburb")
+                        or addr.get("county")
+                        or addr.get("state")
+                    )
+                    district = addr.get("suburb") or addr.get("neighbourhood") or addr.get("county")
+                    state = addr.get("state") or addr.get("region")
+                    country = addr.get("country")
+                    cc = (addr.get("country_code") or "").upper()
+                    if cc and not country:
+                        country = COUNTRY_NAMES.get(cc, cc)
+                    if name:
+                        return [{
+                            "name": name,
+                            "district": district if district != name else None,
+                            "state": state if state != name else None,
+                            "country": country or (COUNTRY_NAMES.get(cc, cc) if cc else ""),
+                            "country_code": cc,
+                            "latitude": lat,
+                            "longitude": lon,
+                        }]
+            except Exception:
+                pass
+            return []
+
+        async def fetch_openweather_reverse() -> list[dict[str, Any]]:
+            try:
+                raw = await self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 5})
+                if isinstance(raw, list):
+                    results = []
+                    for item in raw:
+                        cc = (item.get("country") or "").upper()
+                        country = COUNTRY_NAMES.get(cc, cc)
+                        results.append({
+                            "name": item.get("name"),
+                            "district": None,
+                            "state": item.get("state"),
+                            "country": country,
+                            "country_code": cc,
+                            "latitude": item.get("lat", lat),
+                            "longitude": item.get("lon", lon),
+                        })
+                    return results
+            except Exception:
+                pass
+            return []
+
+        nom_res, ow_res = await asyncio.gather(
+            fetch_nominatim_reverse(),
+            fetch_openweather_reverse(),
+            return_exceptions=True,
+        )
+
+        results: list[dict[str, Any]] = []
+        if isinstance(nom_res, list) and nom_res:
+            results.extend(nom_res)
+        if isinstance(ow_res, list) and ow_res:
+            for item in ow_res:
+                if not any(r["name"].lower() == item["name"].lower() for r in results if r.get("name")):
+                    results.append(item)
+
+        if not results:
+            lat_dir = "N" if lat >= 0 else "S"
+            lon_dir = "E" if lon >= 0 else "W"
+            results = [{
+                "name": f"{abs(lat):.2f}° {lat_dir}, {abs(lon):.2f}° {lon_dir}",
+                "district": None,
+                "state": None,
+                "country": "Selected Location",
+                "country_code": "",
+                "latitude": lat,
+                "longitude": lon,
+            }]
+
+        await self.cache.set(key, results)
+        return results
 
 
 def normalize_forecast(raw: dict[str, Any]) -> dict[str, Any]:
