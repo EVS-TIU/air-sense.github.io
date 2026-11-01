@@ -551,9 +551,17 @@
         gap: 10px;
     }
 
+    .topbar:focus-within {
+        z-index: 100;
+    }
+
     .search-box {
         order: 1;
         flex: 1 1 100%;
+    }
+
+    .search-box__results {
+        z-index: 101;
     }
 
     .location-btn,
