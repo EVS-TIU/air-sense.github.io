@@ -38,13 +38,26 @@
                     return response.json();
                 })
                 .then((payload) => (Array.isArray(payload.results) ? payload.results : []))
-                .then((results) => results.map((item) => ({
-                    id: `${item.latitude},${item.longitude}`,
-                    name: item.name || 'Unknown location',
-                    region: [item.state, item.country].filter(Boolean).join(', '),
-                    lat: Number(item.latitude),
-                    lon: Number(item.longitude),
-                })));
+                .then((results) => results.map((item) => {
+                    const name = item.name || 'Unknown location';
+                    const parts = [];
+                    if (item.district && item.district.toLowerCase() !== name.toLowerCase()) {
+                        parts.push(item.district);
+                    }
+                    if (item.state && item.state.toLowerCase() !== name.toLowerCase() && (!item.district || item.state.toLowerCase() !== item.district.toLowerCase())) {
+                        parts.push(item.state);
+                    }
+                    if (item.country && item.country.toLowerCase() !== name.toLowerCase()) {
+                        parts.push(item.country);
+                    }
+                    return {
+                        id: `${item.latitude},${item.longitude}`,
+                        name: name,
+                        region: parts.join(', '),
+                        lat: Number(item.latitude),
+                        lon: Number(item.longitude),
+                    };
+                }));
         }
     };
 

@@ -176,9 +176,114 @@ class WeatherClient:
         return result
 
     async def search(self, query: str) -> list[dict[str, Any]]:
-        raw = await self._get("/geo/1.0/direct", {"q": query, "limit": 5})
-        return [{"name": item.get("name"), "country": item.get("country"), "state": item.get("state"),
-                 "latitude": item.get("lat"), "longitude": item.get("lon")} for item in raw]
+        clean_q = query.strip()
+        if not clean_q:
+            return []
+        key = f"search:{clean_q.lower()}"
+        cached = await self.cache.get(key)
+        if cached is not None:
+            return cached
+
+        if self.client is None:
+            await self.startup()
+        assert self.client is not None
+
+        query_tokens = [w.lower() for w in clean_q.replace(",", " ").split() if len(w.strip()) > 1]
+
+        async def fetch_nominatim() -> list[dict[str, Any]]:
+            try:
+                resp = await self.client.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={"q": clean_q, "format": "jsonv2", "addressdetails": 1, "limit": 6},
+                    headers={"User-Agent": "AirSenseWeatherApp/1.0"},
+                )
+                if resp.status_code == 200:
+                    candidates = []
+                    for item in resp.json():
+                        addr = item.get("address") or {}
+                        name = (
+                            item.get("name")
+                            or addr.get("city")
+                            or addr.get("town")
+                            or addr.get("suburb")
+                            or addr.get("state_district")
+                            or addr.get("state")
+                        )
+                        district = addr.get("state_district") or addr.get("county") or addr.get("district")
+                        state = addr.get("state")
+                        country = addr.get("country")
+                        country_code = (addr.get("country_code") or "").upper()
+                        if name and item.get("lat") and item.get("lon"):
+                            candidates.append({
+                                "name": name,
+                                "district": district if district != name else None,
+                                "state": state if state != name else None,
+                                "country": country or country_code,
+                                "latitude": float(item["lat"]),
+                                "longitude": float(item["lon"]),
+                            })
+                    return candidates
+            except Exception:
+                pass
+            return []
+
+        async def fetch_openweather() -> list[dict[str, Any]]:
+            try:
+                raw = await self._get("/geo/1.0/direct", {"q": clean_q, "limit": 5})
+                if isinstance(raw, list):
+                    return [
+                        {
+                            "name": item.get("name"),
+                            "district": None,
+                            "state": item.get("state"),
+                            "country": item.get("country"),
+                            "latitude": float(item.get("lat")),
+                            "longitude": float(item.get("lon")),
+                        }
+                        for item in raw
+                        if item.get("name") and item.get("lat") is not None and item.get("lon") is not None
+                    ]
+            except Exception:
+                pass
+            return []
+
+        nom_candidates, ow_candidates = await asyncio.gather(
+            fetch_nominatim(),
+            fetch_openweather(),
+            return_exceptions=True,
+        )
+
+        all_candidates = []
+        if isinstance(nom_candidates, list):
+            all_candidates.extend(nom_candidates)
+        if isinstance(ow_candidates, list):
+            all_candidates.extend(ow_candidates)
+
+        def score(cand: dict[str, Any]) -> int:
+            text = f"{cand.get('name') or ''} {cand.get('district') or ''} {cand.get('state') or ''} {cand.get('country') or ''}".lower()
+            return sum(1 for token in query_tokens if token in text)
+
+        seen_coords = set()
+        deduped = []
+        for cand in all_candidates:
+            coord_key = (round(cand["latitude"], 2), round(cand["longitude"], 2))
+            if coord_key not in seen_coords:
+                seen_coords.add(coord_key)
+                deduped.append(cand)
+
+        if deduped and query_tokens:
+            scored = [(score(c), c) for c in deduped]
+            best_score = max(s for s, _ in scored)
+            if best_score > 1:
+                scored = [(s, c) for s, c in scored if s >= 2]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            results = [c for _, c in scored][:6]
+        else:
+            deduped.sort(key=score, reverse=True)
+            results = deduped[:6]
+
+        await self.cache.set(key, results)
+        return results
 
     async def reverse(self, lat: float, lon: float) -> list[dict[str, Any]]:
         raw = await self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 5})

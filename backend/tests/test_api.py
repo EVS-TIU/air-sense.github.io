@@ -191,3 +191,14 @@ def test_location_reverse_endpoint(client):
     assert response.json()["results"][0]["name"] == "Bidhannagar"
 
 
+def test_location_search_endpoint(client):
+    app.state.weather.search = AsyncMock(return_value=[
+        {"name": "North 24 Parganas", "district": "North 24 Parganas", "state": "West Bengal", "country": "India", "latitude": 22.69, "longitude": 88.66}
+    ])
+    response = client.get("/api/v1/location/search?q=North%2024%20Parganas,%20India")
+    assert response.status_code == 200
+    assert response.json()["results"][0]["name"] == "North 24 Parganas"
+    assert response.json()["results"][0]["district"] == "North 24 Parganas"
+
+
+
