@@ -6,6 +6,15 @@
     border-bottom: 1px solid rgba(116, 174, 213, 0.12);
 }
 
+.sidebar-menu-toggle,
+.sidebar-close {
+    display: none;
+}
+
+.sidebar-backdrop {
+    display: none;
+}
+
 .sidebar-content__brand-icon {
     width: 36px;
     height: 36px;
@@ -122,13 +131,101 @@
 }
 
 @media (max-width: 900px) {
+    .sidebar-menu-toggle {
+        order: 0;
+        flex: 0 0 42px;
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        color: var(--text);
+        background: rgba(8, 26, 42, 0.72);
+        border: 1px solid rgba(116, 174, 213, 0.2);
+        border-radius: 12px;
+    }
+
+    .sidebar-menu-toggle svg,
+    .sidebar-close svg {
+        width: 21px;
+        height: 21px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+    }
+
+    .sidebar-menu-toggle:focus-visible,
+    .sidebar-close:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+    }
+
+    .sidebar-backdrop {
+        position: fixed;
+        z-index: 99;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        background: rgba(2, 10, 18, 0.66);
+        border: 0;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+
+    .sidebar-backdrop.is-visible {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    .sidebar {
+        position: fixed;
+        z-index: 100;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(86vw, 310px);
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
+        padding: 20px 18px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        border-radius: 0 20px 20px 0;
+        transform: translateX(-102%);
+        visibility: hidden;
+        transition: transform 0.28s ease, visibility 0.28s ease;
+        will-change: transform;
+    }
+
+    .sidebar.is-open {
+        transform: translateX(0);
+        visibility: visible;
+    }
+
     .sidebar-content__brand {
         padding-bottom: 14px;
     }
 
+    .sidebar-close {
+        flex: 0 0 36px;
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        margin-left: auto;
+        padding: 0;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(116, 174, 213, 0.18);
+        border-radius: 10px;
+    }
+
     .sidebar-content__nav {
-        flex-direction: row;
-        flex-wrap: wrap;
+        flex-direction: column;
         margin-top: 14px;
     }
 
@@ -138,5 +235,27 @@
 
     .sidebar-content__user {
         padding: 12px 4px;
+    }
+
+    .topbar .search-box {
+        order: 1;
+        flex: 1 1 180px;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .topbar .topbar-nav {
+        display: none;
+    }
+
+    body.sidebar-open {
+        overflow: hidden;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .sidebar-backdrop {
+        transition-duration: 0.01ms;
     }
 }
