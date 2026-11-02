@@ -87,6 +87,14 @@
     z-index: 1;
 }
 
+.airsense-wind-thermal-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    pointer-events: none !important;
+}
+
 /* --------------------------------------------------------------------------
    Legend control
    -------------------------------------------------------------------------- */

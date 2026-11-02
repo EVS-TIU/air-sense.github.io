@@ -123,6 +123,7 @@ COUNTRY_NAMES: dict[str, str] = {
 
 class WeatherClient:
     BASE_URL = "https://api.openweathermap.org"
+    WIND_TILE_URL = "https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png"
     OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None):
@@ -178,6 +179,27 @@ class WeatherClient:
         except (httpx.TimeoutException, httpx.NetworkError):
             logger.warning("Weather provider request failed due to network or timeout")
             raise WeatherServiceError("Weather service is temporarily unavailable", 502) from None
+
+    async def wind_tile(self, z: int, x: int, y: int) -> bytes:
+        """Return an OpenWeather wind tile without exposing the API key."""
+        if self.client is None:
+            await self.startup()
+        assert self.client is not None
+        try:
+            response = await self.client.get(
+                self.WIND_TILE_URL.format(z=z, x=x, y=y),
+                params={"appid": self._require_key()},
+            )
+            if response.status_code == 401:
+                raise WeatherServiceError("Weather service authentication failed", 502)
+            response.raise_for_status()
+            return response.content
+        except WeatherServiceError:
+            raise
+        except (httpx.TimeoutException, httpx.NetworkError):
+            raise WeatherServiceError("Wind tile service is temporarily unavailable", 502) from None
+        except httpx.HTTPError:
+            raise WeatherServiceError("Wind tile service returned an error", 502) from None
         except (httpx.HTTPStatusError, ValueError):
             logger.warning("Weather provider returned an invalid response")
             raise WeatherServiceError("Weather service returned an invalid response", 502) from None

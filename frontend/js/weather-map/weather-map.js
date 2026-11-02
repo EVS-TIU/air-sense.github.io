@@ -37,7 +37,7 @@
     function readStoredMode() {
         try {
             const stored = window.localStorage.getItem(STORAGE_KEY);
-            if (stored && isKnownMode(stored)) return stored;
+            if (stored && isKnownMode(stored) && stored !== 'standard') return stored;
         } catch {
             // Storage can be unavailable in privacy modes.
         }
@@ -118,9 +118,37 @@
         }
     }
 
+    function removeOpenWeatherWindTile(controller) {
+        if (controller.openWeatherWindTile && controller.map.hasLayer(controller.openWeatherWindTile)) {
+            controller.map.removeLayer(controller.openWeatherWindTile);
+        }
+    }
+
+    function showOpenWeatherWindTile(controller) {
+        // The vector renderer normally creates this pane. The fallback can
+        // run before any vector payload exists, so create it explicitly.
+        scalarRenderer.ensureWeatherPane(controller.map);
+        if (!controller.openWeatherWindTile) {
+            controller.openWeatherWindTile = window.L.tileLayer(
+                `${dataStore.apiBase()}/map/wind-tile/{z}/{x}/{y}.png`,
+                {
+                    minZoom: 2,
+                    maxZoom: 19,
+                    opacity: 0.62,
+                    pane: 'weatherPane',
+                    attribution: 'Wind tiles by <a href="https://openweathermap.org/">OpenWeather</a>'
+                }
+            );
+        }
+        if (!controller.map.hasLayer(controller.openWeatherWindTile)) {
+            controller.openWeatherWindTile.addTo(controller.map);
+        }
+    }
+
     function clearVisuals(controller) {
         removeScalar(controller);
         removeWind(controller);
+        removeOpenWeatherWindTile(controller);
         if (controller.radar && controller.map.hasLayer(controller.radar)) controller.map.removeLayer(controller.radar);
         if (controller.weatherApiTile && controller.map.hasLayer(controller.weatherApiTile)) controller.map.removeLayer(controller.weatherApiTile);
     }
@@ -139,6 +167,7 @@
         controller.payloadKey = key;
 
         if (mode === 'wind') {
+            removeOpenWeatherWindTile(controller);
             const field = windRenderer.buildField(payload);
             if (!field) {
                 updateLegend(controller, {
@@ -155,11 +184,8 @@
                 return;
             }
             removeScalar(controller);
-            removeScalar(controller);
-            if (meta.provider !== 'weatherapi') {
-                controller.overlay = scalarRenderer.render(controller.map, payload, mode, controller.opacities[mode]);
-                controller.overlay.addTo(controller.map);
-            }
+            // Wind is rendered as directional vector flow, not as a blurry
+            // provider tile. Keep the base map visible underneath the lines.
             if (!controller.wind) {
                 controller.wind = windRenderer.createLayer(controller.map);
             }
@@ -244,6 +270,19 @@
                             : 'WeatherAPI map tile is current; secondary point data is unavailable.',
                         warningTimestamp: new Date().toISOString(),
                         payload: controller.payload || null
+                    });
+                    return;
+                }
+                if (mode === 'wind') {
+                    // Keep Wind usable when the gridded Open-Meteo request is
+                    // rate-limited: the backend tile is still real wind data.
+                    // Remove any stale vector layer before showing the tile.
+                    removeWind(controller);
+                    removeScalar(controller);
+                    showOpenWeatherWindTile(controller);
+                    updateLegend(controller, {
+                        status: 'ready',
+                        warning: 'Live vector wind unavailable; showing the real-time wind tile fallback.'
                     });
                     return;
                 }
@@ -359,6 +398,13 @@
         }
 
         updateLegend(controller, { status: 'loading' });
+        // Put the real wind tile on screen immediately. If the gridded
+        // Open-Meteo request succeeds, applyPayload removes this tile and
+        // replaces it with the animated vector field; if it is rate-limited,
+        // the tile remains visible instead of leaving the user with no layer.
+        if (mode === 'wind') {
+            showOpenWeatherWindTile(controller);
+        }
         updateController(controller);
     }
 
@@ -391,6 +437,7 @@
             wind: null,
             radar: null,
             weatherApiTile: null,
+            openWeatherWindTile: null,
             weatherApiTileMode: null,
             weatherApiStamp: null,
             legendState: {},

@@ -5,6 +5,7 @@ from datetime import date as date_type, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from .map_service import MapService, parse_bbox
@@ -117,6 +118,18 @@ async def map_weather(
         map_service(request).weather_grid(
             west, south, east, north, zoom, map_variables(variables)
         )
+    )
+
+
+@router.get("/map/wind-tile/{z}/{x}/{y}.png")
+async def wind_tile(request: Request, z: int, x: int, y: int) -> Response:
+    if z < 0 or z > 19 or x < 0 or y < 0:
+        raise HTTPException(400, "Invalid map tile coordinates")
+    content = await provider_call(service(request).wind_tile(z, x, y))
+    return Response(
+        content=content,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=300"},
     )
 
 

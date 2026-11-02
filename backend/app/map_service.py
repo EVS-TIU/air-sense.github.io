@@ -277,10 +277,30 @@ class MapService:
 
         async def load() -> dict:
             points = [point for segment in segments for point in segment.points]
-            records = await self.forecast.fetch(points, selected)
-            return self._build_payload(
+            fallback_used = False
+            try:
+                records = await self.forecast.fetch(points, selected)
+            except WeatherServiceError as primary_error:
+                # Wind animation can use the free NOAA GFS model as a
+                # provider fallback. Other map layers keep their existing
+                # provider behavior and error semantics.
+                if not wind_only or getattr(primary_error, "status_code", 502) < 500:
+                    raise
+                try:
+                    records = await self.forecast.fetch_gfs(points, selected)
+                    fallback_used = True
+                except WeatherServiceError:
+                    raise primary_error
+
+            payload = self._build_payload(
                 "weather", segments, records, selected
             )
+            if fallback_used:
+                payload["provider"] = "noaa-gfs"
+                payload.setdefault("warnings", []).append(
+                    "Open-Meteo unavailable; using NOAA GFS fallback"
+                )
+            return payload
 
         payload = await self._cached(key, self.settings.map_cache_ttl_seconds, load)
         payload = copy.deepcopy(payload)

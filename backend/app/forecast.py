@@ -30,9 +30,29 @@ class ForecastService:
         points: Sequence[tuple[float, float]],
         variables: Sequence[str] | None = None,
     ) -> list[dict]:
+        return await self._fetch_from_url(
+            self.client.settings.openmeteo_forecast_url, points, variables
+        )
+
+    async def fetch_gfs(
+        self,
+        points: Sequence[tuple[float, float]],
+        variables: Sequence[str] | None = None,
+    ) -> list[dict]:
+        """Fetch the free NOAA GFS-backed fallback through Open-Meteo."""
+        return await self._fetch_from_url(
+            self.client.settings.openmeteo_gfs_url, points, variables
+        )
+
+    async def _fetch_from_url(
+        self,
+        url: str,
+        points: Sequence[tuple[float, float]],
+        variables: Sequence[str] | None = None,
+    ) -> list[dict]:
         selected = tuple(variables or FORECAST_VARIABLES)
         return await self.client.fetch_locations(
-            self.client.settings.openmeteo_forecast_url,
+            url,
             points,
             {
                 "current": ",".join(selected),

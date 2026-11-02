@@ -147,9 +147,10 @@
     let sidebarMarker = null;
     let standardBaseLayer = null;
     let satelliteBaseLayers = [];
-    let activeBaseMode = 'standard';
+    let activeBaseMode = 'satellite';
     let mapMaximized = false;
     let mapResizeFrame = null;
+    const WORLD_BOUNDS = [[-85.051129, -180], [85.051129, 180]];
 
     function isMaximized() {
         return mapMaximized;
@@ -381,12 +382,9 @@
     }
 
     function readSavedBaseMode() {
-        try {
-            const stored = window.localStorage.getItem('airsense:map-layer');
-            return stored === 'standard' ? 'standard' : 'satellite';
-        } catch {
-            return 'satellite';
-        }
+        // Satellite is the only supported base map and is restored on every
+        // fresh page load. Weather overlays remain independently selectable.
+        return 'satellite';
     }
 
     function setBaseLayer(mode) {
@@ -446,7 +444,13 @@
         setTimeout(() => {
             if (!sidebarMap) return;
             sidebarMap.invalidateSize({ animate: false });
-            sidebarMap.setView(view.center, view.zoom, { animate: false });
+            // Always open the expanded map at a complete-world view. Keep the
+            // world as the minimum zoom and pan boundary so users can zoom in
+            // freely without losing the global map extent when zooming out.
+            sidebarMap.fitBounds(WORLD_BOUNDS, { animate: false, padding: [8, 8] });
+            sidebarMap.setMinZoom(sidebarMap.getZoom());
+            sidebarMap.setMaxBounds(WORLD_BOUNDS);
+            sidebarMap.setMaxBoundsViscosity(1);
             syncLocationPopup(true);
         }, 120);
     }
@@ -476,6 +480,12 @@
         mapMaximized = false;
         modalDialog.hidden = true;
         modalDialog.setAttribute('aria-hidden', 'true');
+
+        // Restore the normal sidebar map constraints before restoring its
+        // previous city-level view.
+        sidebarMap.setMaxBounds(null);
+        sidebarMap.setMaxBoundsViscosity(0);
+        sidebarMap.setMinZoom(null);
 
         scheduleMapResize();
         setTimeout(() => {

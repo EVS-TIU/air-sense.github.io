@@ -1,12 +1,12 @@
 /* ==========================================================================
-   AirSense — wind particle field
-   Renders animated particles driven by wind_speed_10m and wind_direction_10m
-   with streamlines, reduced-motion support, and automatic pause/resume.
+   AirSense — geographic wind particle renderer
    ========================================================================== */
 (function () {
     'use strict';
 
     const PAUSE_EVENTS = ['weatherly:map-modal-close'];
+    const MIN_PARTICLES = 700;
+    const MAX_PARTICLES = 14000;
 
     function ensureWeatherPane(map) {
         let pane = map.getPane('weatherPane');
@@ -24,299 +24,284 @@
         const speedGrid = segment.values?.wind_speed_10m;
         const dirGrid = segment.values?.wind_direction_10m;
         if (!Array.isArray(speedGrid) || !Array.isArray(dirGrid)) return null;
-
-        const rows = segment.rows;
-        const columns = segment.columns;
+        const rows = Number(segment.rows);
+        const columns = Number(segment.columns);
         const [west, south, east, north] = segment.bbox;
-        const lonStep = (segment.longitudes?.[1] - segment.longitudes?.[0]) || 0;
-        const latStep = (segment.latitudes?.[1] - segment.latitudes?.[0]) || 0;
+        if (!(rows > 1 && columns > 1) || ![west, south, east, north].every(Number.isFinite)) return null;
 
         const speeds = new Float32Array(rows * columns);
         const dirs = new Float32Array(rows * columns);
         let maxSpeed = 0;
-
         for (let row = 0; row < rows; row += 1) {
             for (let column = 0; column < columns; column += 1) {
                 const index = row * columns + column;
-                const speed = speedGrid[row]?.[column];
-                const direction = dirGrid?.[row]?.[column];
-                const numericSpeed = (speed === null || speed === undefined || !Number.isFinite(Number(speed)))
-                    ? 0 : Number(speed);
-                speeds[index] = numericSpeed;
-                if (numericSpeed > maxSpeed) maxSpeed = numericSpeed;
-                dirs[index] = (direction === null || direction === undefined || !Number.isFinite(Number(direction)))
-                    ? 0 : Number(direction);
+                const speed = Number(speedGrid[row]?.[column]);
+                const direction = Number(dirGrid[row]?.[column]);
+                speeds[index] = Number.isFinite(speed) ? speed : 0;
+                dirs[index] = Number.isFinite(direction) ? direction : 0;
+                maxSpeed = Math.max(maxSpeed, speeds[index]);
             }
         }
+        return { speeds, dirs, rows, columns, west, south, east, north, maxSpeed: maxSpeed || 1 };
+    }
 
-        return {
-            segment,
-            speeds,
-            dirs,
-            rows,
-            columns,
-            west,
-            south,
-            east,
-            north,
-            lonStep,
-            latStep,
-            maxSpeed
-        };
+    function wrapLongitude(lon) {
+        return ((lon + 180) % 360 + 360) % 360 - 180;
     }
 
     function sample(field, lat, lon) {
         if (!field) return { u: 0, v: 0, speed: 0 };
-        const lonRatio = (lon - field.west) / ((field.east - field.west) || 1);
-        const latRatio = (field.north - lat) / ((field.north - field.south) || 1);
-        const column = lonRatio * (field.columns - 1);
-        const row = latRatio * (field.rows - 1);
-        if (column < 0 || column >= field.columns || row < 0 || row >= field.rows) {
-            return { u: 0, v: 0, speed: 0 };
-        }
+        const wrappedLon = wrapLongitude(lon);
+        const clampedLat = Math.max(field.south, Math.min(field.north, lat));
+        const x = ((wrappedLon - field.west) / ((field.east - field.west) || 1)) * (field.columns - 1);
+        const y = ((field.north - clampedLat) / ((field.north - field.south) || 1)) * (field.rows - 1);
+        if (x < 0 || x > field.columns - 1 || y < 0 || y > field.rows - 1) return { u: 0, v: 0, speed: 0 };
 
-        const x0 = Math.floor(column);
-        const y0 = Math.floor(row);
+        const x0 = Math.floor(x);
+        const y0 = Math.floor(y);
         const x1 = Math.min(x0 + 1, field.columns - 1);
         const y1 = Math.min(y0 + 1, field.rows - 1);
-        const tx = column - x0;
-        const ty = row - y0;
-
-        function read(gx, gy) {
-            return field.speeds[gy * field.columns + gx];
-        }
-
-        function readDir(gx, gy) {
-            return field.dirs[gy * field.columns + gx];
-        }
-
-        const speed = (
-            read(x0, y0) * (1 - tx) * (1 - ty) +
-            read(x1, y0) * tx * (1 - ty) +
-            read(x0, y1) * (1 - tx) * ty +
-            read(x1, y1) * tx * ty
-        );
-        const weights = [
-            [readDir(x0, y0), (1 - tx) * (1 - ty)],
-            [readDir(x1, y0), tx * (1 - ty)],
-            [readDir(x0, y1), (1 - tx) * ty],
-            [readDir(x1, y1), tx * ty]
+        const tx = x - x0;
+        const ty = y - y0;
+        const read = (gx, gy) => ({
+            speed: field.speeds[gy * field.columns + gx],
+            direction: field.dirs[gy * field.columns + gx]
+        });
+        const values = [
+            [read(x0, y0), (1 - tx) * (1 - ty)],
+            [read(x1, y0), tx * (1 - ty)],
+            [read(x0, y1), (1 - tx) * ty],
+            [read(x1, y1), tx * ty]
         ];
-        const directionVector = weights.reduce((vector, [degrees, weight]) => {
-            const radians = (degrees * Math.PI) / 180;
-            vector.x += Math.sin(radians) * weight;
-            vector.y += Math.cos(radians) * weight;
-            return vector;
-        }, { x: 0, y: 0 });
-        const direction = (Math.atan2(directionVector.x, directionVector.y) * 180 / Math.PI + 360) % 360;
+        let speed = 0;
+        let u = 0;
+        let v = 0;
+        values.forEach(([value, amount]) => {
+            speed += value.speed * amount;
+            const radians = value.direction * Math.PI / 180;
+            // Meteorological direction is where wind comes from.
+            u += -value.speed * Math.sin(radians) * amount;
+            v += -value.speed * Math.cos(radians) * amount;
+        });
+        return { u, v, speed };
+    }
 
-        const radians = (direction * Math.PI) / 180;
-        return {
-            u: -speed * Math.sin(radians),
-            v: -speed * Math.cos(radians),
-            speed
-        };
+    function deviceQuality() {
+        const memory = Number(navigator.deviceMemory || 4);
+        const cores = Number(navigator.hardwareConcurrency || 4);
+        if (memory <= 2 || cores <= 2) return 0.45;
+        if (memory <= 4 || cores <= 4) return 0.7;
+        return 1;
     }
 
     function createLayer(map) {
         const L = window.L;
         ensureWeatherPane(map);
         const container = L.DomUtil.create('div', 'airsense-wind-layer');
-        container.style.position = 'absolute';
-        container.style.top = '0';
-        container.style.left = '0';
-        container.style.width = '100%';
-        container.style.height = '100%';
-        container.style.pointerEvents = 'none';
-
+        Object.assign(container.style, { position: 'absolute', top: '0', left: '0', width: '100%', height: '100%', pointerEvents: 'none' });
+        const thermalCanvas = L.DomUtil.create('canvas', 'airsense-wind-thermal-canvas');
         const canvas = L.DomUtil.create('canvas', 'airsense-wind-canvas');
-        canvas.width = 256;
-        canvas.height = 256;
+        container.appendChild(thermalCanvas);
         container.appendChild(canvas);
-        const context = canvas.getContext('2d');
+        const thermalContext = thermalCanvas.getContext('2d', { alpha: true, desynchronized: true });
+        const context = canvas.getContext('2d', { alpha: true, desynchronized: true });
+        const baseQuality = deviceQuality();
 
         const layer = L.Layer.extend({
             onAdd: function (parentMap) {
                 this._map = parentMap;
                 parentMap.getPane('weatherPane').appendChild(container);
                 this._particles = [];
+                this._field = null;
+                this._running = true;
                 this._paused = false;
-                this._reducedMotion = window.matchMedia &&
-                    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                this._interacting = false;
+                this._quality = baseQuality;
+                this._opacity = 0.9;
                 this._resize();
-                this._map.on('resize move zoom', this._resize, this);
-                this._handleVisibility = () => {
-                    this._paused = document.hidden;
-                };
-                document.addEventListener('visibilitychange', this._handleVisibility);
-                PAUSE_EVENTS.forEach((event) => {
-                    document.addEventListener(event, this._handleVisibility);
-                });
+                this._bindEvents();
+                this._resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this._resize()) : null;
+                this._resizeObserver?.observe(container);
                 this._start();
             },
             onRemove: function () {
                 this._running = false;
                 if (this._frame) cancelAnimationFrame(this._frame);
-                this._map.off('resize move zoom', this._resize, this);
-                document.removeEventListener('visibilitychange', this._handleVisibility);
-                PAUSE_EVENTS.forEach((event) => {
-                    document.removeEventListener(event, this._handleVisibility);
-                });
+                this._unbindEvents();
+                this._resizeObserver?.disconnect();
                 if (container.parentNode) container.parentNode.removeChild(container);
-                this._particles = [];
+                this._particles.length = 0;
+                this._field = null;
             },
-            setData: function (payload) {
-                this._field = buildField(payload);
-                this._staticDrawn = false;
-                this._respawn(true);
+            _bindEvents: function () {
+                this._map.on('resize', this._resize, this);
+                this._map.on('movestart zoomstart dragstart', this._interactionStart, this);
+                this._map.on('moveend zoomend dragend', this._interactionEnd, this);
+                document.addEventListener('visibilitychange', this._handleVisibility = () => { this._paused = document.hidden; });
+                PAUSE_EVENTS.forEach((event) => document.addEventListener(event, this._handleVisibility));
             },
-            setOpacity: function (value) {
-                this._opacity = Math.max(0, Math.min(1, Number(value)));
+            _unbindEvents: function () {
+                this._map.off('resize', this._resize, this);
+                this._map.off('movestart zoomstart dragstart', this._interactionStart, this);
+                this._map.off('moveend zoomend dragend', this._interactionEnd, this);
+                document.removeEventListener('visibilitychange', this._handleVisibility);
+                PAUSE_EVENTS.forEach((event) => document.removeEventListener(event, this._handleVisibility));
             },
+            _interactionStart: function () { this._interacting = true; this._quality = Math.min(this._quality, 0.35); },
+            _interactionEnd: function () { this._interacting = false; this._quality = Math.max(this._quality, baseQuality); this._renderThermal(); this._reprojectTrails(); },
             _resize: function () {
+                if (!this._map) return;
                 const size = this._map.getSize();
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
                 canvas.width = Math.max(1, Math.floor(size.x * dpr));
                 canvas.height = Math.max(1, Math.floor(size.y * dpr));
-                canvas.style.width = size.x + 'px';
-                canvas.style.height = size.y + 'px';
+                thermalCanvas.width = canvas.width;
+                thermalCanvas.height = canvas.height;
+                canvas.style.width = `${size.x}px`;
+                canvas.style.height = `${size.y}px`;
+                thermalCanvas.style.width = `${size.x}px`;
+                thermalCanvas.style.height = `${size.y}px`;
+                thermalContext.setTransform(dpr, 0, 0, dpr, 0, 0);
                 context.setTransform(dpr, 0, 0, dpr, 0, 0);
-                this._staticDrawn = false;
+                this._renderThermal();
+                this._reprojectTrails();
+                this._fitParticlePool();
             },
-            _respawn: function (reset) {
+            _particleTarget: function () {
                 const size = this._map.getSize();
-                // Dense particles with short histories create the continuous
-                // flowing streamlines seen in meteorological maps.
-                const count = Math.min(12000, Math.max(3000, Math.round((size.x * size.y) / 180)));
-                this._particles = [];
-                for (let index = 0; index < count; index += 1) {
-                    const x = Math.random() * size.x;
-                    const y = Math.random() * size.y;
-                    this._particles.push({
-                        x,
-                        y,
-                        age: reset ? Math.random() * 90 : Math.random() * 45,
-                        maxAge: 90 + Math.random() * 120,
-                        trail: [{ x, y }]
-                    });
+                return Math.max(MIN_PARTICLES, Math.min(MAX_PARTICLES, Math.round(size.x * size.y / 260 * this._quality)));
+            },
+            _randomPosition: function () {
+                const bounds = this._map.getBounds();
+                const south = Math.max(-85, bounds.getSouth());
+                const north = Math.min(85, bounds.getNorth());
+                return { lat: south + Math.random() * Math.max(0.01, north - south), lon: bounds.getWest() + Math.random() * (bounds.getEast() - bounds.getWest()) };
+            },
+            _newParticle: function () {
+                const position = this._randomPosition();
+                return { lat: position.lat, lon: position.lon, age: Math.random() * 120, maxAge: 100 + Math.random() * 160, trail: [] };
+            },
+            _fitParticlePool: function () {
+                const target = this._particleTarget();
+                while (this._particles.length < target) this._particles.push(this._newParticle());
+                if (this._particles.length > target) this._particles.length = target;
+                this._reprojectTrails();
+            },
+            _reprojectTrails: function () {
+                if (!this._map) return;
+                this._particles.forEach((particle) => {
+                    const point = this._map.latLngToContainerPoint([particle.lat, particle.lon]);
+                    particle.trail = [{ x: point.x, y: point.y }];
+                });
+            },
+            _renderThermal: function () {
+                if (!this._map || !this._field) return;
+                const size = this._map.getSize();
+                thermalContext.clearRect(0, 0, size.x, size.y);
+                thermalContext.globalAlpha = Math.min(0.72, this._opacity * 0.7);
+                thermalContext.globalCompositeOperation = 'source-over';
+                thermalContext.filter = 'blur(5px)';
+
+                // A coarse, interpolated screen-space field keeps the thermal
+                // pass cheap while the browser smooths the colour transitions.
+                // Every sample is taken from the real Open-Meteo speed grid.
+                const columns = Math.min(96, Math.max(24, Math.ceil(size.x / 18)));
+                const rows = Math.min(54, Math.max(14, Math.ceil(size.y / 18)));
+                const bounds = this._map.getBounds();
+                const west = bounds.getWest();
+                const east = bounds.getEast();
+                const south = Math.max(-85, bounds.getSouth());
+                const north = Math.min(85, bounds.getNorth());
+                const colorFor = window.AirSensePalettes?.colorFor;
+                if (typeof colorFor !== 'function') return;
+
+                for (let row = 0; row < rows; row += 1) {
+                    const lat0 = south + (north - south) * row / rows;
+                    const lat1 = south + (north - south) * (row + 1) / rows;
+                    for (let column = 0; column < columns; column += 1) {
+                        const lon0 = west + (east - west) * column / columns;
+                        const lon1 = west + (east - west) * (column + 1) / columns;
+                        const value = sample(this._field, (lat0 + lat1) / 2, (lon0 + lon1) / 2).speed;
+                        const color = colorFor('wind', value);
+                        if (!color) continue;
+                        const topLeft = this._map.latLngToContainerPoint([lat1, lon0]);
+                        const topRight = this._map.latLngToContainerPoint([lat1, lon1]);
+                        const bottomRight = this._map.latLngToContainerPoint([lat0, lon1]);
+                        const bottomLeft = this._map.latLngToContainerPoint([lat0, lon0]);
+                        thermalContext.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+                        thermalContext.beginPath();
+                        thermalContext.moveTo(topLeft.x, topLeft.y);
+                        thermalContext.lineTo(topRight.x, topRight.y);
+                        thermalContext.lineTo(bottomRight.x, bottomRight.y);
+                        thermalContext.lineTo(bottomLeft.x, bottomLeft.y);
+                        thermalContext.closePath();
+                        thermalContext.fill();
+                    }
                 }
+                thermalContext.filter = 'none';
+                thermalContext.globalAlpha = 1;
+            },
+            _respawn: function (particle) {
+                const position = this._randomPosition();
+                particle.lat = position.lat;
+                particle.lon = position.lon;
+                particle.age = 0;
+                particle.maxAge = 100 + Math.random() * 160;
+                particle.trail.length = 0;
+            },
+            setData: function (payload) {
+                this._field = buildField(payload);
+                if (!this._field) return;
+                this._renderThermal();
+                this._fitParticlePool();
+                this._particles.forEach((particle) => { particle.age = Math.random() * particle.maxAge; });
+            },
+            setOpacity: function (value) {
+                this._opacity = Math.max(0, Math.min(1, Number(value)));
+                this._renderThermal();
             },
             _start: function () {
-                this._running = true;
                 const tick = () => {
                     if (!this._running) return;
                     this._frame = requestAnimationFrame(tick);
-                    if (this._paused || !this._field) {
-                        return;
-                    }
-                    if (this._reducedMotion) {
-                        if (!this._staticDrawn) {
-                            this._drawStatic();
-                            this._staticDrawn = true;
-                        }
-                        return;
-                    }
+                    if (this._paused || !this._field) return;
                     this._draw();
                 };
-                tick();
-            },
-            _drawStatic: function () {
-                const size = this._map.getSize();
-                context.clearRect(0, 0, size.x, size.y);
-                const palette = window.AirSensePalettes;
-                context.lineCap = 'round';
-                context.globalAlpha = this._opacity ?? 0.9;
-                for (let index = 0; index < 60; index += 1) {
-                    const lat = this._field.south + Math.random() * (this._field.north - this._field.south);
-                    const lon = this._field.west + Math.random() * (this._field.east - this._field.west);
-                    const point = this._map.latLngToContainerPoint(L.latLng(lat, lon));
-                    const windSample = sample(this._field, lat, lon);
-                    if (windSample.speed < 2) continue;
-                    const color = palette.colorFor('wind', windSample.speed);
-                    context.strokeStyle = color
-                        ? `rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.7)`
-                        : 'rgba(150, 210, 255, 0.7)';
-                    context.lineWidth = 1.5;
-                    context.beginPath();
-                    context.moveTo(point.x, point.y);
-                    context.lineTo(point.x + windSample.u * 0.7, point.y - windSample.v * 0.7);
-                    context.stroke();
-                }
+                this._frame = requestAnimationFrame(tick);
             },
             _draw: function () {
                 const size = this._map.getSize();
-                // Fade only existing particle trails; never paint over the map.
                 context.globalCompositeOperation = 'destination-in';
-                context.fillStyle = 'rgba(0, 0, 0, 0.9)';
+                context.fillStyle = `rgba(0, 0, 0, ${this._interacting ? 0.76 : 0.9})`;
                 context.fillRect(0, 0, size.x, size.y);
                 context.globalCompositeOperation = 'source-over';
-                const palette = window.AirSensePalettes;
                 context.lineCap = 'round';
                 context.lineJoin = 'round';
-                context.globalAlpha = this._opacity ?? 0.9;
+                context.lineWidth = this._interacting ? 0.55 : 0.8;
+                context.globalAlpha = this._opacity;
+                const stepScale = this._interacting ? 0.00012 : 0.00024;
 
                 this._particles.forEach((particle) => {
-                    let windSample = null;
-                    // Two small advection steps per frame keep the motion
-                    // smooth while making streamlines long enough to read.
-                    for (let step = 0; step < 2; step += 1) {
-                        const point = this._map.containerPointToLatLng(L.point(particle.x, particle.y));
-                        windSample = sample(this._field, point.lat, point.lng);
-                        if (windSample.speed < 0.4) break;
-                        const px = point.lng;
-                        const py = point.lat;
-                        const zoomScale = Math.pow(2, 5 - this._map.getZoom());
-                        const stepDegrees = (0.012 + Math.min(0.055, windSample.speed * 0.0007)) * zoomScale;
-                        const nx = this._map.latLngToContainerPoint(L.latLng(
-                            py + windSample.v * stepDegrees,
-                            px + windSample.u * stepDegrees
-                        ));
-                        particle.x = nx.x;
-                        particle.y = nx.y;
-                        particle.trail.push({ x: particle.x, y: particle.y });
-                        if (particle.trail.length > 28) particle.trail.shift();
-                    }
-                    if (!windSample || windSample.speed < 0.4) {
-                        particle.x = Math.random() * size.x;
-                        particle.y = Math.random() * size.y;
-                        particle.trail = [{ x: particle.x, y: particle.y }];
-                        particle.age = 0;
-                        return;
-                    }
+                    const wind = sample(this._field, particle.lat, particle.lon);
+                    if (wind.speed < 0.2) { this._respawn(particle); return; }
+                    const latitudeScale = Math.max(0.35, Math.cos(particle.lat * Math.PI / 180));
+                    particle.lon = wrapLongitude(particle.lon + wind.u * stepScale / latitudeScale);
+                    particle.lat = Math.max(-85, Math.min(85, particle.lat + wind.v * stepScale));
+                    const point = this._map.latLngToContainerPoint([particle.lat, particle.lon]);
+                    particle.trail.push({ x: point.x, y: point.y });
+                    if (particle.trail.length > (this._interacting ? 8 : 26)) particle.trail.shift();
+                    if (particle.age > particle.maxAge || point.x < -80 || point.x > size.x + 80 || point.y < -80 || point.y > size.y + 80) { this._respawn(particle); return; }
 
-                    const color = palette.colorFor('wind', windSample.speed);
-                    const alpha = 0.3 + Math.min(0.58, windSample.speed / 42);
-                    context.strokeStyle = color
-                        ? `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`
-                        : `rgba(120, 200, 255, ${alpha})`;
-                    context.lineWidth = 0.65 + Math.min(1.25, windSample.speed / 34);
+                    context.strokeStyle = wind.speed > 24 ? 'rgba(195, 241, 255, 0.84)' : 'rgba(220, 247, 255, 0.7)';
                     context.beginPath();
-                    particle.trail.forEach((trailPoint, trailIndex) => {
-                        if (trailIndex === 0) context.moveTo(trailPoint.x, trailPoint.y);
-                        else context.lineTo(trailPoint.x, trailPoint.y);
-                    });
+                    particle.trail.forEach((trailPoint, index) => index ? context.lineTo(trailPoint.x, trailPoint.y) : context.moveTo(trailPoint.x, trailPoint.y));
                     context.stroke();
-                    particle.age += 1;
-                    if (particle.age > particle.maxAge || particle.x < 0 || particle.x > size.x || particle.y < 0 || particle.y > size.y) {
-                        particle.x = Math.random() * size.x;
-                        particle.y = Math.random() * size.y;
-                        particle.trail = [{ x: particle.x, y: particle.y }];
-                        particle.age = 0;
-                        particle.maxAge = 90 + Math.random() * 120;
-                    }
+                    particle.age += 1 + Math.min(2, wind.speed / 25);
                 });
-
-                if (this._reducedMotion) {
-                    this._staticDrawn = false;
-                }
             }
         });
-
         return new layer();
     }
 
-    window.AirSenseWindRenderer = {
-        createLayer,
-        buildField
-    };
+    window.AirSenseWindRenderer = { createLayer, buildField };
 })();

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
         default="https://api.open-meteo.com/v1/forecast",
         validation_alias="OPENMETEO_FORECAST_URL",
     )
+    openmeteo_gfs_url: str = Field(
+        default="https://api.open-meteo.com/v1/gfs",
+        validation_alias="OPENMETEO_GFS_URL",
+    )
     openmeteo_archive_url: str = Field(
         default="https://archive-api.open-meteo.com/v1/archive",
         validation_alias="OPENMETEO_ARCHIVE_URL",
