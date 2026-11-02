@@ -1,8 +1,8 @@
 /* ==========================================================================
    AirSense - Interactive World Map Component
-   Method A (Search): Search updates map position and marker
-   Method B (Interactive Map): User clicks map -> coordinates captured ->
-   reverse geocoded -> search bar & weather dashboard update in sync.
+   One Leaflet instance is used for both the compact sidebar map and the
+   expanded modal. The map element is moved between the two hosts so center,
+   zoom, marker, popup and weather layers are preserved.
    ========================================================================== */
 
 (function () {
@@ -48,6 +48,26 @@
         }[m]));
     }
 
+    function announceMap(id, map) {
+        document.dispatchEvent(new CustomEvent('weatherly:map-ready', {
+            detail: { id, map }
+        }));
+    }
+
+    function enhancePopup(mapId, marker, lat, lon, name, region) {
+        if (!window.AirSenseLocationPopup || typeof window.AirSenseLocationPopup.enhance !== 'function') {
+            return;
+        }
+        window.AirSenseLocationPopup.enhance({
+            mapId,
+            marker,
+            lat,
+            lon,
+            name,
+            region
+        });
+    }
+
     // Custom pinpoint marker icon with radar pulse
     const pinpointIcon = window.L.divIcon({
         className: 'custom-map-pinpoint',
@@ -70,13 +90,15 @@
     }
 
     const sidebarMapEl = document.getElementById('interactive-map');
-    const modalMapEl = document.getElementById('modal-map');
+    const modalMapHost = document.getElementById('modal-map');
     const modalDialog = document.getElementById('map-modal');
     const expandBtn = document.getElementById('map-expand-btn');
     const modalCloseBtn = document.getElementById('map-modal-close');
     const modalBackdrop = document.getElementById('map-modal-backdrop');
     const modalDoneBtn = document.getElementById('modal-map-done');
     const modalStatus = document.getElementById('modal-map-status');
+    const sidebarMapParent = sidebarMapEl ? sidebarMapEl.parentNode : null;
+    const sidebarMapNext = sidebarMapEl ? sidebarMapEl.nextSibling : null;
 
     // Sidebar UI elements
     const sidebarCityEl = document.getElementById('sidebar-city');
@@ -92,8 +114,59 @@
 
     let sidebarMap = null;
     let sidebarMarker = null;
-    let modalMap = null;
-    let modalMarker = null;
+    let mapMaximized = false;
+
+    function isMaximized() {
+        return mapMaximized;
+    }
+
+    function locationChipHtml(name, countryCode) {
+        const code = String(countryCode || '').trim().toUpperCase();
+        return `
+            <svg class="airsense-location-chip__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 21s-6-5.33-6-10a6 6 0 1 1 12 0c0 4.67-6 10-6 10z"/>
+                <circle cx="12" cy="11" r="2.5"/>
+            </svg>
+            <span class="airsense-location-chip__name">${escapeHtml(name || 'Selected Location')}</span>
+            ${code ? `<span class="airsense-location-chip__country">${escapeHtml(code)}</span>` : ''}
+        `;
+    }
+
+    function updateLocationChip(name, countryCode) {
+        if (!sidebarMarker) return;
+        const content = locationChipHtml(name, countryCode);
+        if (!sidebarMarker.getTooltip()) {
+            sidebarMarker.bindTooltip(content, {
+                permanent: true,
+                direction: 'top',
+                offset: [0, -38],
+                className: 'airsense-location-chip',
+                opacity: 1,
+                interactive: false
+            });
+            sidebarMarker.openTooltip();
+        } else {
+            sidebarMarker.setTooltipContent(content);
+        }
+    }
+
+    function popupHtml(name, region) {
+        return `<b>${escapeHtml(name || 'Selected Location')}</b>${region ? `<br><small>${escapeHtml(region)}</small>` : ''}`;
+    }
+
+    function syncLocationPopup(enrich) {
+        if (!sidebarMarker || !sidebarMap) return;
+        sidebarMarker.bindPopup(popupHtml(currentName, currentRegion), { autoPan: false });
+
+        if (isMaximized()) {
+            sidebarMarker.openPopup();
+            if (enrich) {
+                enhancePopup('map', sidebarMarker, currentLat, currentLon, currentName, currentRegion);
+            }
+        } else {
+            sidebarMap.closePopup();
+        }
+    }
 
     function updateSidebarBadge(name, region, countryCode, lat, lon) {
         if (sidebarCityEl) sidebarCityEl.textContent = name || 'Selected Location';
@@ -107,6 +180,7 @@
         if (modalStatus) {
             modalStatus.textContent = `Selected: ${name} (${region || 'Worldwide'})`;
         }
+        updateLocationChip(name, countryCode);
     }
 
     async function reverseGeocode(lat, lon) {
@@ -135,38 +209,16 @@
             }
         }
 
-        if (modalMarker) {
-            modalMarker.setLatLng([currentLat, currentLon]);
-        }
-        if (modalMap) {
-            if (zoomLevel) {
-                modalMap.flyTo([currentLat, currentLon], zoomLevel, { duration: 1.0 });
-            } else {
-                modalMap.panTo([currentLat, currentLon]);
-            }
-        }
-
         if (skipReverse && locationMeta) {
             currentName = locationMeta.name || 'Selected Location';
             currentRegion = locationMeta.region || locationMeta.country || '';
             currentCountryCode = locationMeta.countryCode || '';
             updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
-
-            const popupContent = `<b>${escapeHtml(currentName)}</b>${currentRegion ? `<br><small>${escapeHtml(currentRegion)}</small>` : ''}`;
-            if (sidebarMarker) {
-                sidebarMarker.bindPopup(popupContent).openPopup();
-            }
-            if (modalMarker) {
-                modalMarker.bindPopup(popupContent).openPopup();
-            }
+            syncLocationPopup(true);
             return;
         }
 
         // Method B: Reverse-geocode coordinates captured from interactive map
-        const tempPopup = '<span>Fetching location details...</span>';
-        if (sidebarMarker) sidebarMarker.bindPopup(tempPopup).openPopup();
-        if (modalMarker) modalMarker.bindPopup(tempPopup).openPopup();
-
         try {
             const place = await reverseGeocode(currentLat, currentLon);
             if (place) {
@@ -200,10 +252,7 @@
         }
 
         updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
-
-        const popupHtml = `<b>${escapeHtml(currentName)}</b>${currentRegion ? `<br><small>${escapeHtml(currentRegion)}</small>` : ''}`;
-        if (sidebarMarker) sidebarMarker.bindPopup(popupHtml).openPopup();
-        if (modalMarker) modalMarker.bindPopup(popupHtml).openPopup();
+        syncLocationPopup(true);
 
         // Synchronize search input field
         const searchInput = document.getElementById('location-search');
@@ -230,7 +279,7 @@
     }
 
     /* ----------------------------------------------------------------------
-       Sidebar Map Initialization
+       Map Initialization
        ---------------------------------------------------------------------- */
     function initSidebarMap() {
         if (!sidebarMapEl) return;
@@ -247,7 +296,7 @@
         tileLayer.addTo(sidebarMap);
 
         sidebarMarker = window.L.marker([currentLat, currentLon], { icon: pinpointIcon }).addTo(sidebarMap);
-        sidebarMarker.bindPopup(`<b>${escapeHtml(currentName)}</b><br><small>${escapeHtml(currentRegion)}</small>`);
+        sidebarMarker.bindPopup(popupHtml(currentName, currentRegion), { autoPan: false });
 
         sidebarMap.on('click', (e) => {
             handleMapSelection(e.latlng.lat, e.latlng.lng, null, false);
@@ -258,52 +307,70 @@
         }, 150);
 
         updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
+        announceMap('map', sidebarMap);
     }
 
     /* ----------------------------------------------------------------------
-       Modal (Expanded) World Map Initialization
+       Modal (Maximized) Map
+       The existing Leaflet element is moved into the modal rather than
+       creating a second map instance.
        ---------------------------------------------------------------------- */
     function openModalMap() {
-        if (!modalDialog) return;
+        if (!modalDialog || !sidebarMap || !modalMapHost || mapMaximized) return;
+
+        const view = {
+            center: sidebarMap.getCenter(),
+            zoom: sidebarMap.getZoom()
+        };
+
+        mapMaximized = true;
         modalDialog.hidden = false;
         modalDialog.setAttribute('aria-hidden', 'false');
+        modalMapHost.appendChild(sidebarMapEl);
+        sidebarMapEl.classList.add('is-maximized');
+        document.body.classList.add('map-maximized');
 
-        if (!modalMap && modalMapEl) {
-            modalMap = window.L.map(modalMapEl, {
-                center: [currentLat, currentLon],
-                zoom: Math.max(sidebarMap ? sidebarMap.getZoom() : 10, 5),
-                zoomControl: true,
-                scrollWheelZoom: true
-            });
-
-            createTileLayer().addTo(modalMap);
-
-            modalMarker = window.L.marker([currentLat, currentLon], { icon: pinpointIcon }).addTo(modalMap);
-            modalMarker.bindPopup(`<b>${escapeHtml(currentName)}</b><br><small>${escapeHtml(currentRegion)}</small>`);
-
-            modalMap.on('click', (e) => {
-                handleMapSelection(e.latlng.lat, e.latlng.lng, null, false);
-            });
-        }
+        document.dispatchEvent(new CustomEvent('weatherly:map-modal-open'));
 
         setTimeout(() => {
-            if (modalMap) {
-                modalMap.invalidateSize();
-                modalMap.setView([currentLat, currentLon], sidebarMap ? sidebarMap.getZoom() : 10);
-                if (modalMarker) {
-                    modalMarker.setLatLng([currentLat, currentLon]).openPopup();
-                }
-            }
-        }, 150);
+            if (!sidebarMap) return;
+            sidebarMap.invalidateSize();
+            sidebarMap.setView(view.center, view.zoom, { animate: false });
+            syncLocationPopup(true);
+        }, 160);
     }
 
     function closeModalMap() {
-        if (!modalDialog) return;
+        if (!modalDialog || !mapMaximized) return;
+
+        const view = {
+            center: sidebarMap.getCenter(),
+            zoom: sidebarMap.getZoom()
+        };
+
+        document.dispatchEvent(new CustomEvent('weatherly:map-modal-close'));
+        sidebarMap.closePopup();
+
+        if (sidebarMapEl && sidebarMapParent && sidebarMapEl.parentNode === modalMapHost) {
+            const before = sidebarMapNext && sidebarMapNext.parentNode === sidebarMapParent
+                ? sidebarMapNext
+                : null;
+            sidebarMapParent.insertBefore(sidebarMapEl, before);
+        }
+        sidebarMapEl.classList.remove('is-maximized');
+        document.body.classList.remove('map-maximized');
+        mapMaximized = false;
+
         modalDialog.hidden = true;
         modalDialog.setAttribute('aria-hidden', 'true');
-        if (sidebarMap) {
-            setTimeout(() => sidebarMap.invalidateSize(), 100);
-        }
+
+        setTimeout(() => {
+            if (sidebarMap) {
+                sidebarMap.invalidateSize();
+                sidebarMap.setView(view.center, view.zoom, { animate: false });
+                syncLocationPopup(false);
+            }
+        }, 120);
     }
 
     if (expandBtn) {
@@ -343,6 +410,7 @@
             currentRegion = city.region || currentRegion;
             currentCountryCode = city.countryCode || currentCountryCode;
             updateSidebarBadge(currentName, currentRegion, currentCountryCode, lat, lon);
+            syncLocationPopup(true);
             return;
         }
 
@@ -379,7 +447,7 @@
         });
     });
 
-    // Initialize sidebar map when DOM is ready
+    // Initialize the only map instance when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initSidebarMap);
     } else {
@@ -390,6 +458,9 @@
         getCoordinates: () => ({ lat: currentLat, lon: currentLon }),
         selectCoordinates: (lat, lon, zoom) => handleMapSelection(lat, lon, zoom, false),
         openModal: openModalMap,
-        closeModal: closeModalMap
+        closeModal: closeModalMap,
+        isMaximized,
+        getMaps: () => ({ map: sidebarMap }),
+        getApiBase: () => apiBase
     };
 })();

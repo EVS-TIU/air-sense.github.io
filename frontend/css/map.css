@@ -279,6 +279,109 @@
     stroke-linejoin: round;
 }
 
+/* --------------------------------------------------------------------------
+   Small sidebar map
+   The sidebar always renders the compact map. The full weather interface is
+   revealed only when the same map is moved into the large modal.
+   -------------------------------------------------------------------------- */
+.sidebar__map-section.is-minimized {
+    position: relative;
+    gap: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.sidebar__map-section.is-minimized .sidebar__map-header {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 500;
+    padding: 0;
+}
+
+.sidebar__map-section.is-minimized .sidebar__map-title,
+.sidebar__map-section.is-minimized .sidebar__map-controls,
+.sidebar__map-section.is-minimized .sidebar__map-hint {
+    display: none;
+}
+
+.sidebar__map-section.is-minimized .sidebar__map-expand-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(7, 23, 38, 0.82);
+    border-color: rgba(116, 174, 213, 0.35);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.sidebar__map-section.is-minimized .interactive-map {
+    height: 170px;
+}
+
+/* Nothing except the base map, marker and location chip belongs in the
+   compact sidebar map. */
+.sidebar__map-section .leaflet-control-zoom,
+.sidebar__map-section .leaflet-control-attribution,
+.sidebar__map-section .airsense-legend,
+.sidebar__map-section .leaflet-popup-pane,
+.sidebar__map-section .leaflet-weather-pane {
+    display: none !important;
+}
+
+/* Compact location chip anchored to the selected marker. */
+.leaflet-tooltip.airsense-location-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 178px;
+    margin: 0;
+    padding: 6px 9px;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #ffffff;
+    white-space: nowrap;
+    background: rgba(7, 23, 38, 0.94);
+    border: 1px solid rgba(116, 174, 213, 0.38);
+    border-radius: 9px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.48);
+    pointer-events: none;
+}
+
+.leaflet-tooltip-top.airsense-location-chip::before {
+    border-top-color: rgba(7, 23, 38, 0.94);
+}
+
+.airsense-location-chip__icon {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.airsense-location-chip__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.airsense-location-chip__country {
+    flex: 0 0 auto;
+    padding: 1px 5px;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: #cfe8ff;
+    background: rgba(33, 169, 255, 0.18);
+    border: 1px solid rgba(33, 169, 255, 0.38);
+    border-radius: 4px;
+}
+
 .interactive-map {
     width: 100%;
     height: 250px;
@@ -458,7 +561,22 @@
     flex: 1;
     min-height: 0;
     width: 100%;
+    display: flex;
     cursor: crosshair !important;
+}
+
+/* The single Leaflet instance is moved into the modal when maximized. */
+.modal-map > #interactive-map {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.modal-map .airsense-location-chip {
+    display: none !important;
 }
 
 .map-modal__footer {

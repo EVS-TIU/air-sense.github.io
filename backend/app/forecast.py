@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from .openmeteo import OpenMeteoClient
+
+# One weather-grid request returns every scalar field needed by all weather
+# layers, so switching between temperature/wind/humidity/rain/cloud does not
+# consume another provider request.
+FORECAST_VARIABLES = (
+    "temperature_2m",
+    "apparent_temperature",
+    "relative_humidity_2m",
+    "precipitation",
+    "cloud_cover",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "surface_pressure",
+)
+
+
+class ForecastService:
+    """Open-Meteo current/forecast API integration."""
+
+    def __init__(self, client: OpenMeteoClient):
+        self.client = client
+
+    async def fetch(self, points: Sequence[tuple[float, float]]) -> list[dict]:
+        return await self.client.fetch_locations(
+            self.client.settings.openmeteo_forecast_url,
+            points,
+            {
+                "current": ",".join(FORECAST_VARIABLES),
+                "temperature_unit": "celsius",
+                "wind_speed_unit": "kmh",
+                "precipitation_unit": "mm",
+            },
+        )

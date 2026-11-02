@@ -18,6 +18,14 @@ OpenWeather geocoding. UV is requested from OpenWeather One Call 3.0
 `current.uvi` as an optional request; if unavailable for the API plan, the
 weather response still succeeds with `uv_index: null`.
 
+The map subsystem adds `MapService`, `OpenMeteoClient`, `ForecastService`,
+`AirQualityService`, `HistoricalService`, `map_grid`, and `map_cache`. It
+uses viewport-based grids, request coalescing, per-family TTL caching, and
+serves data from Open-Meteo Forecast, Air Quality, and Archive APIs with no
+additional API keys. The frontend uses modular map-layer files under
+`frontend/js/weather-map/` to render heatmaps, wind particles, legends, and
+popup enrichment without replacing the existing Leaflet map.
+
 The frontend's existing `/weather/current` contract is retained: normalized
 metric temperatures, `visibility` in metres, wind in km/h, condition metadata,
 location fields, sunrise/sunset epochs, location timezone offset, UV data, and

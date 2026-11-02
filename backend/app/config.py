@@ -26,6 +26,36 @@ class Settings(BaseSettings):
     llm_base_url: str = Field(default="", validation_alias="LLM_BASE_URL")
     llm_model: str = Field(default="", validation_alias="LLM_MODEL")
 
+    # Open-Meteo map data. URLs are configurable so a self-hosted or proxy
+    # deployment can be used without changing application code.
+    openmeteo_forecast_url: str = Field(
+        default="https://api.open-meteo.com/v1/forecast",
+        validation_alias="OPENMETEO_FORECAST_URL",
+    )
+    openmeteo_archive_url: str = Field(
+        default="https://archive-api.open-meteo.com/v1/archive",
+        validation_alias="OPENMETEO_ARCHIVE_URL",
+    )
+    openmeteo_air_quality_url: str = Field(
+        default="https://air-quality-api.open-meteo.com/v1/air-quality",
+        validation_alias="OPENMETEO_AIR_QUALITY_URL",
+    )
+    map_cache_ttl_seconds: int = Field(
+        default=300, validation_alias="MAP_CACHE_TTL_SECONDS", ge=0, le=86400
+    )
+    map_air_cache_ttl_seconds: int = Field(
+        default=900, validation_alias="MAP_AIR_CACHE_TTL_SECONDS", ge=0, le=86400
+    )
+    map_historical_cache_ttl_seconds: int = Field(
+        default=3600, validation_alias="MAP_HISTORICAL_CACHE_TTL_SECONDS", ge=0, le=86400
+    )
+    map_max_points: int = Field(
+        default=400, validation_alias="MAP_MAX_POINTS", ge=4, le=2000
+    )
+    map_max_batch_points: int = Field(
+        default=40, validation_alias="MAP_MAX_BATCH_POINTS", ge=1, le=100
+    )
+
     # Configurable intelligence thresholds.
     heat_celsius: float = 35
     extreme_heat_celsius: float = 40

@@ -11,7 +11,11 @@
     <!-- Leaflet interactive map styles -->
     <link rel="stylesheet" href="./assets/vendor/leaflet/leaflet.css">
     <!-- Map component styles -->
-    <link rel="stylesheet" href="./css/map.css?v=20261101-1">
+    <link rel="stylesheet" href="./css/map.css?v=20261102-3">
+    <!-- Weather visualization layers -->
+    <link rel="stylesheet" href="./css/weather-layers.css?v=20261102-2">
+    <!-- Popular cities sidebar section -->
+    <link rel="stylesheet" href="./css/popular-cities.css?v=20261102-1">
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css?v=20261031-3">
     <!-- Top Navigation component styles -->
@@ -179,17 +183,10 @@
                     </svg>
                     <span>Smart Alert</span>
                 </a>
-                <a href="#settings" data-nav="settings">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <circle cx="12" cy="12" r="3"/>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                    </svg>
-                    <span>Settings</span>
-                </a>
             </nav>
 
             <!-- 4. Interactive Map (at bottom of sidebar) -->
-            <div class="sidebar__map-section">
+            <div class="sidebar__map-section is-minimized" id="sidebar-map-section">
                 <div class="sidebar__map-header">
                     <div class="sidebar__map-title">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -205,12 +202,73 @@
                         </svg>
                     </button>
                 </div>
+                <div class="sidebar__map-controls">
+                    <label class="map-layer-label" for="sidebar-map-layer">Weather layer</label>
+                    <select class="map-layer-select" id="sidebar-map-layer" aria-label="Weather layer">
+                        <option value="standard">Standard Map</option>
+                        <option value="temperature">Temperature</option>
+                        <option value="wind">Wind</option>
+                        <option value="humidity">Humidity</option>
+                        <option value="rainfall">Rainfall</option>
+                        <option value="clouds">Clouds</option>
+                        <option value="aqi">AQI</option>
+                    </select>
+                </div>
                 <div id="interactive-map" class="interactive-map" role="region" aria-label="Interactive world map"></div>
                 <div class="sidebar__map-hint">
                     <svg viewBox="0 0 24 24" aria-hidden="true" width="12" height="12"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
                     <span>Click anywhere on map to select</span>
                 </div>
             </div>
+
+            <!-- 5. Popular Cities -->
+            <section class="sidebar__popular" id="popular-cities" aria-labelledby="popular-cities-title">
+                <div class="sidebar__popular-header">
+                    <h3 class="sidebar__popular-title" id="popular-cities-title">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                        <span>POPULAR CITIES</span>
+                    </h3>
+                    <span class="sidebar__popular-count" id="popular-cities-count"></span>
+                </div>
+
+                <div class="sidebar__country" id="popular-country">
+                    <button type="button" class="sidebar__country-trigger" id="popular-country-trigger"
+                        aria-haspopup="listbox" aria-expanded="false" aria-controls="popular-country-list"
+                        aria-label="Choose a country">
+                        <span class="sidebar__country-flag" id="popular-country-flag" aria-hidden="true">🌍</span>
+                        <span class="sidebar__country-name" id="popular-country-name">Select country</span>
+                        <svg class="sidebar__country-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="sidebar__country-panel" id="popular-country-panel" hidden>
+                        <div class="sidebar__country-search-wrap">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"/>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            </svg>
+                            <input class="sidebar__country-search" id="popular-country-search" type="search"
+                                role="combobox" aria-autocomplete="list" aria-expanded="false"
+                                aria-controls="popular-country-list" aria-label="Search countries"
+                                placeholder="Search all countries..." autocomplete="off" spellcheck="false">
+                        </div>
+                        <ul class="sidebar__country-list" id="popular-country-list" role="listbox"
+                            aria-label="Countries"></ul>
+                        <p class="sidebar__country-empty" id="popular-country-empty" hidden>No countries found</p>
+                    </div>
+                </div>
+
+                <div class="sidebar__cities-grid" id="popular-cities-grid" role="group"
+                    aria-label="Popular cities"></div>
+                <p class="sidebar__popular-attribution">
+                    City data © <a href="https://www.geonames.org/" target="_blank"
+                        rel="noopener noreferrer">GeoNames</a> (CC BY 4.0)
+                </p>
+            </section>
         </aside>
 
         <!-- Current Weather -->
@@ -601,6 +659,18 @@
                     <h3 id="map-modal-title">Global Weather Map</h3>
                     <p class="map-modal__subtitle">Click any location on Earth to update live weather and forecasts</p>
                 </div>
+                <div class="map-modal__layer-control">
+                    <label class="map-layer-label" for="modal-map-layer">Weather layer</label>
+                    <select class="map-layer-select map-layer-select--modal" id="modal-map-layer" aria-label="Weather layer">
+                        <option value="standard">Standard Map</option>
+                        <option value="temperature">Temperature</option>
+                        <option value="wind">Wind</option>
+                        <option value="humidity">Humidity</option>
+                        <option value="rainfall">Rainfall</option>
+                        <option value="clouds">Clouds</option>
+                        <option value="aqi">AQI</option>
+                    </select>
+                </div>
                 <button type="button" class="map-modal__close" id="map-modal-close" aria-label="Close world map">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
@@ -616,9 +686,20 @@
     <!-- Leaflet Map library -->
     <script src="./assets/vendor/leaflet/leaflet.js"></script>
     <!-- Map synchronization & interaction component -->
-    <script src="./js/map.js?v=20261101-1"></script>
+    <script src="./js/map.js?v=20261102-3"></script>
+    <!-- Weather visualization layers -->
+    <script src="./js/weather-map/palettes.js?v=20261102-1"></script>
+    <script src="./js/weather-map/data-store.js?v=20261102-1"></script>
+    <script src="./js/weather-map/scalar-renderer.js?v=20261102-1"></script>
+    <script src="./js/weather-map/wind-renderer.js?v=20261102-1"></script>
+    <script src="./js/weather-map/legends.js?v=20261102-1"></script>
+    <script src="./js/weather-map/popup.js?v=20261102-1"></script>
+    <script src="./js/weather-map/weather-map.js?v=20261102-2"></script>
     <script src="./js/app.js?v=20261101-16" defer></script>
     <script src="./js/topbar.js?v=20261101-3" defer></script>
+    <!-- Popular cities sidebar section -->
+    <script src="./js/popular-cities-data.js?v=20261102-1" defer></script>
+    <script src="./js/popular-cities.js?v=20261102-1" defer></script>
     <!-- Climate Analysis module -->
     <script src="./climate-analysis/climate-analysis.js?v=20261102-1" defer></script>
 </body>

@@ -1,0 +1,314 @@
+/* ==========================================================================
+   AirSense — Weather visualization layers
+   Additive styles only: the existing map shell, tiles, marker and popup keep
+   their current rules from map.css.
+   ========================================================================== */
+
+.sidebar__map-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 2px;
+}
+
+.map-layer-label {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #8faec4;
+    white-space: nowrap;
+}
+
+.map-layer-select {
+    min-width: 0;
+    max-width: 138px;
+    padding: 4px 22px 4px 8px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: #dceeff;
+    background-color: #0b2236;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238fb0c9' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 11px;
+    border: 1px solid rgba(116, 174, 213, 0.28);
+    border-radius: 7px;
+    cursor: pointer;
+    appearance: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.map-layer-select:hover,
+.map-layer-select:focus-visible {
+    border-color: rgba(33, 169, 255, 0.65);
+    background-color: #12314b;
+    outline: none;
+}
+
+.map-layer-select:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.map-layer-select--modal {
+    max-width: 170px;
+    padding: 7px 28px 7px 11px;
+    font-size: 12px;
+}
+
+.map-modal__layer-control {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-left: auto;
+    margin-right: 16px;
+}
+
+/* Leaflet weather panes: overlays must never consume map interactions. */
+.leaflet-weather-pane,
+.leaflet-weather-pane canvas,
+.weather-layer-image,
+.airsense-wind-canvas {
+    pointer-events: none !important;
+}
+
+.weather-layer-image {
+    image-rendering: auto;
+}
+
+.airsense-wind-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+/* --------------------------------------------------------------------------
+   Legend control
+   -------------------------------------------------------------------------- */
+.airsense-legend {
+    min-width: 152px;
+    max-width: 248px;
+    padding: 9px 11px 8px;
+    color: #eaf5ff;
+    background: rgba(7, 23, 38, 0.92);
+    border: 1px solid rgba(116, 174, 213, 0.34);
+    border-radius: 10px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    font-size: 10.5px;
+    line-height: 1.35;
+}
+
+.airsense-legend__title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    color: #ffffff;
+}
+
+.airsense-legend__unit {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: #9ac2e0;
+}
+
+.airsense-legend__bar {
+    height: 8px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.airsense-legend__ticks {
+    display: flex;
+    justify-content: space-between;
+    gap: 4px;
+    margin-top: 2px;
+    font-size: 8.5px;
+    color: #a9c8df;
+    font-variant-numeric: tabular-nums;
+}
+
+.airsense-legend__status {
+    margin-top: 6px;
+    font-size: 9px;
+    color: #9ac2e0;
+}
+
+.airsense-legend__status.is-error {
+    color: #ffb4ab;
+}
+
+.airsense-legend__status.is-loading {
+    color: #8fd4ff;
+}
+
+.airsense-legend__retry {
+    margin-left: 4px;
+    padding: 1px 6px;
+    font: inherit;
+    font-size: 8.5px;
+    color: #dceeff;
+    background: rgba(33, 169, 255, 0.16);
+    border: 1px solid rgba(33, 169, 255, 0.42);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.airsense-legend__meta {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(116, 174, 213, 0.16);
+    font-size: 8.5px;
+    color: #7fa4bf;
+}
+
+.airsense-legend__attribution {
+    margin-top: 2px;
+    font-size: 8px;
+    color: #6f93ad;
+}
+
+.airsense-legend__attribution a {
+    color: #9ac2e0;
+    text-decoration: underline;
+}
+
+/* Keep the compact sidebar copy of the legend from hiding the marker. The
+   modal map uses the full-size legend from the base rules above. */
+.sidebar__map-section .airsense-legend {
+    min-width: 132px;
+    max-width: 190px;
+    padding: 7px 9px 6px;
+    font-size: 9.5px;
+}
+
+.sidebar__map-section .airsense-legend__title {
+    font-size: 10px;
+}
+
+.sidebar__map-section .airsense-legend__meta,
+.sidebar__map-section .airsense-legend__attribution {
+    font-size: 7.5px;
+}
+
+/* --------------------------------------------------------------------------
+   Location popup enrichment
+   -------------------------------------------------------------------------- */
+.airsense-popup {
+    min-width: 190px;
+}
+
+.airsense-popup__heading {
+    margin-bottom: 4px;
+}
+
+.airsense-popup__coords {
+    display: inline-block;
+    margin-bottom: 6px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 10px;
+    color: #35b6ff;
+    background: rgba(33, 169, 255, 0.1);
+    border: 1px solid rgba(33, 169, 255, 0.22);
+    border-radius: 5px;
+}
+
+.airsense-popup__grid {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 3px 12px;
+    margin: 2px 0 0;
+}
+
+.airsense-popup__item {
+    display: contents;
+}
+
+.airsense-popup__label {
+    font-size: 10px;
+    color: #90b6d1;
+    white-space: nowrap;
+}
+
+.airsense-popup__value {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #f2f7fc;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.airsense-popup__aqi {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #06131d;
+}
+
+.airsense-popup__section {
+    margin-top: 6px;
+    padding-top: 5px;
+    border-top: 1px solid rgba(116, 174, 213, 0.16);
+}
+
+.airsense-popup__section-title {
+    margin-bottom: 3px;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #81a8c4;
+}
+
+.airsense-popup__meta {
+    margin-top: 5px;
+    font-size: 9px;
+    color: #7fa4bf;
+}
+
+.airsense-popup__error {
+    margin-top: 5px;
+    font-size: 9.5px;
+    color: #ffb4ab;
+}
+
+.airsense-popup__retry {
+    margin-left: 6px;
+    padding: 2px 7px;
+    font: inherit;
+    font-size: 9px;
+    color: #dceeff;
+    background: rgba(33, 169, 255, 0.16);
+    border: 1px solid rgba(33, 169, 255, 0.42);
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.airsense-popup__loading {
+    margin-top: 5px;
+    font-size: 9.5px;
+    color: #8fd4ff;
+}
+
+@media (max-width: 720px) {
+    .map-modal__layer-control {
+        margin-right: 8px;
+    }
+
+    .map-layer-select--modal {
+        max-width: 132px;
+    }
+}

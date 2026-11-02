@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import date as date_type, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from .map_service import MapService, parse_bbox
 from .services import WeatherClient, WeatherServiceError, build_recommendations
 
 logger = logging.getLogger(__name__)
@@ -33,11 +35,38 @@ def service(request: Request) -> WeatherClient:
     return request.app.state.weather
 
 
+def map_service(request: Request) -> MapService:
+    return request.app.state.map_service
+
+
+def map_variables(value: str | None) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    variables = tuple(part.strip() for part in value.split(",") if part.strip())
+    if not variables:
+        raise HTTPException(400, "At least one variable is required")
+    return variables
+
+
+def historical_date(value: str) -> str:
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(400, "date must use YYYY-MM-DD") from None
+    if parsed > date_type.today():
+        raise HTTPException(400, "date cannot be in the future")
+    return parsed.isoformat()
+
+
 async def provider_call(call):
     try:
         return await call
     except WeatherServiceError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from None
+        headers = None
+        retry_after = getattr(exc, "retry_after", None)
+        if retry_after:
+            headers = {"Retry-After": str(retry_after)}
+        raise HTTPException(exc.status_code, str(exc), headers=headers) from None
 
 
 @router.get("/health")
@@ -67,6 +96,70 @@ async def forecast(request: Request, location: Annotated[Coordinates, Depends(co
 @router.get("/weather/air-quality")
 async def air_quality(request: Request, location: Annotated[Coordinates, Depends(coordinates)]) -> dict:
     return await provider_call(service(request).air_quality(location.latitude, location.longitude))
+
+
+def bounds(value: str) -> tuple[float, float, float, float]:
+    try:
+        return parse_bbox(value)
+    except WeatherServiceError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from None
+
+
+@router.get("/map/weather")
+async def map_weather(
+    request: Request,
+    bbox: Annotated[str, Query(description="west,south,east,north")],
+    zoom: Annotated[int, Query(ge=0, le=19)] = 6,
+    variables: Annotated[str | None, Query()] = None,
+) -> dict:
+    west, south, east, north = bounds(bbox)
+    return await provider_call(
+        map_service(request).weather_grid(
+            west, south, east, north, zoom, map_variables(variables)
+        )
+    )
+
+
+@router.get("/map/air-quality")
+async def map_air_quality(
+    request: Request,
+    bbox: Annotated[str, Query(description="west,south,east,north")],
+    zoom: Annotated[int, Query(ge=0, le=19)] = 6,
+    variables: Annotated[str | None, Query()] = None,
+) -> dict:
+    west, south, east, north = bounds(bbox)
+    return await provider_call(
+        map_service(request).air_quality_grid(
+            west, south, east, north, zoom, map_variables(variables)
+        )
+    )
+
+
+@router.get("/map/point")
+async def map_point(
+    request: Request,
+    location: Annotated[Coordinates, Depends(coordinates)],
+) -> dict:
+    return await provider_call(
+        map_service(request).point(location.latitude, location.longitude)
+    )
+
+
+@router.get("/map/historical")
+async def map_historical(
+    request: Request,
+    bbox: Annotated[str, Query(description="west,south,east,north")],
+    date: Annotated[str, Query(description="YYYY-MM-DD")],
+    zoom: Annotated[int, Query(ge=0, le=19)] = 6,
+    variables: Annotated[str | None, Query()] = None,
+) -> dict:
+    west, south, east, north = bounds(bbox)
+    selected = map_variables(variables) or ("temperature_2m",)
+    return await provider_call(
+        map_service(request).historical_grid(
+            west, south, east, north, zoom, historical_date(date), selected
+        )
+    )
 
 
 @router.get("/location/search")

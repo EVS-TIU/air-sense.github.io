@@ -36,6 +36,44 @@ ports are allowed by the backend CORS configuration.
   practical recommendations.
 * `GET /api/v1/weather/summary?lat=35.46&lon=-97.51` - weather, air quality,
   and recommendations in one response.
+* `GET /api/v1/map/weather?bbox=west,south,east,north&zoom=5` - viewport
+  weather grid for the map layers (temperature, wind, humidity, rainfall,
+  clouds). Fetching one grid returns every variable, so switching between
+  weather layers does not create another provider request.
+* `GET /api/v1/map/air-quality?bbox=west,south,east,north&zoom=5` - viewport
+  US AQI grid from the Open-Meteo Air Quality API (CAMS).
+* `GET /api/v1/map/point?lat=35.46&lon=-97.51` - combined live weather and
+  air-quality point values used by the map popup.
+* `GET /api/v1/map/historical?bbox=west,south,east,north&zoom=5&date=2025-01-15`
+  - historical archive grid for a past UTC date. This is a separate dataset
+  from the live forecast layers and is not mixed into current conditions.
+
+### Map grid contract
+
+Map endpoints accept a Leaflet-style `bbox` (`west,south,east,north`), a
+zoom level `0..19`, and an optional comma-separated `variables` filter. The
+backend splits viewports that cross the antimeridian, clamps latitude to the
+Web-Mercator-safe `-85..85` range, and chooses a grid step from a fixed ladder
+so nearby viewports share cache entries. Grids are capped by
+`MAP_MAX_POINTS` (400 by default).
+
+Responses contain `provider`, `family`, `dataset`, `bbox`, `zoom`,
+`resolution_deg`, `columns`, `rows`, `point_count`, `data_time`, `units`,
+`stale`, and `segments`. Each segment contains its own `bbox`, `latitudes`,
+`longitudes`, and a `values` matrix per variable indexed as
+`values[variable][row][column]`. Missing values are `null` and are rendered as
+transparent cells, never as zero.
+
+Weather grids use a 300-second cache, air-quality grids 900 seconds, and
+historical grids 3600 seconds. Identical in-flight requests are coalesced. If
+the provider fails after a cached grid exists, the cached response is returned
+with `stale: true` and a warning. Provider rate limits return HTTP 503 with a
+`Retry-After` header when the provider supplies one.
+
+Map data is sourced from Open-Meteo. Weather data is © Open-Meteo.com
+(CC BY 4.0); air quality is based on CAMS data distributed by Open-Meteo. The
+frontend displays this attribution plus the effective sampling grid and the
+approximate model resolution. No paid API or API key is required.
 
 Successful current response includes `temperature`, `apparent_temperature`,
 `humidity`, `pressure`, `visibility`, `wind_speed` (km/h), `wind_direction`,

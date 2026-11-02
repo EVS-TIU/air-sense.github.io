@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
+from .map_service import MapService
 from .routes import router
 from .services import WeatherClient
 
@@ -20,8 +21,11 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
     app.state.weather = WeatherClient(settings)
+    app.state.map_service = MapService(settings)
     await app.state.weather.startup()
+    await app.state.map_service.startup()
     yield
+    await app.state.map_service.shutdown()
     await app.state.weather.shutdown()
 
 
