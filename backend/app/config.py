@@ -53,7 +53,7 @@ class Settings(BaseSettings):
         default=400, validation_alias="MAP_MAX_POINTS", ge=4, le=2000
     )
     map_max_batch_points: int = Field(
-        default=40, validation_alias="MAP_MAX_BATCH_POINTS", ge=1, le=100
+        default=100, validation_alias="MAP_MAX_BATCH_POINTS", ge=1, le=100
     )
 
     # Configurable intelligence thresholds.

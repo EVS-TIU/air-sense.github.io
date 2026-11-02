@@ -1209,17 +1209,31 @@ function pickDailyRepresentative(points, weather, timezoneOffset) {
 }
 
 function aggregateDailyForecast(weather) {
-  if (Array.isArray(weather?.daily) && weather.daily.length === 7) {
-    return weather.daily.map((day) => ({
-      dateKey: day.date,
-      high: day.temperature_max,
-      low: day.temperature_min,
-      precipitation: day.precipitation_probability,
-      representative: { weather_code: day.weather_code, condition: day.condition, time: `${day.date}T12:00`, timestamp: Date.parse(`${day.date}T12:00:00Z`) / 1000 },
-    }));
-  }
-  const points = Array.isArray(weather?.hourly) ? weather.hourly : [];
   const timezoneOffset = Number(weather?.timezone_offset) || 0;
+  const today = new Date(Date.now() + timezoneOffset * 1000);
+  today.setUTCHours(12, 0, 0, 0);
+  const dateKeys = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
+
+  if (Array.isArray(weather?.daily) && weather.daily.length) {
+    const dailyByDate = new Map(weather.daily.map((day) => [day.date, day]));
+    return dateKeys.map((dateKey) => {
+      const day = dailyByDate.get(dateKey);
+      if (!day) return { dateKey, unavailable: true };
+      return {
+        dateKey,
+        high: day.temperature_max,
+        low: day.temperature_min,
+        precipitation: day.precipitation_probability,
+        representative: { weather_code: day.weather_code, condition: day.condition, time: `${day.date}T12:00`, timestamp: Date.parse(`${day.date}T12:00:00Z`) / 1000 },
+      };
+    });
+  }
+
+  const points = Array.isArray(weather?.hourly) ? weather.hourly : [];
   const days = new Map();
 
   points.forEach((point) => {
@@ -1244,7 +1258,9 @@ function aggregateDailyForecast(weather) {
     days.set(dateKey, day);
   });
 
-  return [...days.values()].slice(0, 7).map((day) => {
+  return dateKeys.map((dateKey) => {
+    const day = days.get(dateKey);
+    if (!day) return { dateKey, unavailable: true };
     const representative = pickDailyRepresentative(
       day.points,
       weather,
@@ -1296,6 +1312,15 @@ function renderDailyForecast(weather) {
     const dayEl = document.createElement("p");
     dayEl.className = "week-card__day";
     dayEl.textContent = dayName;
+    if (day.unavailable) {
+      card.classList.add("week-card--unavailable");
+      const unavailable = document.createElement("p");
+      unavailable.className = "week-card__condition";
+      unavailable.textContent = "Forecast unavailable";
+      card.append(dayEl, unavailable);
+      weekCardsEl.append(card);
+      return;
+    }
     const conditionEl = document.createElement("p");
     conditionEl.className = "week-card__condition";
     conditionEl.textContent = resolved.label;
@@ -1320,7 +1345,11 @@ function renderDailyForecast(weather) {
     }
     weekCardsEl.append(card);
   });
-  if (weekStatusEl) weekStatusEl.textContent = "Live forecast";
+  if (weekStatusEl) {
+    weekStatusEl.textContent = days.some((day) => day.unavailable)
+      ? "Partial forecast"
+      : "Live forecast";
+  }
 }
 
 function renderCurrentWeather(weather) {
@@ -1332,7 +1361,9 @@ function renderCurrentWeather(weather) {
   renderUvIndex(weather);
   if (Number.isFinite(weather.latitude) && Number.isFinite(weather.longitude)) {
     updateAirQualityIndex(weather.latitude, weather.longitude);
-    updateUvIndexFromOpenMeteo(weather.latitude, weather.longitude);
+    if (!Number.isFinite(weather.uv_index)) {
+      updateUvIndexFromOpenMeteo(weather.latitude, weather.longitude);
+    }
   }
   updateTemperatureUnitUI();
   renderHourlyForecast(weather);
@@ -1541,9 +1572,6 @@ async function updateCurrentWeatherHero(position) {
   }
 
   renderCurrentWeather(weather);
-  updateAirQualityIndex(latitude, longitude);
-  updateUvIndexFromOpenMeteo(latitude, longitude);
-
   applyFallbackBackground();
 }
 
@@ -1594,8 +1622,6 @@ async function fetchDeviceLocationWeather(options = {}) {
     }
 
     renderCurrentWeather(weather);
-    updateAirQualityIndex(heroPosition.latitude, heroPosition.longitude);
-    updateUvIndexFromOpenMeteo(heroPosition.latitude, heroPosition.longitude);
     updateWeatherForPosition(heroPosition).catch(() => {});
 
     if (locationBtn) {
@@ -1851,7 +1877,7 @@ function getBrowserPosition(options = {}) {
     return pendingPositionPromise;
   }
 
-  const timeout = typeof options.timeout === "number" ? options.timeout : 20000;
+  const timeout = typeof options.timeout === "number" ? options.timeout : 15000;
   const maxAge = typeof options.maximumAge === "number" ? options.maximumAge : 0;
 
   pendingPositionPromise = new Promise((resolve, reject) => {
@@ -1861,38 +1887,17 @@ function getBrowserPosition(options = {}) {
       return;
     }
 
-    let settled = false;
-    let bestPosition = null;
-    let watchId = null;
-    const finish = (position, error = null) => {
-      if (settled) return;
-      settled = true;
-      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-      clearTimeout(timeoutId);
-      pendingPositionPromise = null;
-      if (error && !position) reject(error);
-      else resolve(position);
-    };
-    const timeoutId = setTimeout(() => {
-      if (bestPosition) finish(bestPosition);
-      else finish(null, new Error("The browser could not obtain a fresh GPS location."));
-    }, timeout);
-
-    try {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
-            bestPosition = position;
-          }
-          // Keep listening briefly for a better fix unless the device has a strong GPS reading.
-          if (position.coords.accuracy <= 50) finish(position);
-        },
-        (error) => finish(bestPosition, error),
-        { enableHighAccuracy: true, timeout, maximumAge: maxAge },
-      );
-    } catch (error) {
-      finish(null, error);
-    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        pendingPositionPromise = null;
+        resolve(position);
+      },
+      (error) => {
+        pendingPositionPromise = null;
+        reject(error);
+      },
+      { enableHighAccuracy: true, timeout, maximumAge: maxAge },
+    );
   });
 
   return pendingPositionPromise;
