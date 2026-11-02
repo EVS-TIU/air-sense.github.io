@@ -607,6 +607,9 @@
 
 .mobile-nav-menu__panel {
     min-width: 210px;
+    max-height: 80vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .mobile-nav-menu__item {
