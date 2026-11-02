@@ -25,12 +25,17 @@ class ForecastService:
     def __init__(self, client: OpenMeteoClient):
         self.client = client
 
-    async def fetch(self, points: Sequence[tuple[float, float]]) -> list[dict]:
+    async def fetch(
+        self,
+        points: Sequence[tuple[float, float]],
+        variables: Sequence[str] | None = None,
+    ) -> list[dict]:
+        selected = tuple(variables or FORECAST_VARIABLES)
         return await self.client.fetch_locations(
             self.client.settings.openmeteo_forecast_url,
             points,
             {
-                "current": ",".join(FORECAST_VARIABLES),
+                "current": ",".join(selected),
                 "temperature_unit": "celsius",
                 "wind_speed_unit": "kmh",
                 "precipitation_unit": "mm",

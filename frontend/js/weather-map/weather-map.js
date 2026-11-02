@@ -88,8 +88,8 @@
         return Math.max(0, Math.min(19, Math.round(Number.isFinite(zoom) ? zoom : 5)));
     }
 
-    function viewportKey(family, bbox, zoom) {
-        return `${family}:${zoom}:${dataStore.roundedBbox(bbox)}`;
+    function viewportKey(family, bbox, zoom, mode) {
+        return `${family}:${mode || ''}:${zoom}:${dataStore.roundedBbox(bbox)}`;
     }
 
     function updateLegend(controller, state) {
@@ -213,7 +213,7 @@
 
         const zoom = viewportZoom(controller.map);
         const family = meta.family;
-        const key = viewportKey(family, bbox, zoom);
+        const key = viewportKey(family, bbox, zoom, mode);
 
         if (controller.payload && controller.payloadKey === key) {
             applyPayload(controller, controller.payload, mode, key);
@@ -223,13 +223,38 @@
         const requestId = controller.requestId;
         updateLegend(controller, { status: 'loading' });
 
-        dataStore.getGrid(family, bbox, zoom)
+        const variables = mode === 'wind'
+            ? ['wind_speed_10m', 'wind_direction_10m']
+            : (family === 'weather' && meta.variable ? [meta.variable] : null);
+        dataStore.getGrid(family, bbox, zoom, variables)
             .then((payload) => {
                 if (requestId !== controller.requestId || controller.mode !== mode) return;
                 applyPayload(controller, payload, mode, key);
             })
             .catch((error) => {
                 if (requestId !== controller.requestId || controller.mode !== mode) return;
+                // A WeatherAPI tile is an independent, valid layer. An
+                // Open-Meteo failure only removes the optional wind animation;
+                // it must never turn a working speed tile into a layer error.
+                if (meta.provider === 'weatherapi' && controller.weatherApiTile) {
+                    updateLegend(controller, {
+                        status: 'ready',
+                        warning: mode === 'wind'
+                            ? 'Animated flow temporarily unavailable; WeatherAPI speed tile is current.'
+                            : 'WeatherAPI map tile is current; secondary point data is unavailable.',
+                        warningTimestamp: new Date().toISOString(),
+                        payload: controller.payload || null
+                    });
+                    return;
+                }
+                if (controller.overlay) {
+                    updateLegend(controller, {
+                        status: 'ready',
+                        warning: 'Provider unavailable; keeping the last valid field with its original timestamp.',
+                        warningTimestamp: new Date().toISOString()
+                    });
+                    return;
+                }
                 updateLegend(controller, {
                     status: 'error',
                     error: error?.message || 'Unable to load weather data. Please try again.',
@@ -248,7 +273,7 @@
         const validTime = new Date();
         validTime.setUTCMinutes(0, 0, 0);
         const stamp = validTime.toISOString().replace(/[-:T]/g, '').slice(0, 10);
-        const opacity = controller.opacities[mode] ?? palettes.MODES[mode].opacity;
+        const opacity = controller.opacities[mode] ?? (mode === 'wind' ? 0.34 : palettes.MODES[mode].opacity);
         if (controller.weatherApiTile && controller.weatherApiTileMode === mode && controller.weatherApiStamp === stamp) {
             controller.weatherApiTile.setOpacity(opacity);
             if (!controller.map.hasLayer(controller.weatherApiTile)) controller.weatherApiTile.addTo(controller.map);
@@ -262,6 +287,19 @@
             `https://weathermaps.weatherapi.com/${path}/tiles/${stamp}/{z}/{x}/{y}.png`,
             { minZoom: 0, maxZoom: 19, opacity, pane: 'weatherPane', attribution: 'Weather map tiles by <a href="https://www.weatherapi.com/docs/weather-maps/">WeatherAPI.com</a>' }
         ).addTo(controller.map);
+        controller.weatherApiTile.on('tileerror', () => {
+            controller.weatherApiTileErrors = (controller.weatherApiTileErrors || 0) + 1;
+            if (controller.weatherApiTileErrors >= 3 && controller.mode === mode) {
+                updateLegend(controller, {
+                    status: 'ready',
+                    warning: 'Some WeatherAPI tiles could not be loaded; retrying on the next map move.'
+                });
+            }
+        });
+        controller.weatherApiTile.on('load', () => {
+            controller.weatherApiTileErrors = 0;
+            if (controller.mode === mode) updateLegend(controller, { status: 'ready', warning: null });
+        });
         updateLegend(controller, { status: 'ready', tileTime: validTime.toISOString(), tileSource: 'WeatherAPI' });
     }
 

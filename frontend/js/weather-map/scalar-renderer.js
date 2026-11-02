@@ -99,18 +99,25 @@
             const rendered = buildSegmentCanvas(segment, mode);
             if (!rendered) return;
             const [west, south, east, north] = rendered.bbox;
-            const overlay = L.imageOverlay(
-                rendered.canvas.toDataURL('image/png'),
-                L.latLngBounds([south, west], [north, east]),
-                {
-                    opacity,
-                    interactive: false,
-                    pane: 'weatherPane',
-                    className: 'weather-layer-image',
-                    attribution: 'Weather data by Open-Meteo.com (CC BY 4.0)'
-                }
-            );
-            group.addLayer(overlay);
+            const image = rendered.canvas.toDataURL('image/png');
+            // Leaflet repeats the base world horizontally at low zoom. An
+            // ImageOverlay does not repeat automatically, so add adjacent
+            // longitude copies of the same measured field. This fixes the
+            // half-covered global AQI/weather view without changing values.
+            [-360, 0, 360].forEach((offset) => {
+                const overlay = L.imageOverlay(
+                    image,
+                    L.latLngBounds([south, west + offset], [north, east + offset]),
+                    {
+                        opacity,
+                        interactive: false,
+                        pane: 'weatherPane',
+                        className: 'weather-layer-image',
+                        attribution: 'Weather data by Open-Meteo.com (CC BY 4.0)'
+                    }
+                );
+                group.addLayer(overlay);
+            });
         });
         return group;
     }

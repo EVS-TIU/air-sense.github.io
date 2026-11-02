@@ -75,7 +75,9 @@
                     <div class="airsense-legend__title"><span>${meta.label}</span><span class="airsense-legend__unit">${meta.unit}</span></div>
                     <div class="airsense-legend__status">${mode === 'wind' ? 'WeatherAPI speed tile · Open-Meteo animated flow' : 'Provider-rendered map colors · units shown above'}</div>
                     ${state.status === 'loading' ? '<div class="airsense-legend__status is-loading">Loading latest map tiles…</div>' : ''}
-                    ${state.status === 'error' ? `<div class="airsense-legend__status is-error">${escapeHtml(state.error)}${mode === 'wind' ? ' · speed tile remains available' : ''}</div>` : ''}
+                    ${state.warning ? `<div class="airsense-legend__status">${escapeHtml(state.warning)}</div>` : ''}
+                    ${state.payload?.stale ? '<div class="airsense-legend__status">Using last valid wind field · stale</div>' : ''}
+                    ${state.status === 'error' ? `<div class="airsense-legend__status is-error">${escapeHtml(state.error)}</div>` : ''}
                     <div class="airsense-legend__meta"><div>Tile valid: ${timeLabel}</div>${mode === 'wind' ? `<div>Flow data: ${escapeHtml(formatDataTime(state.payload?.data_time))} · grid ≈ ${state.payload?.resolution_deg ?? '—'}°</div>` : ''}<div>Hourly map tiles · global coverage</div><div>Source: ${mode === 'wind' ? 'WeatherAPI + Open-Meteo' : 'WeatherAPI.com'}</div></div>
                     <div class="airsense-legend__attribution"><a href="https://www.weatherapi.com/docs/weather-maps/" target="_blank" rel="noopener">WeatherAPI map tiles · free, no key</a>${mode === 'wind' ? ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>' : ''}</div>
                     <label class="airsense-opacity">Overlay opacity <input data-map-opacity type="range" min="0.15" max="1" step="0.05" value="${state.opacity ?? meta.opacity}"></label>`;
@@ -126,11 +128,13 @@
                 ${state.status === 'loading' ? '<div class="airsense-legend__status is-loading">Loading Open-Meteo data…</div>' : ''}
                 ${state.status === 'error' ? `<div class="airsense-legend__status is-error">${escapeHtml(state.error)}${typeof state.onRetry === 'function' ? ' <button type="button" class="airsense-legend__retry">Retry</button>' : ''}</div>` : ''}
                 ${state.payload?.stale ? '<div class="airsense-legend__status">Cached data</div>' : ''}
+                ${state.warning ? `<div class="airsense-legend__status">${escapeHtml(state.warning)}</div>` : ''}
                 <label class="airsense-opacity">Overlay opacity <input data-map-opacity type="range" min="0.15" max="1" step="0.05" value="${state.opacity ?? meta.opacity ?? 0.6}"></label>
                 <div class="airsense-legend__meta">
                     <div>Data: ${timeLabel}</div>
                     <div>Grid ≈ ${gridLabel} · ${pointCount} pts</div>
                     <div>Source: ${sourceNote}</div>
+                    ${state.warning ? `<div>${escapeHtml(state.warning)}</div>` : ''}
                 </div>
                 <div class="airsense-legend__attribution">
                     <a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com (CC BY 4.0)</a><br>

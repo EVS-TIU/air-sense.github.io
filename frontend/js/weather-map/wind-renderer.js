@@ -185,14 +185,19 @@
             },
             _respawn: function (reset) {
                 const size = this._map.getSize();
-                const count = Math.min(1100, Math.max(320, Math.round((size.x * size.y) / 9000)));
+                // Dense particles with short histories create the continuous
+                // flowing streamlines seen in meteorological maps.
+                const count = Math.min(2200, Math.max(650, Math.round((size.x * size.y) / 5200)));
                 this._particles = [];
                 for (let index = 0; index < count; index += 1) {
+                    const x = Math.random() * size.x;
+                    const y = Math.random() * size.y;
                     this._particles.push({
-                        x: Math.random() * size.x,
-                        y: Math.random() * size.y,
-                        age: reset ? Math.random() * 80 : Math.random() * 40,
-                        maxAge: 60 + Math.random() * 60
+                        x,
+                        y,
+                        age: reset ? Math.random() * 90 : Math.random() * 45,
+                        maxAge: 90 + Math.random() * 120,
+                        trail: [{ x, y }]
                     });
                 }
             },
@@ -251,35 +256,52 @@
                 context.globalAlpha = this._opacity ?? 0.9;
 
                 this._particles.forEach((particle) => {
-                    const point = this._map.containerPointToLatLng(L.point(particle.x, particle.y));
-                    const windSample = sample(this._field, point.lat, point.lng);
-                    if (windSample.speed < 0.4) {
+                    let windSample = null;
+                    // Two small advection steps per frame keep the motion
+                    // smooth while making streamlines long enough to read.
+                    for (let step = 0; step < 2; step += 1) {
+                        const point = this._map.containerPointToLatLng(L.point(particle.x, particle.y));
+                        windSample = sample(this._field, point.lat, point.lng);
+                        if (windSample.speed < 0.4) break;
+                        const px = point.lng;
+                        const py = point.lat;
+                        const stepDegrees = 0.0045 + Math.min(0.012, windSample.speed * 0.00018);
+                        const nx = this._map.latLngToContainerPoint(L.latLng(
+                            py + windSample.v * stepDegrees,
+                            px + windSample.u * stepDegrees
+                        ));
+                        particle.x = nx.x;
+                        particle.y = nx.y;
+                        particle.trail.push({ x: particle.x, y: particle.y });
+                        if (particle.trail.length > 14) particle.trail.shift();
+                    }
+                    if (!windSample || windSample.speed < 0.4) {
                         particle.x = Math.random() * size.x;
                         particle.y = Math.random() * size.y;
+                        particle.trail = [{ x: particle.x, y: particle.y }];
                         particle.age = 0;
                         return;
                     }
 
                     const color = palette.colorFor('wind', windSample.speed);
+                    const alpha = 0.22 + Math.min(0.52, windSample.speed / 45);
                     context.strokeStyle = color
-                        ? `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${0.25 + Math.min(0.5, windSample.speed / 40)})`
-                        : 'rgba(120, 200, 255, 0.4)';
-                    context.lineWidth = 0.8 + Math.min(1.6, windSample.speed / 30);
-                    const px = point.lng;
-                    const py = point.lat;
-                    const nx = this._map.latLngToContainerPoint(L.latLng(py + windSample.v * 0.0025, px + windSample.u * 0.0025));
+                        ? `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`
+                        : `rgba(120, 200, 255, ${alpha})`;
+                    context.lineWidth = 0.7 + Math.min(1.8, windSample.speed / 28);
                     context.beginPath();
-                    context.moveTo(particle.x, particle.y);
-                    context.lineTo(nx.x, nx.y);
+                    particle.trail.forEach((trailPoint, trailIndex) => {
+                        if (trailIndex === 0) context.moveTo(trailPoint.x, trailPoint.y);
+                        else context.lineTo(trailPoint.x, trailPoint.y);
+                    });
                     context.stroke();
-                    particle.x = nx.x;
-                    particle.y = nx.y;
                     particle.age += 1;
                     if (particle.age > particle.maxAge || particle.x < 0 || particle.x > size.x || particle.y < 0 || particle.y > size.y) {
                         particle.x = Math.random() * size.x;
                         particle.y = Math.random() * size.y;
+                        particle.trail = [{ x: particle.x, y: particle.y }];
                         particle.age = 0;
-                        particle.maxAge = 60 + Math.random() * 60;
+                        particle.maxAge = 90 + Math.random() * 120;
                     }
                 });
 

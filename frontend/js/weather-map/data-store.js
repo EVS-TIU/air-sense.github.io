@@ -16,6 +16,24 @@
     const entries = new Map();
     const points = new Map();
     const inflight = new Map();
+    const STORAGE_PREFIX = 'airsense:weather-grid:';
+
+    function readStored(key) {
+        try {
+            const raw = window.localStorage.getItem(STORAGE_PREFIX + key);
+            if (!raw) return null;
+            const entry = JSON.parse(raw);
+            return entry && entry.payload ? entry : null;
+        } catch { return null; }
+    }
+
+    function writeStored(key, payload) {
+        try {
+            window.localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify({
+                savedAt: Date.now(), payload
+            }));
+        } catch { /* storage quota/private mode: memory cache still works */ }
+    }
 
     function apiBase() {
         if (typeof window.WeatherlyMap?.getApiBase === 'function') {
@@ -32,44 +50,54 @@
         return bbox.map((value) => Number(value).toFixed(2)).join(',');
     }
 
-    function gridKey(family, bbox, zoom) {
-        return `${family}:${zoom}:${roundedBbox(bbox)}`;
+    function gridKey(family, bbox, zoom, variables) {
+        return `${family}:${zoom}:${roundedBbox(bbox)}:${variables || ''}`;
     }
 
     async function requestJson(url, signal) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-        const signals = [controller.signal];
-        if (signal) signals.push(signal);
-        const combined = typeof AbortSignal !== 'undefined' && AbortSignal.any
-            ? AbortSignal.any(signals)
-            : controller.signal;
-
-        try {
-            const response = await fetch(url, {
-                headers: { Accept: 'application/json' },
-                signal: combined
-            });
-            if (!response.ok) {
+        let lastError = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            if (signal?.aborted) throw new DOMException('Request cancelled', 'AbortError');
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+            const signals = [controller.signal];
+            if (signal) signals.push(signal);
+            const combined = typeof AbortSignal !== 'undefined' && AbortSignal.any
+                ? AbortSignal.any(signals)
+                : controller.signal;
+            try {
+                const response = await fetch(url, {
+                    headers: { Accept: 'application/json' },
+                    signal: combined
+                });
+                if (response.ok) return await response.json();
                 let detail = '';
                 try {
                     const body = await response.json();
                     detail = typeof body.detail === 'string' ? body.detail : '';
-                } catch {
-                    // Non-JSON error body.
-                }
-                throw new Error(detail || `Weather map request failed (${response.status})`);
+                } catch { /* provider may return an empty gateway body */ }
+                lastError = new Error(detail || `Weather map request failed (${response.status})`);
+                if (response.status < 500 && response.status !== 429) throw lastError;
+            } catch (error) {
+                if (error?.name === 'AbortError' && signal?.aborted) throw error;
+                lastError = error;
+            } finally {
+                clearTimeout(timeout);
             }
-            return await response.json();
-        } finally {
-            clearTimeout(timeout);
+            if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350 * (2 ** attempt)));
         }
+        throw lastError || new Error('Weather map request failed');
     }
 
-    async function getGrid(family, bbox, zoom, signal) {
-        const key = gridKey(family, bbox, zoom);
+    async function getGrid(family, bbox, zoom, variables, signal) {
+        if (variables && typeof variables.aborted === 'boolean') {
+            signal = variables;
+            variables = null;
+        }
+        const variableList = Array.isArray(variables) ? variables : [];
+        const key = gridKey(family, bbox, zoom, variableList.join(','));
         const ttl = family === 'air' ? AIR_TTL_MS : WEATHER_TTL_MS;
-        const cached = entries.get(key);
+        const cached = entries.get(key) || readStored(key);
         if (cached && Date.now() - cached.savedAt < ttl) {
             return cached.payload;
         }
@@ -80,10 +108,12 @@
         const url = new URL(`${apiBase()}/${endpoint}`);
         url.searchParams.set('bbox', bbox.map((value) => Number(value).toFixed(4)).join(','));
         url.searchParams.set('zoom', String(zoom));
+        if (variableList.length) url.searchParams.set('variables', variableList.join(','));
 
         const task = requestJson(url.toString(), signal)
             .then((payload) => {
                 entries.set(key, { payload, savedAt: Date.now() });
+                writeStored(key, payload);
                 return payload;
             })
             .catch((error) => {

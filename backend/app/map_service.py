@@ -259,14 +259,27 @@ class MapService:
         variables: tuple[str, ...] | None = None,
     ) -> dict:
         selected = self._assert_variables(variables, WEATHER_LAYER_VARIABLES, "weather")
-        segments = self._segments(west, south, east, north, zoom)
-        key = _grid_key("weather", segments, zoom)
+        # Wind animation needs only two fields. Keep that request compact so
+        # one viewport consumes a single Open-Meteo batch instead of several
+        # concurrent calls that commonly trigger public API throttling.
+        wind_only = set(selected) == {"wind_speed_10m", "wind_direction_10m"}
+        if wind_only:
+            try:
+                segments = build_grid_segments(
+                    west, south, east, north, zoom,
+                    min(self.settings.map_max_points, self.settings.map_max_batch_points),
+                )
+            except ValueError as exc:
+                raise WeatherServiceError(f"Invalid map viewport: {exc}", 400) from None
+        else:
+            segments = self._segments(west, south, east, north, zoom)
+        key = _grid_key("weather", segments, zoom, suffix=','.join(selected))
 
         async def load() -> dict:
             points = [point for segment in segments for point in segment.points]
-            records = await self.forecast.fetch(points)
+            records = await self.forecast.fetch(points, selected)
             return self._build_payload(
-                "weather", segments, records, tuple(FORECAST_VARIABLES)
+                "weather", segments, records, selected
             )
 
         payload = await self._cached(key, self.settings.map_cache_ttl_seconds, load)

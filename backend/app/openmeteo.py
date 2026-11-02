@@ -72,6 +72,9 @@ class OpenMeteoClient:
                     retry_after_value = None
                 raise OpenMeteoError("Weather data rate limit reached", 503, retry_after_value)
             if response.status_code >= 500:
+                if attempt == 0:
+                    await asyncio.sleep(0.35 + random.random() * 0.2)
+                    continue
                 raise OpenMeteoError("Weather data provider is temporarily unavailable", 502)
             if response.status_code >= 400:
                 raise OpenMeteoError("Weather data provider rejected the request", 502)
