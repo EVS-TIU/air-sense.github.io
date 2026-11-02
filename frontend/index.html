@@ -19,7 +19,7 @@
     <!-- Forecast Hourly component styles (Roshan) -->
     <link rel="stylesheet" href="./css/forecast-hourly.css?v=20261031-3">
     <!-- Top Navigation component styles -->
-    <link rel="stylesheet" href="./css/topbar.css?v=20261101-2">
+    <link rel="stylesheet" href="./css/topbar.css?v=20261102-1">
     <!-- Left Sidebar component styles -->
     <link rel="stylesheet" href="./css/sidebar.css?v=20261101-2">
     <!-- Climate Analysis module styles -->
@@ -48,12 +48,47 @@
 
         <!-- Top Navigation -->
         <header class="topbar panel" aria-label="Top navigation">
-            <button class="sidebar-menu-toggle" type="button" aria-label="Open navigation menu"
-                aria-controls="dashboard-sidebar" aria-expanded="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 6h16M4 12h16M4 18h16"/>
-                </svg>
-            </button>
+            <div class="dropdown mobile-nav-menu">
+                <button class="dropdown__trigger mobile-nav-menu__trigger" type="button"
+                    aria-label="Open navigation menu" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="mobile-nav-menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu mobile-nav-menu__panel" id="mobile-nav-menu"
+                    role="menu" aria-label="Navigation and account options" hidden>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitemradio" aria-checked="true" tabindex="-1" data-value="C">
+                            Celsius (°C)
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitemradio" aria-checked="false" tabindex="-1" data-value="F">
+                            Fahrenheit (°F)
+                        </button>
+                    </li>
+                    <li class="mobile-nav-menu__separator" role="separator"></li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="login">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+                            </svg>
+                            Login
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="climate-analysis">
+                            Climate Analysis
+                        </button>
+                    </li>
+                </ul>
+            </div>
             <div class="search-box" role="search">
                 <svg class="search-box__icon" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="11" cy="11" r="7"/>
@@ -696,7 +731,7 @@
     <script src="./js/weather-map/popup.js?v=20261102-1"></script>
     <script src="./js/weather-map/weather-map.js?v=20261102-2"></script>
     <script src="./js/app.js?v=20261101-16" defer></script>
-    <script src="./js/topbar.js?v=20261101-3" defer></script>
+    <script src="./js/topbar.js?v=20261102-1" defer></script>
     <!-- Popular cities sidebar section -->
     <script src="./js/popular-cities-data.js?v=20261102-1" defer></script>
     <script src="./js/popular-cities.js?v=20261102-1" defer></script>
