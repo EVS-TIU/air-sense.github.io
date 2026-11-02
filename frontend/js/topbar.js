@@ -559,7 +559,7 @@
                 emit('profile-action', { action: action });
             } else if (action === 'climate-analysis') {
                 emit('navigate', { view: action });
-                window.location.assign('./climate-analysis/climate-analysis.html');
+                window.location.assign('./climate-analysis/climate-analysis-2.html');
             } else {
                 const sidebarLink = document.querySelector(`.sidebar__nav a[data-nav="${action}"]`);
                 if (sidebarLink) {

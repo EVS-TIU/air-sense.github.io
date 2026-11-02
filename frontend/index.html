@@ -24,6 +24,8 @@
     <link rel="stylesheet" href="./css/sidebar.css?v=20261101-2">
     <!-- Climate Analysis module styles -->
     <link rel="stylesheet" href="./climate-analysis/climate-analysis.css?v=20261102-2">
+    <!-- Climate Trend tab styles -->
+    <link rel="stylesheet" href="./climate-analysis/climate-trend.css?v=20261103-1">
 </head>
 <body>
 
@@ -82,7 +84,7 @@
                         </button>
                     </li>
                     <li role="none">
-                        <button href="./climate-analysis/climate-analysis.html" class="dropdown__item mobile-nav-menu__item" type="button"
+                        <button data-href="./climate-analysis/climate-analysis-2.html" class="dropdown__item mobile-nav-menu__item" type="button"
                             role="menuitem" tabindex="-1" data-value="climate-analysis">
                             Climate Analysis
                         </button>
@@ -158,7 +160,7 @@
                 <span class="location-btn__label" id="location-label">Current Location</span>
             </button>
             <nav class="topbar-nav" aria-label="Dashboard sections">
-                <a href="./climate-analysis/climate-analysis.html" data-view="climate-analysis">Climate Analysis</a>
+                <a href="./climate-analysis/climate-analysis-2.html" data-view="climate-analysis">Climate Analysis</a>
             </nav>
             <div class="dropdown dropdown--end unit-select">
                 <button class="dropdown__trigger" type="button" aria-label="Temperature unit"
@@ -787,5 +789,7 @@
     <script src="./js/popular-cities.js?v=20261102-1" defer></script>
     <!-- Climate Analysis module -->
     <script src="./climate-analysis/climate-analysis.js?v=20261102-1" defer></script>
+    <!-- Climate Trend tab -->
+    <script src="./climate-analysis/climate-trend.js?v=20261103-1" defer></script>
 </body>
 </html>
