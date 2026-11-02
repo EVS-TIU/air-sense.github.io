@@ -1,6 +1,6 @@
 /* ==========================================================================
    TOP NAVIGATION (AKSHAT) - search, location selector, section nav,
-   temperature-unit switch, profile.
+   temperature-unit switch, profile, and responsive navigation menu.
    Loaded AFTER style.css. Placement (grid slot) stays in style.css.
    Uses new class names so it does not depend on the old .topbar__* rules.
    ========================================================================== */
@@ -90,6 +90,25 @@
     display: none;
 }
 
+/* Spinner */
+.search-box__spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(169, 198, 223, 0.25);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: search-spin 0.6s linear infinite;
+    flex: 0 0 auto;
+}
+
+.search-box__spinner[hidden] {
+    display: none;
+}
+
+@keyframes search-spin {
+    to { transform: rotate(360deg); }
+}
+
 /* Suggestions list */
 
 .search-box__results {
@@ -97,8 +116,9 @@
     top: calc(100% + 8px);
     left: 0;
     right: 0;
+    min-width: 320px;
 
-    max-height: 290px;
+    max-height: 320px;
     margin: 0;
     padding: 6px;
     overflow-y: auto;
@@ -108,7 +128,8 @@
     background: #0b2236;
     border: 1px solid var(--panel-border);
     border-radius: 14px;
-    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+    z-index: 50;
 }
 
 .search-box__results[hidden] {
@@ -117,34 +138,65 @@
 
 .search-box__option {
     display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+
+    padding: 8px 12px;
+
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.search-box__option-flag {
+    font-size: 20px;
+    line-height: 1;
+    flex: 0 0 auto;
+}
+
+.search-box__option-content {
+    display: flex;
     flex-direction: column;
     gap: 2px;
-
-    padding: 9px 11px;
-
-    border-radius: 9px;
-    cursor: pointer;
+    min-width: 0;
+    flex: 1;
 }
 
-.search-box__option strong {
-    font-size: 12.5px;
+.search-box__option-title {
+    font-size: 13px;
     font-weight: 600;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.search-box__option span {
-    font-size: 10.5px;
+.search-box__option-sub {
+    font-size: 11px;
     color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-box__match {
+    background: rgba(33, 169, 255, 0.3);
+    color: #8fe0ff;
+    border-radius: 3px;
+    padding: 0 2px;
+    font-weight: 600;
 }
 
 .search-box__option:hover,
 .search-box__option.is-active {
-    background: rgba(33, 169, 255, 0.14);
+    background: rgba(33, 169, 255, 0.16);
 }
 
 .search-box__empty {
-    padding: 12px;
-
-    font-size: 12px;
+    padding: 14px 12px;
+    text-align: center;
+    font-size: 12.5px;
     color: var(--muted);
 }
 
@@ -296,7 +348,97 @@
     color: var(--muted);
 }
 
-/* Location selector */
+/* --------------------------------------------------------------------------
+   Current Location Button
+   -------------------------------------------------------------------------- */
+
+.location-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+
+    height: 44px;
+    padding: 0 14px;
+    min-width: 148px;
+
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+
+    background: rgba(8, 26, 42, 0.72);
+    border: 1px solid rgba(116, 174, 213, 0.16);
+    border-radius: 14px;
+    cursor: pointer;
+
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.location-btn:hover {
+    background: rgba(18, 48, 72, 0.85);
+    border-color: rgba(33, 169, 255, 0.45);
+    color: #ffffff;
+}
+
+.location-btn:active {
+    transform: scale(0.97);
+}
+
+.location-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.location-btn.is-active {
+    border-color: rgba(33, 169, 255, 0.35);
+    background: rgba(18, 50, 78, 0.65);
+    color: #cfe8ff;
+}
+
+.location-btn__icon {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    color: #cfe8ff;
+    transition: transform 0.2s ease, stroke 0.2s ease;
+}
+
+.location-btn:hover .location-btn__icon {
+    stroke: #21a9ff;
+}
+
+.location-btn.is-loading {
+    cursor: wait;
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.location-btn.is-loading .location-btn__icon {
+    animation: location-btn-spin 1s linear infinite;
+    stroke: var(--accent);
+}
+
+@keyframes location-btn-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.location-btn__label {
+    flex: 1;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Location selector dropdown (legacy/fallback) */
 
 .location-select .dropdown__trigger {
     min-width: 168px;
@@ -389,6 +531,33 @@
 }
 
 /* --------------------------------------------------------------------------
+   About & Support Navigation (Top-right)
+   -------------------------------------------------------------------------- */
+
+.topbar-meta-links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 10px;
+}
+
+.topbar-meta-link {
+    padding: 8px 12px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #a8c4db;
+    border-radius: 9px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.18s ease, background 0.18s ease;
+}
+
+.topbar-meta-link:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+/* --------------------------------------------------------------------------
    Profile
    -------------------------------------------------------------------------- */
 
@@ -419,6 +588,60 @@
 
 .profile .dropdown__menu {
     min-width: 200px;
+}
+
+.mobile-nav-menu {
+    display: none;
+}
+
+.mobile-nav-menu__trigger {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+}
+
+.mobile-nav-menu__trigger svg {
+    width: 21px;
+    height: 21px;
+}
+
+.mobile-nav-menu__panel {
+    min-width: 210px;
+    max-height: 80vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.mobile-nav-menu__item {
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    background: transparent;
+    border: 0;
+}
+
+.mobile-nav-menu__item[aria-checked="true"] {
+    color: #ffffff;
+    background: var(--accent-soft);
+}
+
+.mobile-nav-menu__item svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.mobile-nav-menu__separator {
+    height: 1px;
+    margin: 5px 8px;
+    background: rgba(116, 174, 213, 0.18);
 }
 
 /* --------------------------------------------------------------------------
@@ -454,22 +677,30 @@
     }
 }
 
-/* Mobile: row 1 search, row 2 location + unit + profile, row 3 nav links. */
+/* Mobile: keep the menu trigger beside search and move account/unit actions into its menu. */
 @media (max-width: 900px) {
     .topbar {
         flex-wrap: wrap;
         gap: 10px;
     }
 
-    .search-box {
-        order: 1;
-        flex: 1 1 100%;
+    .mobile-nav-menu {
+        display: block;
+        order: 0;
     }
 
+    .search-box {
+        order: 1;
+        flex: 1 1 180px;
+        min-width: 0;
+    }
+
+    .location-btn,
     .location-select {
         order: 2;
         flex: 1 1 0;
         min-width: 0;
+        width: 100%;
     }
 
     .location-select .dropdown__trigger {
@@ -478,28 +709,14 @@
     }
 
     .unit-select {
-        order: 3;
-        margin-left: 0 !important;
+        display: none;
     }
 
     .profile {
-        order: 4;
+        display: none;
     }
 
     .topbar-nav {
-        order: 5;
-        flex: 1 1 100%;
-
-        display: flex;
-        margin-left: 0;
-        padding-top: 6px;
-        overflow-x: auto;
-
-        border-top: 1px solid rgba(116, 174, 213, 0.12);
-        scrollbar-width: none;
-    }
-
-    .topbar-nav::-webkit-scrollbar {
         display: none;
     }
 }
@@ -523,5 +740,6 @@
     .topbar *,
     .topbar *::after {
         transition: none !important;
+        animation: none !important;
     }
 }

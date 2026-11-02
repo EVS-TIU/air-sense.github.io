@@ -1,0 +1,278 @@
+from unittest.mock import AsyncMock
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.main import app
+from app.services import (
+    TTLCache,
+    WeatherClient,
+    WeatherServiceError,
+    build_recommendations,
+    calculate_epa_aqi,
+    normalize_current,
+)
+
+
+@pytest.fixture
+def fake_weather():
+    return {
+        "location_label": "Test City", "location_country": "TC", "latitude": 10, "longitude": 20,
+        "temperature": 36, "apparent_temperature": 38, "temperature_min": 30, "temperature_max": 37,
+        "humidity": 90, "visibility": 800, "wind_speed": 55, "condition": "thunderstorm",
+        "hourly": [{"precipitation_probability": 80, "rain_3h": 12}],
+    }
+
+
+@pytest.fixture
+def client(fake_weather):
+    settings = Settings(openweather_api_key="test-key")
+    weather = WeatherClient(settings)
+    weather.current = AsyncMock(return_value=fake_weather)
+    weather.forecast = AsyncMock(return_value={"hourly": []})
+    weather.air_quality = AsyncMock(return_value={"aqi": 4, "components": {}})
+    with TestClient(app) as test_client:
+        app.state.settings = settings
+        app.state.weather = weather
+        yield test_client
+
+
+def test_health(client):
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_local_live_server_origin_is_allowed(client):
+    response = client.get("/api/v1/health", headers={"Origin": "http://127.0.0.1:5501"})
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5501"
+
+
+def test_current_weather_accepts_both_coordinate_names(client, fake_weather):
+    response = client.get("/api/v1/weather/current?latitude=10&longitude=20")
+    assert response.status_code == 200
+    assert response.json()["location_label"] == fake_weather["location_label"]
+    response = client.get("/api/v1/weather/current?lat=10&lon=20")
+    assert response.status_code == 200
+
+
+def test_forecast_and_air_quality(client):
+    assert client.get("/api/v1/weather/forecast?lat=10&lon=20").status_code == 200
+    assert client.get("/api/v1/weather/air-quality?lat=10&lon=20").status_code == 200
+
+
+def test_invalid_coordinates(client):
+    response = client.get("/api/v1/weather/current?lat=100&lon=20")
+    assert response.status_code == 422
+
+
+def test_provider_failure_is_safe(client):
+    app.state.weather.current = AsyncMock(side_effect=WeatherServiceError("Weather service is temporarily unavailable"))
+    response = client.get("/api/v1/weather/current?lat=10&lon=20")
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Weather service is temporarily unavailable"
+
+
+def test_missing_api_key():
+    import asyncio
+    service = WeatherClient(Settings(openweather_api_key=""))
+    with pytest.raises(WeatherServiceError) as error:
+        asyncio.run(service.current(10, 20))
+    assert error.value.status_code == 503
+
+
+def test_recommendation_engine(fake_weather):
+    result = build_recommendations(fake_weather, {"provider_index": 5}, Settings())
+    assert result["overall_severity"] == "Severe"
+    assert any(r["type"] == "thunderstorm" for r in result["risks"])
+    assert result["recommendations"]
+
+
+def test_cache():
+    import asyncio
+    cache = TTLCache(60)
+    async def exercise():
+        assert await cache.get("x") is None
+        await cache.set("x", {"value": 1})
+        assert await cache.get("x") == {"value": 1}
+    asyncio.run(exercise())
+
+
+def test_current_weather_includes_normalized_hourly_forecast():
+    current = {"name": "Test City", "coord": {"lat": 1, "lon": 2}, "weather": [{"id": 800, "icon": "01d"}],
+               "main": {}, "wind": {}, "sys": {}}
+    forecast = {"city": {"coord": {"lat": 1, "lon": 2}}, "list": [
+        {"dt": 1, "dt_txt": "2026-10-31 12:00:00", "main": {"temp": 20},
+         "weather": [{"id": 801, "description": "few clouds", "icon": "02d"}], "pop": 0.6}
+    ]}
+    result = normalize_current(current, forecast)
+    assert len(result["hourly"]) == 1
+    assert result["hourly"][0]["temperature"] == 20
+    assert result["hourly"][0]["precipitation_probability"] == 60
+    assert result["hourly"][0]["weather_code"] == 801
+    assert result["hourly"][0]["icon"] == "02d"
+    assert result["hourly"][0]["is_day"] is True
+    assert result["is_day"] is True
+
+
+def test_current_weather_maps_uv_and_location_sun_times():
+    current = {
+        "name": "Kolkata", "coord": {"lat": 22.57, "lon": 88.36},
+        "weather": [{"id": 800}], "main": {}, "wind": {},
+        "sys": {"sunrise": 1000, "sunset": 2000},
+        "timezone": 19800,
+    }
+    result = normalize_current(
+        current,
+        {"city": {}, "list": []},
+        {"timezone": "Asia/Kolkata", "current": {"uvi": 6.2}},
+    )
+    assert result["uv_index"] == 6.2
+    assert result["sunrise"] == 1000
+    assert result["sunset"] == 2000
+    assert result["timezone_offset"] == 19800
+
+
+def test_current_weather_leaves_uv_unavailable_when_one_call_has_no_uv():
+    current = {"name": "Night City", "coord": {}, "weather": [], "main": {}, "wind": {}, "sys": {}}
+    result = normalize_current(current, {"city": {}, "list": []}, {"current": {}})
+    assert result["uv_index"] is None
+
+
+def test_us_epa_aqi_breakpoints_category_and_dominant_pollutant():
+    result = calculate_epa_aqi({
+        "pm25": {"value": 35.49, "unit": "ug/m3", "averaging_period": "24h"},
+        "o3": {"value": 0.040, "unit": "ppm", "averaging_period": "8h"},
+    })
+    assert result == {
+        "value": 100,
+        "category": "Moderate",
+        "dominant_pollutant": "pm25",
+        "subindices": {"pm25": 100, "o3": 37},
+        "methodology": "US EPA AQI",
+    }
+
+
+def test_us_epa_aqi_62_is_moderate():
+    result = calculate_epa_aqi({
+        "pm25": {"value": 15.1, "unit": "ug/m3", "averaging_period": "24h"},
+    })
+    assert result["value"] == 62
+    assert result["category"] == "Moderate"
+
+
+def test_epa_aqi_requires_averaging_period_and_units():
+    assert calculate_epa_aqi({"pm25": {"value": 35.4, "unit": "ug/m3"}}) is None
+
+
+def test_current_reverse_geocode_fallback_when_name_missing():
+    import asyncio
+    service = WeatherClient(Settings(openweather_api_key="test-key"))
+    service._open_meteo = AsyncMock(side_effect=WeatherServiceError("Open-Meteo unavailable"))
+    service.reverse = AsyncMock(return_value=[{"name": "Bidhannagar", "state": "West Bengal", "country": "IN"}])
+    service._get = AsyncMock(side_effect=[
+        {"name": "Coarse Metro", "coord": {"lat": 22.5801, "lon": 88.4201}, "weather": [{"id": 800, "icon": "01d"}], "main": {}, "wind": {}, "sys": {"country": "IN"}},
+        {"city": {"coord": {"lat": 22.5801, "lon": 88.4201}}, "list": []},
+        Exception("no uv"),
+        Exception("no air"),
+        [{"name": "Bidhannagar", "state": "West Bengal", "country": "IN"}],
+    ])
+    result = asyncio.run(service.current(22.58, 88.42))
+    assert result["location_name"] == "Bidhannagar"
+    assert result["location_state"] == "West Bengal"
+    assert result["location_country"] == "IN"
+    assert result["station_name"] == "Coarse Metro"
+    assert result["latitude"] == 22.58
+    assert result["longitude"] == 88.42
+
+
+def test_reverse_geocode_uses_exact_coordinate_cache_keys():
+    import asyncio
+    from types import SimpleNamespace
+
+    service = WeatherClient(Settings(openweather_api_key="test-key"))
+    payload = {
+        "name": "Nearby Road",
+        "address": {
+            "neighbourhood": "Exact Neighbourhood",
+            "suburb": "Bidhannagar",
+            "state_district": "North 24 Parganas",
+            "state": "West Bengal",
+            "country": "India",
+            "country_code": "in",
+        },
+    }
+    response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
+    service._nominatim_get = AsyncMock(return_value=response)
+
+    latitude_a, longitude_a = 22.580001, 88.420001
+    latitude_b, longitude_b = 22.580002, 88.420002
+    async def fetch_both():
+        return await asyncio.gather(
+            service.reverse(latitude_a, longitude_a),
+            service.reverse(latitude_b, longitude_b),
+        )
+
+    result_a, result_b = asyncio.run(fetch_both())
+
+    assert service._nominatim_get.await_count == 2
+    requested_pairs = {
+        (call.args[1]["lat"], call.args[1]["lon"])
+        for call in service._nominatim_get.await_args_list
+    }
+    assert requested_pairs == {
+        (latitude_a, longitude_a),
+        (latitude_b, longitude_b),
+    }
+    assert result_a[0]["name"] == result_b[0]["name"] == "Exact Neighbourhood"
+    assert result_a[0]["district"] == "North 24 Parganas"
+
+
+def test_location_reverse_endpoint(client):
+    app.state.weather.reverse = AsyncMock(return_value=[{"name": "Bidhannagar", "country": "IN", "state": "West Bengal"}])
+    response = client.get("/api/v1/location/reverse?latitude=22.58&longitude=88.42")
+    assert response.status_code == 200
+    assert response.json()["results"][0]["name"] == "Bidhannagar"
+
+
+def test_location_search_endpoint(client):
+    app.state.weather.search = AsyncMock(return_value=[
+        {"name": "North 24 Parganas", "district": "North 24 Parganas", "state": "West Bengal", "country": "India", "latitude": 22.69, "longitude": 88.66}
+    ])
+    response = client.get("/api/v1/location/search?q=North%2024%20Parganas,%20India")
+    assert response.status_code == 200
+    assert response.json()["results"][0]["name"] == "North 24 Parganas"
+    assert response.json()["results"][0]["district"] == "North 24 Parganas"
+
+
+def test_search_prioritizes_exact_major_city_over_partial_matches():
+    import asyncio
+    service = WeatherClient(Settings(openweather_api_key="test-key"))
+    service._get = AsyncMock(return_value=[
+        {"name": "Dubai", "state": "Dubai", "country": "AE", "lat": 25.26, "lon": 55.29},
+        {"name": "Living Legends", "state": "Dubai", "country": "AE", "lat": 25.08, "lon": 55.30},
+        {"name": "Dubai", "state": "Bay", "country": "SO", "lat": 2.80, "lon": 44.08},
+    ])
+    mock_client = AsyncMock()
+    mock_resp = AsyncMock()
+    mock_resp.status_code = 200
+    mock_resp.json = lambda: [
+        {"name": "Dubai", "address": {"city": "Dubai", "state": "Dubai Emirate", "country": "United Arab Emirates", "country_code": "ae"}, "importance": 0.75, "lat": "25.2647", "lon": "55.2924", "type": "city"},
+        {"name": "Dubal", "address": {"state": "Bay", "country": "Somalia", "country_code": "so"}, "importance": 0.2, "lat": "2.80", "lon": "44.08", "type": "village"},
+    ]
+    mock_client.get = AsyncMock(return_value=mock_resp)
+    service.client = mock_client
+
+    results = asyncio.run(service.search("Dubai"))
+    assert len(results) >= 1
+    assert results[0]["name"] == "Dubai"
+    assert results[0]["country"] == "United Arab Emirates" or results[0]["country_code"] == "AE"
+    # Ensure Dubal Somalia is not prioritized
+    if len(results) > 1:
+        assert results[0]["name"] == "Dubai"
+
+
+
+

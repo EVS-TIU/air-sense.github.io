@@ -1,0 +1,312 @@
+/* ==========================================================================
+   AirSense — popular cities sidebar section
+   Searchable country picker + compact 3 x 3 city grid.
+   ========================================================================== */
+.sidebar__popular {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(116, 174, 213, 0.12);
+}
+
+.sidebar__popular-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 2px;
+}
+
+.sidebar__popular-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: #8fb0c9;
+}
+
+.sidebar__popular-title svg {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sidebar__popular-count {
+    flex: 0 0 auto;
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+/* Country picker ---------------------------------------------------------- */
+.sidebar__country {
+    position: relative;
+}
+
+.sidebar__country-trigger {
+    width: 100%;
+    min-height: 34px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: left;
+    background: rgba(8, 26, 42, 0.65);
+    border: 1px solid rgba(116, 174, 213, 0.18);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar__country-trigger:hover {
+    background: rgba(33, 169, 255, 0.12);
+    border-color: rgba(33, 169, 255, 0.42);
+}
+
+.sidebar__country-trigger:focus-visible {
+    outline: 2px solid rgba(33, 169, 255, 0.7);
+    outline-offset: 1px;
+}
+
+.sidebar__country-flag {
+    flex: 0 0 auto;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.sidebar__country-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar__country-chevron {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+}
+
+.sidebar__country.is-open .sidebar__country-chevron {
+    transform: rotate(180deg);
+}
+
+/* Opens upwards because the section sits at the bottom of the sidebar. */
+.sidebar__country-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 6px);
+    z-index: 1200;
+    padding: 6px;
+    background: linear-gradient(135deg, rgba(14, 38, 59, 0.98), rgba(6, 21, 34, 0.99));
+    border: 1px solid rgba(130, 190, 230, 0.32);
+    border-radius: 10px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(10px);
+}
+
+.sidebar__country-panel[hidden] {
+    display: none;
+}
+
+.sidebar__country-search-wrap {
+    height: 30px;
+    margin-bottom: 6px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(2, 12, 21, 0.55);
+    border: 1px solid rgba(116, 174, 213, 0.2);
+    border-radius: 7px;
+}
+
+.sidebar__country-search-wrap svg {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sidebar__country-search {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: 11px;
+    color: var(--text);
+    background: transparent;
+    border: 0;
+    outline: none;
+}
+
+.sidebar__country-search::placeholder {
+    color: #6f8aa0;
+}
+
+.sidebar__country-list {
+    max-height: 190px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(116, 174, 213, 0.28) transparent;
+}
+
+.sidebar__country-list[hidden] {
+    display: none;
+}
+
+.sidebar__country-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar__country-list::-webkit-scrollbar-thumb {
+    background: rgba(116, 174, 213, 0.25);
+    border-radius: 4px;
+}
+
+.sidebar__country-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 7px;
+    font-size: 11px;
+    color: #cfe2f2;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.sidebar__country-option.is-active {
+    color: #ffffff;
+    background: rgba(33, 169, 255, 0.18);
+}
+
+.sidebar__country-option.is-selected .sidebar__country-option-name {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.sidebar__country-option-flag {
+    flex: 0 0 auto;
+    font-size: 13px;
+    line-height: 1;
+}
+
+.sidebar__country-option-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar__country-option-code {
+    flex: 0 0 auto;
+    padding: 1px 4px;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: #8fb0c9;
+    background: rgba(33, 169, 255, 0.1);
+    border: 1px solid rgba(33, 169, 255, 0.22);
+    border-radius: 3px;
+}
+
+.sidebar__country-empty {
+    margin: 8px 4px;
+    font-size: 10px;
+    color: var(--muted);
+    text-align: center;
+}
+
+/* City grid --------------------------------------------------------------- */
+.sidebar__cities-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+}
+
+.sidebar__city {
+    min-width: 0;
+    padding: 7px 4px;
+    font-family: inherit;
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #cfe2f2;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    background: rgba(8, 26, 42, 0.6);
+    border: 1px solid rgba(116, 174, 213, 0.16);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sidebar__city:hover {
+    color: #ffffff;
+    background: rgba(33, 169, 255, 0.13);
+    border-color: rgba(33, 169, 255, 0.38);
+}
+
+.sidebar__city:focus-visible {
+    outline: 2px solid rgba(33, 169, 255, 0.75);
+    outline-offset: 1px;
+}
+
+.sidebar__city.is-active {
+    color: #ffffff;
+    background: linear-gradient(135deg, rgba(33, 169, 255, 0.3), rgba(17, 91, 156, 0.28));
+    border-color: rgba(83, 180, 255, 0.65);
+    box-shadow: inset 0 0 10px rgba(33, 169, 255, 0.16);
+}
+
+.sidebar__popular-attribution {
+    margin: 0 2px;
+    font-size: 8px;
+    line-height: 1.3;
+    color: #6f8aa0;
+    text-align: right;
+}
+
+.sidebar__popular-attribution a {
+    color: #8fb0c9;
+    text-decoration: none;
+}
+
+.sidebar__popular-attribution a:hover {
+    color: var(--accent);
+    text-decoration: underline;
+}
