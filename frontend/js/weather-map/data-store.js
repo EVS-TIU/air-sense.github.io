@@ -101,15 +101,17 @@
     }
 
     async function getPoint(latitude, longitude, signal) {
-        const key = `${Number(latitude).toFixed(4)}:${Number(longitude).toFixed(4)}`;
+        const lat = Number(latitude);
+        const lon = Number(longitude);
+        const key = `${lat}:${lon}`;
         const cached = points.get(key);
         if (cached && Date.now() - cached.savedAt < POINT_TTL_MS) {
             return cached.payload;
         }
 
         const url = new URL(`${apiBase()}/map/point`);
-        url.searchParams.set('lat', Number(latitude).toFixed(5));
-        url.searchParams.set('lon', Number(longitude).toFixed(5));
+        url.searchParams.set('lat', String(lat));
+        url.searchParams.set('lon', String(lon));
         const payload = await requestJson(url.toString(), signal);
         points.set(key, { payload, savedAt: Date.now() });
         return payload;

@@ -117,8 +117,8 @@ class OpenMeteoClient:
         points: Sequence[tuple[float, float]],
         params: dict[str, object],
     ) -> list[dict]:
-        latitude = ",".join(f"{lat:.4f}" for lat, _ in points)
-        longitude = ",".join(f"{lon:.4f}" for _, lon in points)
+        latitude = ",".join(str(lat) for lat, _ in points)
+        longitude = ",".join(str(lon) for _, lon in points)
         payload = await self._request(
             url,
             {

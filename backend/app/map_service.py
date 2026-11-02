@@ -336,7 +336,7 @@ class MapService:
         return payload
 
     async def point(self, latitude: float, longitude: float) -> dict:
-        key = f"point:{latitude:.4f}:{longitude:.4f}"
+        key = f"point:{latitude.hex()}:{longitude.hex()}"
 
         async def load() -> dict:
             weather_result, air_result = await asyncio.gather(

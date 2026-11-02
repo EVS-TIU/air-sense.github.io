@@ -26,7 +26,7 @@
     function formatCoordinate(value, positive, negative) {
         if (!Number.isFinite(Number(value))) return '--';
         const numeric = Number(value);
-        return `${Math.abs(numeric).toFixed(4)}° ${numeric >= 0 ? positive : negative}`;
+        return `${Math.abs(numeric).toFixed(6)}° ${numeric >= 0 ? positive : negative}`;
     }
 
     function formatNumber(value, digits) {

@@ -1361,8 +1361,18 @@ button {
     display: flex;
     flex-direction: column;
     min-width: 0;
-    padding: 16px 20px 18px;
+    padding: 10px 14px 12px;
     overflow: hidden;
+}
+
+.week-forecast #week-forecast-title {
+    margin: 0;
+    font-size: 21px;
+    line-height: 1.2;
+}
+
+.week-forecast .section-header {
+    margin-bottom: 6px;
 }
 
 .week-forecast__cards {
@@ -1370,8 +1380,9 @@ button {
     min-height: 0;
 
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 8px;
     width: 100%;
     align-items: stretch;
 }
@@ -1623,7 +1634,7 @@ button {
         grid-row: 5;
         width: 100%;
         height: auto;
-        min-height: 230px;
+        min-height: 200px;
     }
 }
 
@@ -1719,12 +1730,14 @@ button {
     .week-forecast {
         width: 100%;
         height: auto;
-        min-height: 230px;
+        min-height: 200px;
     }
 
     .week-forecast__cards {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 10px;
+        grid-template-columns: repeat(7, minmax(112px, 1fr));
+        overflow-x: auto;
+        overflow-y: hidden;
+        gap: 8px;
     }
 
     .week-card {
@@ -1806,7 +1819,7 @@ button {
     }
 
     .week-forecast__cards {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(7, minmax(112px, 1fr));
     }
 }
 

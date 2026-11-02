@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from collections.abc import Mapping
 from typing import Any
 
@@ -44,7 +46,7 @@ class TTLCache:
 
 
 def _cache_key(lat: float, lon: float, suffix: str) -> str:
-    return f"{suffix}:{lat:.3f}:{lon:.3f}"
+    return f"{suffix}:{lat.hex()}:{lon.hex()}"
 
 
 def wind_cardinal(degrees: float | None) -> str | None:
@@ -120,11 +122,28 @@ COUNTRY_NAMES: dict[str, str] = {
 
 class WeatherClient:
     BASE_URL = "https://api.openweathermap.org"
+    OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None):
         self.settings = settings
         self.client = client
         self.cache = TTLCache(settings.cache_ttl_seconds)
+        self._nominatim_lock = asyncio.Lock()
+        self._last_nominatim_request = 0.0
+
+    async def _nominatim_get(self, path: str, params: Mapping[str, Any]) -> httpx.Response:
+        if self.client is None:
+            await self.startup()
+        assert self.client is not None
+        async with self._nominatim_lock:
+            delay = 1.0 - (time.monotonic() - self._last_nominatim_request)
+            if delay > 0:
+                await asyncio.sleep(delay)
+            self._last_nominatim_request = time.monotonic()
+            return await self.client.get(
+                f"https://nominatim.openstreetmap.org/{path}", params=params,
+                headers={"User-Agent": "AirSenseWeatherApp/1.0 (https://air-sense.github.io)"},
+            )
 
     async def startup(self) -> None:
         if self.client is None:
@@ -166,12 +185,20 @@ class WeatherClient:
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
+        try:
+            raw = await self._open_meteo(lat, lon)
+            result = normalize_openmeteo(raw, lat, lon)
+            await self._apply_nominatim_location(result, lat, lon)
+            await self.cache.set(key, result)
+            return result
+        except (WeatherServiceError, httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo current weather unavailable; using OpenWeather fallback: %s", type(exc).__name__)
         current, forecast, uv_response, air_response, geo_response = await asyncio.gather(
             self._get("/data/2.5/weather", {"lat": lat, "lon": lon, "units": "metric"}),
             self._get("/data/2.5/forecast", {"lat": lat, "lon": lon, "units": "metric"}),
             self._get(
                 "/data/3.0/onecall",
-                {"lat": lat, "lon": lon, "exclude": "minutely,hourly,daily,alerts", "units": "metric"},
+                {"lat": lat, "lon": lon, "exclude": "minutely,hourly,alerts", "units": "metric"},
             ),
             self._get("/data/2.5/air_pollution", {"lat": lat, "lon": lon}),
             self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 1}),
@@ -191,18 +218,73 @@ class WeatherClient:
             else None
         )
         result = normalize_current(current, forecast, uv_response, air, geo_item)
+        await self._apply_nominatim_location(result, lat, lon)
         await self.cache.set(key, result)
         return result
+
+    async def _apply_nominatim_location(self, weather: dict[str, Any], lat: float, lon: float) -> None:
+        try:
+            results = await self.reverse(lat, lon)
+        except Exception:
+            logger.info("Location name unavailable for selected coordinates")
+            return
+        if not results:
+            # Keep any existing geographical label, but never expose a timezone as a place name.
+            if weather.get("location_label") == weather.get("timezone"):
+                weather["location_label"] = None
+            return
+        place = results[0]
+        weather.update({
+            "latitude": lat,
+            "longitude": lon,
+            "location_name": place.get("name"),
+            "location_label": place.get("name"),
+            "location_locality": place.get("locality") or place.get("name"),
+            "location_district": place.get("district"),
+            "location_state": place.get("state"),
+            "location_country": place.get("country"),
+            "location_country_code": place.get("country_code"),
+        })
 
     async def forecast(self, lat: float, lon: float) -> dict[str, Any]:
         key = _cache_key(lat, lon, "forecast")
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
+        try:
+            raw = await self._open_meteo(lat, lon)
+            result = normalize_openmeteo(raw, lat, lon)
+            await self.cache.set(key, result)
+            return {"location": {"latitude": lat, "longitude": lon}, "timezone": result["timezone"],
+                    "hourly": result["hourly"], "daily": result["daily"]}
+        except (WeatherServiceError, httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+            logger.warning("Open-Meteo forecast unavailable; using OpenWeather fallback: %s", type(exc).__name__)
         raw = await self._get("/data/2.5/forecast", {"lat": lat, "lon": lon, "units": "metric"})
         result = normalize_forecast(raw)
+        try:
+            onecall = await self._get("/data/3.0/onecall", {"lat": lat, "lon": lon, "exclude": "current,minutely,hourly,alerts", "units": "metric"})
+            result["daily"] = normalize_openweather_daily(onecall.get("daily", []), onecall.get("timezone_offset", 0))
+        except WeatherServiceError:
+            result["daily"] = []
         await self.cache.set(key, result)
         return result
+
+    async def _open_meteo(self, lat: float, lon: float) -> dict[str, Any]:
+        if self.client is None:
+            await self.startup()
+        assert self.client is not None
+        response = await self.client.get(self.settings.openmeteo_forecast_url or self.OPEN_METEO_URL, params={
+            "latitude": lat, "longitude": lon,
+            "current": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m",
+            "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,visibility,uv_index,wind_speed_10m,wind_direction_10m",
+            "daily": "temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max",
+            "timezone": "auto", "forecast_days": 7,
+        })
+        response.raise_for_status()
+        raw = response.json()
+        if not isinstance(raw, dict):
+            raise ValueError("Invalid Open-Meteo payload")
+        return raw
 
     async def air_quality(self, lat: float, lon: float) -> dict[str, Any]:
         key = _cache_key(lat, lon, "air")
@@ -234,26 +316,26 @@ class WeatherClient:
 
         async def fetch_nominatim() -> list[dict[str, Any]]:
             try:
-                resp = await self.client.get(
-                    "https://nominatim.openstreetmap.org/search",
+                resp = await self._nominatim_get(
+                    "search",
                     params={"q": clean_q, "format": "jsonv2", "addressdetails": 1, "limit": 10, "accept-language": "en"},
-                    headers={"User-Agent": "AirSenseWeatherApp/1.0"},
                 )
                 if resp.status_code == 200:
                     candidates = []
                     for item in resp.json():
                         addr = item.get("address") or {}
                         name = (
-                            item.get("name")
-                            or addr.get("city")
-                            or addr.get("town")
-                            or addr.get("village")
+                            addr.get("neighbourhood")
                             or addr.get("suburb")
+                            or item.get("name")
+                            or addr.get("town")
+                            or addr.get("city")
+                            or addr.get("village")
                             or addr.get("state_district")
                             or addr.get("state")
                         )
                         city = addr.get("city") or addr.get("town") or addr.get("village") or addr.get("municipality")
-                        district = addr.get("suburb") or addr.get("neighbourhood") or addr.get("state_district") or addr.get("county")
+                        district = addr.get("district") or addr.get("state_district") or addr.get("county") or addr.get("city_district")
                         state = addr.get("state") or addr.get("region")
                         country = addr.get("country") or ""
                         cc = (addr.get("country_code") or "").upper()
@@ -456,7 +538,7 @@ class WeatherClient:
         seen_ident = set()
         deduped = []
         for cand in all_candidates:
-            coord_key = (round(cand["latitude"], 2), round(cand["longitude"], 2))
+            coord_key = (round(cand["latitude"], 5), round(cand["longitude"], 5))
             ident_key = (
                 (cand.get("name") or "").lower(),
                 (cand.get("state") or "").lower(),
@@ -483,106 +565,129 @@ class WeatherClient:
         return results
 
     async def reverse(self, lat: float, lon: float) -> list[dict[str, Any]]:
-        key = f"reverse:v2:{lat:.3f}:{lon:.3f}"
+        key = f"reverse:v3:{lat:.5f}:{lon:.5f}"
         cached = await self.cache.get(key)
         if cached is not None:
             return cached
-
-        if self.client is None:
-            await self.startup()
-        assert self.client is not None
-
-        async def fetch_nominatim_reverse() -> list[dict[str, Any]]:
-            try:
-                resp = await self.client.get(
-                    "https://nominatim.openstreetmap.org/reverse",
-                    params={"lat": lat, "lon": lon, "format": "jsonv2", "addressdetails": 1, "accept-language": "en"},
-                    headers={"User-Agent": "AirSenseWeatherApp/1.0"},
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    addr = data.get("address") or {}
-                    name = (
-                        addr.get("city")
-                        or addr.get("town")
-                        or addr.get("village")
-                        or addr.get("municipality")
-                        or data.get("name")
-                        or addr.get("suburb")
-                        or addr.get("county")
-                        or addr.get("state")
-                    )
-                    district = addr.get("suburb") or addr.get("neighbourhood") or addr.get("county")
-                    state = addr.get("state") or addr.get("region")
-                    country = addr.get("country")
-                    cc = (addr.get("country_code") or "").upper()
-                    if cc and not country:
-                        country = COUNTRY_NAMES.get(cc, cc)
-                    if name:
-                        return [{
-                            "name": name,
-                            "district": district if district != name else None,
-                            "state": state if state != name else None,
-                            "country": country or (COUNTRY_NAMES.get(cc, cc) if cc else ""),
-                            "country_code": cc,
-                            "latitude": lat,
-                            "longitude": lon,
-                        }]
-            except Exception:
-                pass
-            return []
-
-        async def fetch_openweather_reverse() -> list[dict[str, Any]]:
-            try:
-                raw = await self._get("/geo/1.0/reverse", {"lat": lat, "lon": lon, "limit": 5})
-                if isinstance(raw, list):
-                    results = []
-                    for item in raw:
-                        cc = (item.get("country") or "").upper()
-                        country = COUNTRY_NAMES.get(cc, cc)
-                        results.append({
-                            "name": item.get("name"),
-                            "district": None,
-                            "state": item.get("state"),
-                            "country": country,
-                            "country_code": cc,
-                            "latitude": item.get("lat", lat),
-                            "longitude": item.get("lon", lon),
-                        })
-                    return results
-            except Exception:
-                pass
-            return []
-
-        nom_res, ow_res = await asyncio.gather(
-            fetch_nominatim_reverse(),
-            fetch_openweather_reverse(),
-            return_exceptions=True,
-        )
-
         results: list[dict[str, Any]] = []
-        if isinstance(nom_res, list) and nom_res:
-            results.extend(nom_res)
-        if isinstance(ow_res, list) and ow_res:
-            for item in ow_res:
-                if not any(r["name"].lower() == item["name"].lower() for r in results if r.get("name")):
-                    results.append(item)
-
-        if not results:
-            lat_dir = "N" if lat >= 0 else "S"
-            lon_dir = "E" if lon >= 0 else "W"
-            results = [{
-                "name": f"{abs(lat):.2f}° {lat_dir}, {abs(lon):.2f}° {lon_dir}",
-                "district": None,
-                "state": None,
-                "country": "Selected Location",
-                "country_code": "",
-                "latitude": lat,
-                "longitude": lon,
-            }]
-
+        try:
+            response = await self._nominatim_get("reverse", {
+                "lat": lat, "lon": lon, "format": "jsonv2", "zoom": 16,
+                "addressdetails": 1, "accept-language": "en",
+            })
+            response.raise_for_status()
+            data = response.json()
+            address = data.get("address") or {}
+            locality = next((address.get(key) for key in (
+                "neighbourhood", "suburb", "town", "city", "village", "municipality",
+                "hamlet", "quarter", "locality", "isolated_dwelling", "island",
+            ) if address.get(key)), None) or data.get("name")
+            district = next((address.get(key) for key in (
+                "district", "state_district", "county", "city_district",
+            ) if address.get(key) and address.get(key) != locality), None)
+            state = address.get("state") or address.get("region")
+            country_code = (address.get("country_code") or "").upper()
+            country = address.get("country") or COUNTRY_NAMES.get(country_code, country_code)
+            if locality or district or state or country:
+                results = [{
+                    "name": locality or district or state or country,
+                    "locality": locality,
+                    "district": district if district != locality else None,
+                    "state": state,
+                    "country": country,
+                    "country_code": country_code,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "source": "nominatim",
+                }]
+        except (httpx.HTTPError, ValueError, TypeError):
+            logger.info("Nominatim reverse geocoding unavailable")
         await self.cache.set(key, results)
         return results
+
+
+def wmo_condition(code: int | None) -> str:
+    if code == 0: return "clear"
+    if code in (1, 2): return "partly_cloudy"
+    if code == 3: return "overcast"
+    if code in (45, 48): return "fog"
+    if code is not None and 51 <= code <= 57: return "drizzle"
+    if code is not None and 61 <= code <= 67 or code is not None and 80 <= code <= 82: return "rain"
+    if code is not None and 71 <= code <= 77 or code in (85, 86): return "snow"
+    if code is not None and 95 <= code <= 99: return "thunderstorm"
+    return "unknown"
+
+
+def normalize_openweather_daily(items: list[dict[str, Any]], timezone_offset: int = 0) -> list[dict[str, Any]]:
+    return [{"date": datetime.fromtimestamp(item["dt"] + timezone_offset, tz=timezone.utc).date().isoformat(),
+             "temperature_max": item.get("temp", {}).get("max"),
+             "temperature_min": item.get("temp", {}).get("min"),
+             "weather_code": (item.get("weather") or [{}])[0].get("id"),
+             "condition": condition_group((item.get("weather") or [{}])[0].get("id")),
+             "precipitation_probability": round((item.get("pop") or 0) * 100)}
+            for item in items[:7] if isinstance(item, dict) and item.get("dt") is not None]
+
+
+def normalize_openmeteo(raw: dict[str, Any], lat: float, lon: float) -> dict[str, Any]:
+    current = raw.get("current") or {}
+    required = ("temperature_2m", "relative_humidity_2m", "apparent_temperature", "weather_code",
+                "wind_speed_10m", "wind_direction_10m")
+    if any(current.get(key) is None for key in required):
+        raise ValueError("Open-Meteo current data is incomplete")
+    hourly_data, daily_data = raw.get("hourly") or {}, raw.get("daily") or {}
+    hourly_required = ("time", "temperature_2m", "relative_humidity_2m", "apparent_temperature",
+                       "precipitation_probability", "precipitation", "weather_code", "visibility", "uv_index",
+                       "wind_speed_10m", "wind_direction_10m")
+    daily_required = ("time", "temperature_2m_max", "temperature_2m_min", "weather_code", "precipitation_probability_max")
+    if any(key not in hourly_data for key in hourly_required) or any(key not in daily_data for key in daily_required):
+        raise ValueError("Open-Meteo forecast data is incomplete")
+    hourly = []
+    now = time.time()
+    timezone = raw.get("timezone")
+    def local_timestamp(value: str) -> int:
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is None and timezone:
+            parsed = parsed.replace(tzinfo=ZoneInfo(timezone))
+        return int(parsed.timestamp())
+
+    for i, stamp in enumerate(hourly_data["time"]):
+        try:
+            timestamp = local_timestamp(stamp)
+            if now <= timestamp < now + 24 * 3600:
+                code = hourly_data["weather_code"][i]
+                hourly.append({"time": stamp, "timestamp": timestamp,
+                    "temperature": hourly_data["temperature_2m"][i], "feels_like": hourly_data["apparent_temperature"][i],
+                    "humidity": hourly_data["relative_humidity_2m"][i], "precipitation_probability": hourly_data["precipitation_probability"][i],
+                    "precipitation": hourly_data["precipitation"][i], "rain_3h": hourly_data["precipitation"][i],
+                    "weather_code": code, "condition": wmo_condition(code), "visibility": hourly_data["visibility"][i],
+                    "uv_index": hourly_data["uv_index"][i], "wind_speed": hourly_data["wind_speed_10m"][i],
+                    "wind_direction": hourly_data["wind_direction_10m"][i]})
+        except (ValueError, IndexError, TypeError):
+            raise ValueError("Open-Meteo hourly data is invalid") from None
+    if not hourly:
+        raise ValueError("Open-Meteo hourly data is unavailable")
+    daily = [{"date": daily_data["time"][i], "temperature_max": daily_data["temperature_2m_max"][i],
+              "temperature_min": daily_data["temperature_2m_min"][i], "weather_code": daily_data["weather_code"][i],
+              "condition": wmo_condition(daily_data["weather_code"][i]),
+              "precipitation_probability": daily_data["precipitation_probability_max"][i]}
+             for i in range(min(7, len(daily_data["time"]))) ]
+    if len(daily) != 7 or any(day["temperature_max"] is None or day["temperature_min"] is None or day["weather_code"] is None for day in daily):
+        raise ValueError("Open-Meteo daily data is incomplete")
+    current_hour_index = min(range(len(hourly_data["time"])), key=lambda i: abs(local_timestamp(hourly_data["time"][i]) - now))
+    observed_at = local_timestamp(current["time"]) if current.get("time") else int(now)
+    return {"location_label": None, "location_name": None,
+        "location_state": None, "location_country": None, "latitude": lat, "longitude": lon,
+        "timezone": timezone, "timezone_offset": raw.get("utc_offset_seconds", 0),
+        "observed_at": observed_at,
+        "is_day": None, "uv_index": hourly_data["uv_index"][current_hour_index], "temperature": current["temperature_2m"],
+        "apparent_temperature": current["apparent_temperature"], "temperature_min": daily[0]["temperature_min"], "temperature_max": daily[0]["temperature_max"],
+        "humidity": current["relative_humidity_2m"], "pressure": None, "visibility": hourly_data["visibility"][current_hour_index],
+        "wind_speed": current["wind_speed_10m"], "wind_direction": current["wind_direction_10m"],
+        "wind_direction_cardinal": wind_cardinal(current["wind_direction_10m"]), "clouds": None,
+        "condition_code": current["weather_code"], "condition": wmo_condition(current["weather_code"]),
+        "description": wmo_condition(current["weather_code"]).replace("_", " "), "icon": None, "icon_url": None,
+        "sunrise": None, "sunset": None, "precipitation": current.get("precipitation"),
+        "rain_1h": current.get("rain"), "snow_1h": None, "hourly": hourly, "daily": daily, "air_quality": None}
 
 
 def normalize_forecast(raw: dict[str, Any]) -> dict[str, Any]:
@@ -635,7 +740,7 @@ def normalize_current(
             "icon_url": f"https://openweathermap.org/img/wn/{weather.get('icon')}@2x.png" if weather.get("icon") else None,
             "sunrise": sys.get("sunrise"), "sunset": sys.get("sunset"),
             "rain_1h": (raw.get("rain") or {}).get("1h"), "snow_1h": (raw.get("snow") or {}).get("1h"),
-            "hourly": normalized_forecast["hourly"], "air_quality": air}
+            "hourly": normalized_forecast["hourly"], "daily": normalize_openweather_daily((uv_response or {}).get("daily", []), (uv_response or {}).get("timezone_offset", 0)), "air_quality": air}
 
 
 EPA_BREAKPOINTS: dict[str, tuple[tuple[float, float, int, int], ...]] = {

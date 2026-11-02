@@ -106,11 +106,12 @@
     const sidebarCoordsEl = document.getElementById('sidebar-coords');
     const sidebarFlagEl = null; // removed from UI
 
-    let currentLat = 25.2647;
-    let currentLon = 55.2924;
-    let currentName = 'Dubai';
-    let currentRegion = 'Dubai, United Arab Emirates';
-    let currentCountryCode = 'AE';
+    let currentLat = null;
+    let currentLon = null;
+    let currentName = 'Finding your location';
+    let currentRegion = '';
+    let currentCountryCode = '';
+    let selectionSequence = 0;
 
     let sidebarMap = null;
     let sidebarMarker = null;
@@ -185,21 +186,25 @@
         if (sidebarCityEl) sidebarCityEl.textContent = name || 'Selected Location';
         if (sidebarRegionEl) sidebarRegionEl.textContent = region || 'Worldwide';
         if (sidebarFlagEl) sidebarFlagEl.textContent = getCountryFlag(countryCode);
-        if (sidebarCoordsEl) {
+        if (sidebarCoordsEl && Number.isFinite(lat) && Number.isFinite(lon)) {
             const latDir = lat >= 0 ? 'N' : 'S';
             const lonDir = lon >= 0 ? 'E' : 'W';
-            sidebarCoordsEl.textContent = `${Math.abs(lat).toFixed(2)}° ${latDir}, ${Math.abs(lon).toFixed(2)}° ${lonDir}`;
+            sidebarCoordsEl.textContent = `${Math.abs(lat).toFixed(6)}° ${latDir}, ${Math.abs(lon).toFixed(6)}° ${lonDir}`;
+        } else if (sidebarCoordsEl) {
+            sidebarCoordsEl.textContent = 'Waiting for device location';
         }
         if (modalStatus) {
-            modalStatus.textContent = `Selected: ${name} (${region || 'Worldwide'})`;
+            modalStatus.textContent = Number.isFinite(lat) && Number.isFinite(lon)
+                ? `Selected: ${name} (${region || 'Selected location'})`
+                : name === 'Location unavailable' ? region : 'Waiting for device location';
         }
         updateLocationChip(name, countryCode);
     }
 
     async function reverseGeocode(lat, lon) {
         const url = new URL(`${apiBase}/location/reverse`, window.location.href);
-        url.searchParams.set('latitude', lat.toFixed(5));
-        url.searchParams.set('longitude', lon.toFixed(5));
+        url.searchParams.set('latitude', String(lat));
+        url.searchParams.set('longitude', String(lon));
 
         const resp = await fetch(url, { headers: { Accept: 'application/json' } });
         if (!resp.ok) throw new Error(`Reverse geocode failed (${resp.status})`);
@@ -208,10 +213,13 @@
     }
 
     async function handleMapSelection(lat, lon, zoomLevel, skipReverse, locationMeta) {
+        const selectionId = ++selectionSequence;
         currentLat = Number(lat);
         currentLon = Number(lon);
 
-        if (sidebarMarker) {
+        if (!sidebarMarker && sidebarMap) {
+            sidebarMarker = window.L.marker([currentLat, currentLon], { icon: pinpointIcon }).addTo(sidebarMap);
+        } else if (sidebarMarker) {
             sidebarMarker.setLatLng([currentLat, currentLon]);
         }
         if (sidebarMap) {
@@ -234,8 +242,9 @@
         // Method B: Reverse-geocode coordinates captured from interactive map
         try {
             const place = await reverseGeocode(currentLat, currentLon);
+            if (selectionId !== selectionSequence) return;
             if (place) {
-                currentName = place.name || `${Math.abs(currentLat).toFixed(2)}°, ${Math.abs(currentLon).toFixed(2)}°`;
+                currentName = place.name || 'Selected Location';
                 const parts = [];
                 if (place.district && place.district.toLowerCase() !== currentName.toLowerCase()) {
                     parts.push(place.district);
@@ -251,15 +260,16 @@
             } else {
                 const latDir = currentLat >= 0 ? 'N' : 'S';
                 const lonDir = currentLon >= 0 ? 'E' : 'W';
-                currentName = `${Math.abs(currentLat).toFixed(2)}° ${latDir}, ${Math.abs(currentLon).toFixed(2)}° ${lonDir}`;
+                currentName = `${Math.abs(currentLat).toFixed(6)}° ${latDir}, ${Math.abs(currentLon).toFixed(6)}° ${lonDir}`;
                 currentRegion = 'Selected Geographical Point';
                 currentCountryCode = '';
             }
         } catch (err) {
+            if (selectionId !== selectionSequence) return;
             console.warn('Reverse geocode error:', err.message);
             const latDir = currentLat >= 0 ? 'N' : 'S';
             const lonDir = currentLon >= 0 ? 'E' : 'W';
-            currentName = `${Math.abs(currentLat).toFixed(2)}° ${latDir}, ${Math.abs(currentLon).toFixed(2)}° ${lonDir}`;
+            currentName = `${Math.abs(currentLat).toFixed(6)}° ${latDir}, ${Math.abs(currentLon).toFixed(6)}° ${lonDir}`;
             currentRegion = 'Selected Location';
             currentCountryCode = '';
         }
@@ -298,18 +308,14 @@
         if (!sidebarMapEl) return;
 
         sidebarMap = window.L.map(sidebarMapEl, {
-            center: [currentLat, currentLon],
-            zoom: 10,
             zoomControl: true,
             scrollWheelZoom: true,
-            attributionControl: false
+            attributionControl: true
         });
+        sidebarMap.fitWorld();
 
         const tileLayer = createTileLayer();
         tileLayer.addTo(sidebarMap);
-
-        sidebarMarker = window.L.marker([currentLat, currentLon], { icon: pinpointIcon }).addTo(sidebarMap);
-        sidebarMarker.bindPopup(popupHtml(currentName, currentRegion), { autoPan: false });
 
         sidebarMap.on('click', (e) => {
             handleMapSelection(e.latlng.lat, e.latlng.lng, null, false);
@@ -461,14 +467,22 @@
         const detail = e.detail;
         if (detail && Number.isFinite(detail.latitude) && Number.isFinite(detail.longitude)) {
             const deviceCountry = String(detail.country || '').trim();
-            const countryCode = /^[A-Za-z]{2}$/.test(deviceCountry) ? deviceCountry.toUpperCase() : '';
+            const countryCode = String(detail.countryCode || '').trim().toUpperCase() ||
+                (/^[A-Za-z]{2}$/.test(deviceCountry) ? deviceCountry.toUpperCase() : '');
             handleMapSelection(detail.latitude, detail.longitude, 10, true, {
                 name: detail.name || 'Current Device Location',
-                region: detail.country || 'Device GPS',
+                region: detail.region || [detail.district, detail.state, detail.country].filter(Boolean).join(', ') || 'Device location',
                 country: detail.country || '',
                 countryCode
             });
         }
+    });
+
+    document.addEventListener('weatherly:location-unavailable', () => {
+        if (Number.isFinite(currentLat) && Number.isFinite(currentLon)) return;
+        currentName = 'Location unavailable';
+        currentRegion = 'Allow location access or select a map point';
+        updateSidebarBadge(currentName, currentRegion, '', null, null);
     });
 
     // Sidebar navigation active state handler

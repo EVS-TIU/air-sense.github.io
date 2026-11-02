@@ -283,8 +283,8 @@ async function updateUvIndexFromOpenMeteo(latitude, longitude) {
     const lat = Number(latitude);
     const lon = Number(longitude);
     const url = new URL("https://api.open-meteo.com/v1/forecast");
-    url.searchParams.set("latitude", lat.toFixed(4));
-    url.searchParams.set("longitude", lon.toFixed(4));
+    url.searchParams.set("latitude", String(lat));
+    url.searchParams.set("longitude", String(lon));
     url.searchParams.set("current", "uv_index");
     url.searchParams.set("timezone", "auto");
 
@@ -314,8 +314,8 @@ async function updateAirQualityIndex(latitude, longitude) {
   renderAirQualityStatus(null);
   renderAqiScale(null);
   const url = new URL("https://air-quality-api.open-meteo.com/v1/air-quality");
-  url.searchParams.set("latitude", Number(latitude).toFixed(4));
-  url.searchParams.set("longitude", Number(longitude).toFixed(4));
+  url.searchParams.set("latitude", String(Number(latitude)));
+  url.searchParams.set("longitude", String(Number(longitude)));
   url.searchParams.set("current", "us_aqi,pm2_5,pm10");
 
   try {
@@ -969,9 +969,6 @@ function formatLocation(weather) {
   if (typeof weather?.location_label === "string" && weather.location_label.trim()) {
     return weather.location_label.trim();
   }
-  if (typeof weather?.timezone === "string" && weather.timezone) {
-    return weather.timezone.replace(/_/g, " ");
-  }
   return "Current Location";
 }
 
@@ -1115,7 +1112,8 @@ function renderHourlyForecast(weather) {
 
   const availableForecast = Array.isArray(weather?.hourly)
     ? weather.hourly
-      .filter((point) => point && typeof point.time === "string")
+      .filter((point) => point && typeof point.time === "string" &&
+        (!Number.isFinite(point.timestamp) || point.timestamp <= Math.floor(Date.now() / 1000) + 24 * 3600))
     : [];
   if (hourlyCardsContainer) {
     hourlyCardsContainer.setAttribute("aria-busy", "false");
@@ -1211,6 +1209,15 @@ function pickDailyRepresentative(points, weather, timezoneOffset) {
 }
 
 function aggregateDailyForecast(weather) {
+  if (Array.isArray(weather?.daily) && weather.daily.length === 7) {
+    return weather.daily.map((day) => ({
+      dateKey: day.date,
+      high: day.temperature_max,
+      low: day.temperature_min,
+      precipitation: day.precipitation_probability,
+      representative: { weather_code: day.weather_code, condition: day.condition, time: `${day.date}T12:00`, timestamp: Date.parse(`${day.date}T12:00:00Z`) / 1000 },
+    }));
+  }
   const points = Array.isArray(weather?.hourly) ? weather.hourly : [];
   const timezoneOffset = Number(weather?.timezone_offset) || 0;
   const days = new Map();
@@ -1237,7 +1244,7 @@ function aggregateDailyForecast(weather) {
     days.set(dateKey, day);
   });
 
-  return [...days.values()].slice(0, 5).map((day) => {
+  return [...days.values()].slice(0, 7).map((day) => {
     const representative = pickDailyRepresentative(
       day.points,
       weather,
@@ -1269,7 +1276,7 @@ function renderDailyForecast(weather) {
   }
 
   weekCardsEl.replaceChildren();
-  days.slice(0, 5).forEach((day, index) => {
+  days.slice(0, 7).forEach((day, index) => {
     const date = new Date(`${day.dateKey}T12:00:00Z`);
     const card = document.createElement("article");
     card.className = `week-card${index === 0 ? " active" : ""}`;
@@ -1336,6 +1343,9 @@ function renderCurrentWeather(weather) {
   }
   if (currentCountryEl) {
     const parts = [];
+    if (typeof weather.location_district === "string" && weather.location_district.trim()) {
+      parts.push(weather.location_district.trim());
+    }
     if (
       typeof weather.location_state === "string" &&
       weather.location_state.trim() &&
@@ -1452,8 +1462,7 @@ function readCachedWeatherHero(latitude, longitude) {
     const cached = JSON.parse(raw);
     const isFresh = Date.now() - cached.savedAt < WEATHER_CACHE_TTL_MS;
     const sameLocation =
-      Math.abs(cached.latitude - latitude) < 0.02 &&
-      Math.abs(cached.longitude - longitude) < 0.02;
+      cached.latitude === latitude && cached.longitude === longitude;
     return isFresh && sameLocation && cached.weather ? cached.weather : null;
   } catch {
     return null;
@@ -1478,8 +1487,8 @@ function writeCachedWeatherHero(latitude, longitude, weather) {
 
 async function fetchCurrentWeatherHero(latitude, longitude) {
   const url = new URL(`${API_BASE_URL}/weather/current`, window.location.origin || window.location.href);
-  url.searchParams.set("latitude", Number(latitude).toFixed(4));
-  url.searchParams.set("longitude", Number(longitude).toFixed(4));
+  url.searchParams.set("latitude", String(Number(latitude)));
+  url.searchParams.set("longitude", String(Number(longitude)));
   url.searchParams.set("include_location", "true");
 
   const controller = new AbortController();
@@ -1554,7 +1563,7 @@ async function fetchDeviceLocationWeather(options = {}) {
   try {
     const position = await getBrowserPosition({
       enableHighAccuracy: true,
-      maximumAge: isExplicitClick ? 0 : 30000,
+      maximumAge: 0,
       forceFresh: isExplicitClick,
     });
     heroPosition = {
@@ -1607,7 +1616,11 @@ async function fetchDeviceLocationWeather(options = {}) {
           latitude: heroPosition.latitude,
           longitude: heroPosition.longitude,
           name: weather.location_name || weather.location_label || "Current Location",
+          district: weather.location_district || "",
+          state: weather.location_state || "",
           country: weather.location_country || "",
+          countryCode: weather.location_country_code || "",
+          region: [weather.location_district, weather.location_state, weather.location_country].filter(Boolean).join(", "),
         },
       })
     );
@@ -1622,6 +1635,7 @@ async function fetchDeviceLocationWeather(options = {}) {
     if (locationLabel) {
       locationLabel.textContent = "Current Location";
     }
+    document.dispatchEvent(new CustomEvent("weatherly:location-unavailable"));
 
     if (isExplicitClick) {
       let message = "Unable to fetch device location weather.";
@@ -1684,6 +1698,7 @@ async function initialiseCurrentWeatherHero() {
 
   if (permission === "denied") {
     setHeroError("Location permission is required to load live weather.");
+    document.dispatchEvent(new CustomEvent("weatherly:location-unavailable"));
     return;
   }
 
@@ -1734,8 +1749,7 @@ function readCachedWeather(latitude, longitude) {
     const cached = JSON.parse(raw);
     const isFresh = Date.now() - cached.savedAt < WEATHER_CACHE_TTL_MS;
     const sameLocation =
-      Math.abs(cached.latitude - latitude) < 0.02 &&
-      Math.abs(cached.longitude - longitude) < 0.02;
+      cached.latitude === latitude && cached.longitude === longitude;
 
     return isFresh && sameLocation && cached.weather ? cached.weather : null;
   } catch {
@@ -1761,8 +1775,8 @@ function writeCachedWeather(latitude, longitude, weather) {
 
 async function fetchCurrentWeather(latitude, longitude) {
   const url = new URL(`${API_BASE_URL}/weather/current`, window.location.href);
-  url.searchParams.set("latitude", latitude.toFixed(4));
-  url.searchParams.set("longitude", longitude.toFixed(4));
+  url.searchParams.set("latitude", String(latitude));
+  url.searchParams.set("longitude", String(longitude));
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), WEATHER_REQUEST_TIMEOUT_MS);
@@ -1833,12 +1847,11 @@ async function getGeolocationPermissionState() {
 let pendingPositionPromise = null;
 
 function getBrowserPosition(options = {}) {
-  if (pendingPositionPromise && !options.forceFresh) {
+  if (pendingPositionPromise) {
     return pendingPositionPromise;
   }
 
-  const wantHighAccuracy = options.enableHighAccuracy !== false;
-  const timeout = typeof options.timeout === "number" ? options.timeout : 12000;
+  const timeout = typeof options.timeout === "number" ? options.timeout : 20000;
   const maxAge = typeof options.maximumAge === "number" ? options.maximumAge : 0;
 
   pendingPositionPromise = new Promise((resolve, reject) => {
@@ -1848,43 +1861,38 @@ function getBrowserPosition(options = {}) {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        pendingPositionPromise = null;
-        resolve(position);
-      },
-      (error) => {
-        // If high accuracy timed out or was unavailable on this device, retry once with standard accuracy
-        if (
-          wantHighAccuracy &&
-          (error.code === error.TIMEOUT || error.code === error.POSITION_UNAVAILABLE)
-        ) {
-          navigator.geolocation.getCurrentPosition(
-            (fallbackPos) => {
-              pendingPositionPromise = null;
-              resolve(fallbackPos);
-            },
-            (fallbackErr) => {
-              pendingPositionPromise = null;
-              reject(fallbackErr);
-            },
-            {
-              enableHighAccuracy: false,
-              timeout: 8000,
-              maximumAge: 60000,
-            }
-          );
-        } else {
-          pendingPositionPromise = null;
-          reject(error);
-        }
-      },
-      {
-        enableHighAccuracy: wantHighAccuracy,
-        timeout: timeout,
-        maximumAge: maxAge,
-      }
-    );
+    let settled = false;
+    let bestPosition = null;
+    let watchId = null;
+    const finish = (position, error = null) => {
+      if (settled) return;
+      settled = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      clearTimeout(timeoutId);
+      pendingPositionPromise = null;
+      if (error && !position) reject(error);
+      else resolve(position);
+    };
+    const timeoutId = setTimeout(() => {
+      if (bestPosition) finish(bestPosition);
+      else finish(null, new Error("The browser could not obtain a fresh GPS location."));
+    }, timeout);
+
+    try {
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+            bestPosition = position;
+          }
+          // Keep listening briefly for a better fix unless the device has a strong GPS reading.
+          if (position.coords.accuracy <= 50) finish(position);
+        },
+        (error) => finish(bestPosition, error),
+        { enableHighAccuracy: true, timeout, maximumAge: maxAge },
+      );
+    } catch (error) {
+      finish(null, error);
+    }
   });
 
   return pendingPositionPromise;

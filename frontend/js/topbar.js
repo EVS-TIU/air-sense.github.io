@@ -260,7 +260,9 @@
         state.location = {
             id: `${event.detail.latitude},${event.detail.longitude}`,
             name: event.detail.name,
-            region: event.detail.country,
+            region: event.detail.region || [event.detail.district, event.detail.state, event.detail.country].filter(Boolean).join(', '),
+            country: event.detail.country || '',
+            countryCode: event.detail.countryCode || '',
             lat: event.detail.latitude,
             lon: event.detail.longitude
         };
