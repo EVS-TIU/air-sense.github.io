@@ -20,18 +20,10 @@
     <!-- Popular cities sidebar section -->
     <link rel="stylesheet" href="../css/popular-cities.css?v=20261102-1">
     <!-- Climate Analysis module styles -->
-    <link rel="stylesheet" href="./climate-analysis.css?v=20261102-2">
+    <link rel="stylesheet" href="./climate-analysis.css?v=20261102-3">
 
     <!-- Page-specific overrides: make Climate Analysis always visible on this page -->
     <style>
-        /* On this standalone page the Climate Analysis section is always shown
-           and occupies the full main area (no weather panels to compete with). */
-        .climate-analysis {
-            display: flex !important;
-            grid-column: 2 / -1;
-            grid-row: 2 / -1;
-        }
-
         /* Hide dashboard weather sections that don't belong on this page
            (markup isn't here, but just in case shared JS adds them). */
         .current-weather,
@@ -42,7 +34,7 @@
         }
     </style>
 </head>
-<body>
+<body class="climate-analysis-page">
 
     <!-- Location-aware weather background -->
     <div class="weather-background" id="weather-background" aria-hidden="true">
