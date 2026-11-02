@@ -273,7 +273,7 @@
         const validTime = new Date();
         validTime.setUTCMinutes(0, 0, 0);
         const stamp = validTime.toISOString().replace(/[-:T]/g, '').slice(0, 10);
-        const opacity = controller.opacities[mode] ?? (mode === 'wind' ? 0.34 : palettes.MODES[mode].opacity);
+        const opacity = controller.opacities[mode] ?? (mode === 'wind' ? 0.16 : palettes.MODES[mode].opacity);
         if (controller.weatherApiTile && controller.weatherApiTileMode === mode && controller.weatherApiStamp === stamp) {
             controller.weatherApiTile.setOpacity(opacity);
             if (!controller.map.hasLayer(controller.weatherApiTile)) controller.weatherApiTile.addTo(controller.map);

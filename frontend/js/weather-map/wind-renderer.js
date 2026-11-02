@@ -187,7 +187,7 @@
                 const size = this._map.getSize();
                 // Dense particles with short histories create the continuous
                 // flowing streamlines seen in meteorological maps.
-                const count = Math.min(2200, Math.max(650, Math.round((size.x * size.y) / 5200)));
+                const count = Math.min(12000, Math.max(3000, Math.round((size.x * size.y) / 180)));
                 this._particles = [];
                 for (let index = 0; index < count; index += 1) {
                     const x = Math.random() * size.x;
@@ -265,7 +265,8 @@
                         if (windSample.speed < 0.4) break;
                         const px = point.lng;
                         const py = point.lat;
-                        const stepDegrees = 0.0045 + Math.min(0.012, windSample.speed * 0.00018);
+                        const zoomScale = Math.pow(2, 5 - this._map.getZoom());
+                        const stepDegrees = (0.012 + Math.min(0.055, windSample.speed * 0.0007)) * zoomScale;
                         const nx = this._map.latLngToContainerPoint(L.latLng(
                             py + windSample.v * stepDegrees,
                             px + windSample.u * stepDegrees
@@ -273,7 +274,7 @@
                         particle.x = nx.x;
                         particle.y = nx.y;
                         particle.trail.push({ x: particle.x, y: particle.y });
-                        if (particle.trail.length > 14) particle.trail.shift();
+                        if (particle.trail.length > 28) particle.trail.shift();
                     }
                     if (!windSample || windSample.speed < 0.4) {
                         particle.x = Math.random() * size.x;
@@ -284,11 +285,11 @@
                     }
 
                     const color = palette.colorFor('wind', windSample.speed);
-                    const alpha = 0.22 + Math.min(0.52, windSample.speed / 45);
+                    const alpha = 0.3 + Math.min(0.58, windSample.speed / 42);
                     context.strokeStyle = color
                         ? `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`
                         : `rgba(120, 200, 255, ${alpha})`;
-                    context.lineWidth = 0.7 + Math.min(1.8, windSample.speed / 28);
+                    context.lineWidth = 0.65 + Math.min(1.25, windSample.speed / 34);
                     context.beginPath();
                     particle.trail.forEach((trailPoint, trailIndex) => {
                         if (trailIndex === 0) context.moveTo(trailPoint.x, trailPoint.y);
