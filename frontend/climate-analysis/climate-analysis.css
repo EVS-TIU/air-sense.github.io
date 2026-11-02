@@ -4,8 +4,41 @@
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   Container — hidden by default, shown when Climate Analysis view is active
+   Climate Analysis page layout
+
+   This standalone page contains only the sidebar, top navigation and analysis
+   workspace. Give those elements their own named two-column layout instead
+   of relying on the shared dashboard's unrelated weather-card grid lines.
    -------------------------------------------------------------------------- */
+
+.climate-analysis-page .dashboard {
+    width: min(1648px, 100%);
+    height: min(924px, 100vh);
+    margin: 0 auto;
+    padding: 44px 36px 43px 38px;
+    display: grid;
+    grid-template-columns: 242px minmax(0, 1fr);
+    grid-template-rows: 89px minmax(0, 1fr);
+    grid-template-areas:
+        "sidebar topbar"
+        "sidebar analysis";
+    column-gap: 15px;
+    row-gap: 20px;
+}
+
+.climate-analysis-page .topbar {
+    grid-area: topbar;
+    width: 100%;
+    min-width: 0;
+}
+
+.climate-analysis-page .sidebar {
+    grid-area: sidebar;
+    align-self: stretch;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+}
 
 .climate-analysis {
     display: none;
@@ -16,7 +49,9 @@
     flex-direction: column;
     gap: 0;
 
+    width: 100%;
     height: 100%;
+    min-width: 0;
     min-height: 0;
 }
 
@@ -25,32 +60,83 @@
     display: flex;
 }
 
-/* Standalone page layout: keep the dashboard navigation separate from content. */
+/* Standalone page: the workspace fills the grid area below the top navigation. */
 .climate-analysis-page .climate-analysis {
     display: flex;
-    grid-column: 3 / 7;
-    grid-row: 3 / 10;
+    grid-area: analysis;
 }
 
-@media (max-width: 1647px) and (min-width: 1301px) {
+/* Laptop widths: retain the left sidebar and use all remaining width for the
+   top navigation and analysis workspace. */
+@media (max-width: 1647px) and (min-width: 901px) {
+    .climate-analysis-page .dashboard {
+        width: 100%;
+        height: auto;
+        min-height: calc(100vh - 32px);
+        margin: 16px auto;
+        padding: 20px;
+        grid-template-columns: 220px minmax(0, 1fr);
+        grid-template-rows: 89px minmax(650px, 1fr);
+        column-gap: 16px;
+        row-gap: 16px;
+    }
+
+    .climate-analysis-page .sidebar {
+        min-height: 0;
+        grid-row: 1 / -1;
+    }
+
     .climate-analysis-page .climate-analysis {
+        height: 100%;
+    }
+}
+
+/* In the main dashboard, the shared layout changes to three columns at
+   laptop widths. Place Climate Analysis across those main-content columns
+   directly below the topbar instead of using desktop-only grid lines. */
+@media (max-width: 1647px) and (min-width: 1301px) {
+    body:not(.climate-analysis-page) .dashboard > .climate-analysis {
         grid-column: 2 / 4;
         grid-row: 2;
+        align-self: stretch;
         height: auto;
         min-height: 650px;
     }
 }
 
 @media (max-width: 1300px) and (min-width: 901px) {
-    .climate-analysis-page .climate-analysis {
+    .climate-analysis-page .dashboard {
+        padding: 16px;
+        grid-template-columns: 200px minmax(0, 1fr);
+        column-gap: 14px;
+        row-gap: 14px;
+    }
+}
+
+@media (max-width: 1300px) and (min-width: 901px) {
+    body:not(.climate-analysis-page) .dashboard > .climate-analysis {
         grid-column: 2;
         grid-row: 2;
+        align-self: stretch;
         height: auto;
         min-height: 650px;
     }
 }
 
+/* The shared dashboard intentionally stacks on narrow screens. Keep that
+   behavior here, while allowing the analysis workspace itself to fit. */
 @media (max-width: 900px) {
+    .climate-analysis-page .dashboard {
+        width: 100%;
+        height: auto;
+        min-height: 100vh;
+        margin: 0;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
     .climate-analysis-page .climate-analysis {
         width: 100%;
         height: auto;
@@ -58,9 +144,22 @@
         flex: 0 0 auto;
     }
 
+    .climate-analysis-page .ca-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .climate-analysis-page .ca-left {
         width: 100%;
         max-width: none;
+    }
+
+    body:not(.climate-analysis-page) .dashboard > .climate-analysis {
+        grid-column: auto;
+        grid-row: auto;
+        align-self: stretch;
+        width: 100%;
+        height: auto;
+        min-height: 0;
     }
 }
 
@@ -94,7 +193,7 @@
     min-height: 0;
 
     display: grid;
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
     gap: 16px;
 }
 
@@ -358,6 +457,7 @@
     display: flex;
     flex-direction: column;
     gap: 0;
+    min-width: 0;
     min-height: 0;
 }
 
