@@ -541,6 +541,18 @@
         } else if (action === 'climate-analysis') {
             emit('navigate', { view: action });
             window.location.assign('./climate-analysis/climate-analysis.html');
+        } else {
+            const sidebarLink = document.querySelector(`.sidebar__nav a[data-nav="${action}"]`);
+            if (sidebarLink) {
+                sidebarLink.click();
+                mobileMenuRoot.querySelectorAll('[data-nav]').forEach((item) => {
+                    item.removeAttribute('aria-current');
+                });
+                const mobileNavItem = mobileMenuRoot.querySelector(`[data-value="${action}"]`);
+                if (mobileNavItem) mobileNavItem.setAttribute('aria-current', 'page');
+            } else {
+                console.error(`Mobile navigation target "${action}" is missing from the sidebar.`);
+            }
         }
     });
 
