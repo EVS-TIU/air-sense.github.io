@@ -115,9 +115,22 @@
     let sidebarMap = null;
     let sidebarMarker = null;
     let mapMaximized = false;
+    let mapResizeFrame = null;
 
     function isMaximized() {
         return mapMaximized;
+    }
+
+    function scheduleMapResize() {
+        if (!sidebarMap) return;
+        if (mapResizeFrame !== null) cancelAnimationFrame(mapResizeFrame);
+        mapResizeFrame = requestAnimationFrame(() => {
+            mapResizeFrame = null;
+            if (!sidebarMap) return;
+            const view = { center: sidebarMap.getCenter(), zoom: sidebarMap.getZoom() };
+            sidebarMap.invalidateSize({ animate: false, pan: false });
+            sidebarMap.setView(view.center, view.zoom, { animate: false });
+        });
     }
 
     function locationChipHtml(name, countryCode) {
@@ -306,6 +319,16 @@
             if (sidebarMap) sidebarMap.invalidateSize();
         }, 150);
 
+        // Keep Leaflet in sync with viewport, orientation, and container changes.
+        window.addEventListener('resize', scheduleMapResize);
+        window.addEventListener('orientationchange', scheduleMapResize);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', scheduleMapResize);
+        }
+        if (typeof ResizeObserver === 'function') {
+            new ResizeObserver(scheduleMapResize).observe(sidebarMapEl);
+        }
+
         updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
         announceMap('map', sidebarMap);
     }
@@ -326,18 +349,27 @@
         mapMaximized = true;
         modalDialog.hidden = false;
         modalDialog.setAttribute('aria-hidden', 'false');
+
+        // Lock the page behind the full-screen map.
+        document.documentElement.classList.add('map-maximized');
+        document.body.classList.add('map-maximized');
+
         modalMapHost.appendChild(sidebarMapEl);
         sidebarMapEl.classList.add('is-maximized');
-        document.body.classList.add('map-maximized');
 
         document.dispatchEvent(new CustomEvent('weatherly:map-modal-open'));
 
+        scheduleMapResize();
+        setTimeout(scheduleMapResize, 80);
+        setTimeout(scheduleMapResize, 200);
+        setTimeout(scheduleMapResize, 400);
+
         setTimeout(() => {
             if (!sidebarMap) return;
-            sidebarMap.invalidateSize();
+            sidebarMap.invalidateSize({ animate: false });
             sidebarMap.setView(view.center, view.zoom, { animate: false });
             syncLocationPopup(true);
-        }, 160);
+        }, 120);
     }
 
     function closeModalMap() {
@@ -358,19 +390,22 @@
             sidebarMapParent.insertBefore(sidebarMapEl, before);
         }
         sidebarMapEl.classList.remove('is-maximized');
-        document.body.classList.remove('map-maximized');
-        mapMaximized = false;
 
+        document.documentElement.classList.remove('map-maximized');
+        document.body.classList.remove('map-maximized');
+
+        mapMaximized = false;
         modalDialog.hidden = true;
         modalDialog.setAttribute('aria-hidden', 'true');
 
+        scheduleMapResize();
         setTimeout(() => {
             if (sidebarMap) {
-                sidebarMap.invalidateSize();
+                sidebarMap.invalidateSize({ animate: false });
                 sidebarMap.setView(view.center, view.zoom, { animate: false });
                 syncLocationPopup(false);
             }
-        }, 120);
+        }, 80);
     }
 
     if (expandBtn) {
