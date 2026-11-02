@@ -264,12 +264,28 @@
             country: event.detail.country || '',
             countryCode: event.detail.countryCode || '',
             lat: event.detail.latitude,
-            lon: event.detail.longitude
+            lon: event.detail.longitude,
+            accuracy: Number.isFinite(event.detail.accuracy) ? event.detail.accuracy : null,
+            timestamp: Number.isFinite(event.detail.timestamp) ? event.detail.timestamp : Date.now(),
+            source: 'device'
         };
         writeStorage(STORAGE_KEYS.location, state.location.id);
         if (locationBtn) {
             locationBtn.classList.add('is-active');
-            locationBtn.setAttribute('title', `Current location: ${event.detail.name || 'Device'} (Click to refresh)`);
+            const accuracy = state.location.accuracy;
+            const accuracyLabel = Number.isFinite(accuracy)
+                ? accuracy >= 1000 ? `±${(accuracy / 1000).toFixed(1)} km` : `±${Math.round(accuracy)} m`
+                : 'accuracy unavailable';
+            const locationHints = [];
+            if (event.detail.approximate || !Number.isFinite(accuracy) || accuracy > 1000) {
+                locationHints.push(`GPS may be inaccurate (${accuracyLabel}). Click to retry.`);
+            } else {
+                locationHints.push(`GPS accuracy ${accuracyLabel}. Click to refresh.`);
+            }
+            if (event.detail.approximateName) {
+                locationHints.push('The place name could not be verified by reverse geocoding.');
+            }
+            locationBtn.setAttribute('title', `${event.detail.name || 'Device location'} · ${locationHints.join(' ')}`);
         }
         if (locationLabel) {
             locationLabel.textContent = event.detail.name || 'Current Location';
@@ -296,7 +312,7 @@
     }
 
     function setLocation(city) {
-        state.location = city;
+        state.location = { ...city, accuracy: null, timestamp: Date.now(), source: 'manual' };
         if (locationLabel) {
             locationLabel.textContent = city.name || 'Current Location';
         }

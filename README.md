@@ -1,8 +1,9 @@
 # AIR_SENSE
 
 AIR_SENSE is a location-aware weather dashboard with a small FastAPI backend.
-The backend uses OpenWeather for current conditions, forecasts, geocoding, and
-air quality, then generates transparent rule-based recommendations.
+The backend uses Open-Meteo as the primary weather and modelled air-quality
+source, keeps OpenWeather as the existing weather fallback, and can validate
+modelled AQI against separate WAQI and OpenAQ station readings.
 
 See [docs/api.md](docs/api.md) for setup, endpoint examples, tests, Docker, and
 deployment instructions. Start the backend locally with:

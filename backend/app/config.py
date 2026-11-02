@@ -40,6 +40,11 @@ class Settings(BaseSettings):
         default="https://air-quality-api.open-meteo.com/v1/air-quality",
         validation_alias="OPENMETEO_AIR_QUALITY_URL",
     )
+    waqi_api_token: str = Field(default="", validation_alias="WAQI_API_TOKEN")
+    openaq_api_key: str = Field(default="", validation_alias="OPENAQ_API_KEY")
+    air_quality_cache_ttl_seconds: int = Field(
+        default=300, validation_alias="AIR_QUALITY_CACHE_TTL_SECONDS", ge=0, le=86400
+    )
     map_cache_ttl_seconds: int = Field(
         default=300, validation_alias="MAP_CACHE_TTL_SECONDS", ge=0, le=86400
     )

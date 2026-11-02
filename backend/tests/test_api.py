@@ -170,9 +170,11 @@ def test_epa_aqi_requires_averaging_period_and_units():
 def test_current_reverse_geocode_fallback_when_name_missing():
     import asyncio
     service = WeatherClient(Settings(openweather_api_key="test-key"))
+    service._open_meteo = AsyncMock(side_effect=WeatherServiceError("Open-Meteo unavailable"))
+    service.reverse = AsyncMock(return_value=[{"name": "Bidhannagar", "state": "West Bengal", "country": "IN"}])
     service._get = AsyncMock(side_effect=[
-        {"name": "Coarse Metro", "coord": {"lat": 22.58, "lon": 88.42}, "weather": [{"id": 800, "icon": "01d"}], "main": {}, "wind": {}, "sys": {"country": "IN"}},
-        {"city": {"coord": {"lat": 22.58, "lon": 88.42}}, "list": []},
+        {"name": "Coarse Metro", "coord": {"lat": 22.5801, "lon": 88.4201}, "weather": [{"id": 800, "icon": "01d"}], "main": {}, "wind": {}, "sys": {"country": "IN"}},
+        {"city": {"coord": {"lat": 22.5801, "lon": 88.4201}}, "list": []},
         Exception("no uv"),
         Exception("no air"),
         [{"name": "Bidhannagar", "state": "West Bengal", "country": "IN"}],
@@ -182,6 +184,50 @@ def test_current_reverse_geocode_fallback_when_name_missing():
     assert result["location_state"] == "West Bengal"
     assert result["location_country"] == "IN"
     assert result["station_name"] == "Coarse Metro"
+    assert result["latitude"] == 22.58
+    assert result["longitude"] == 88.42
+
+
+def test_reverse_geocode_uses_exact_coordinate_cache_keys():
+    import asyncio
+    from types import SimpleNamespace
+
+    service = WeatherClient(Settings(openweather_api_key="test-key"))
+    payload = {
+        "name": "Nearby Road",
+        "address": {
+            "neighbourhood": "Exact Neighbourhood",
+            "suburb": "Bidhannagar",
+            "state_district": "North 24 Parganas",
+            "state": "West Bengal",
+            "country": "India",
+            "country_code": "in",
+        },
+    }
+    response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
+    service._nominatim_get = AsyncMock(return_value=response)
+
+    latitude_a, longitude_a = 22.580001, 88.420001
+    latitude_b, longitude_b = 22.580002, 88.420002
+    async def fetch_both():
+        return await asyncio.gather(
+            service.reverse(latitude_a, longitude_a),
+            service.reverse(latitude_b, longitude_b),
+        )
+
+    result_a, result_b = asyncio.run(fetch_both())
+
+    assert service._nominatim_get.await_count == 2
+    requested_pairs = {
+        (call.args[1]["lat"], call.args[1]["lon"])
+        for call in service._nominatim_get.await_args_list
+    }
+    assert requested_pairs == {
+        (latitude_a, longitude_a),
+        (latitude_b, longitude_b),
+    }
+    assert result_a[0]["name"] == result_b[0]["name"] == "Exact Neighbourhood"
+    assert result_a[0]["district"] == "North 24 Parganas"
 
 
 def test_location_reverse_endpoint(client):

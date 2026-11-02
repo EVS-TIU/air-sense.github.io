@@ -28,8 +28,9 @@ ports are allowed by the backend CORS configuration.
   conditions plus the next forecast points used by the dashboard.
 * `GET /api/v1/weather/forecast?lat=35.46&lon=-97.51` - normalized 5-day,
   3-hour forecast.
-* `GET /api/v1/weather/air-quality?lat=35.46&lon=-97.51` - OpenWeather AQI
-  and pollutant components.
+* `GET /api/v1/weather/air-quality?lat=35.46&lon=-97.51` - Open-Meteo/CAMS
+  modelled US AQI and pollutants, with separate nearby WAQI/OpenAQ station
+  validation when their optional server-side credentials are configured.
 * `GET /api/v1/location/search?q=London` - up to five OpenWeather geocoding
   results.
 * `GET /api/v1/recommendations?lat=35.46&lon=-97.51` - rule-based risks and
@@ -84,18 +85,32 @@ does not provide One Call 3.0, it is `null` rather than fabricated. Provider
 failures return a safe JSON `detail` with HTTP 502;
 missing configuration returns 503.
 
-Air-quality responses include OpenWeather pollutant components and its
-`provider_index` on the documented 1–5 OpenWeather scale. `epa_aqi` is
-populated only when pollutant values include valid US EPA averaging periods
-and units; the current OpenWeather endpoint provides instantaneous μg/m³
-concentrations, so it normally remains `null`. The UI never labels the
-provider index as US EPA AQI.
+The live air-quality response keeps datasets separate. `modelled` contains
+Open-Meteo/CAMS `us_aqi`, its US AQI category/scale, six pollutant
+concentrations and the model timestamp. `stations.waqi` contains a nearby
+WAQI station's reported index on its own WAQI scale and its own pollutant
+indices. `stations.openaq.stations` contains nearby ground-station pollutant
+concentrations and observation times; OpenAQ concentrations are not converted
+to AQI. Station readings are never averaged or substituted into the modelled
+AQI. Missing station credentials or provider failures leave modelled results
+available and mark that station source unavailable.
+
+Open-Meteo/CAMS model data and OpenAQ station results are cached for
+`AIR_QUALITY_CACHE_TTL_SECONDS` (300 seconds by default). WAQI results are
+requested live and not cached, in accordance with its data terms. Configure
+`WAQI_API_TOKEN` and `OPENAQ_API_KEY` in the backend environment; neither key is
+sent to the browser. Open-Meteo requires no key. Cite Open-Meteo/CAMS, WAQI and
+OpenAQ when their data is shown. WAQI's free API terms prohibit paid-app use
+and require additional permission for public for-profit use.
 
 ## Configuration
 
-`OPENWEATHER_API_KEY` is required for provider-backed endpoints.
+`OPENWEATHER_API_KEY` is used by the existing OpenWeather weather fallback.
+`WAQI_API_TOKEN` and `OPENAQ_API_KEY` optionally enable nearby station checks;
+the Open-Meteo/CAMS modelled AQI endpoint works without API keys.
 `FRONTEND_URL`, `ENVIRONMENT`, `PORT`, `CACHE_TTL_SECONDS`, and
-`HTTP_TIMEOUT_SECONDS` are supported. `LLM_API_KEY`, `LLM_BASE_URL`, and
+`HTTP_TIMEOUT_SECONDS`, and `AIR_QUALITY_CACHE_TTL_SECONDS` are supported.
+`LLM_API_KEY`, `LLM_BASE_URL`, and
 `LLM_MODEL` optionally enable the isolated hosted-LLM adapter; weather endpoints
 never depend on it. Do not commit `.env`.
 

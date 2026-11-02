@@ -23,6 +23,12 @@ const DEFAULT_ILLUSTRATION = "cloudy.png";
 const DEFAULT_CONDITION_ICON = "default.svg";
 const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 const WEATHER_REQUEST_TIMEOUT_MS = 12 * 1000;
+const GEOLOCATION_TIMEOUT_MS = 20000;
+const GEOLOCATION_MAXIMUM_AGE_MS = 0;
+const GEOLOCATION_STALE_AFTER_MS = WEATHER_REFRESH_MS;
+// A kilometre can cross several neighbourhood boundaries; warn earlier so a
+// coarse browser fix is never presented as a confidently identified locality.
+const GEOLOCATION_ACCURACY_WARNING_METERS = 250;
 const WEATHER_CACHE_TTL_MS = 5 * 60 * 1000;
 const WEATHER_CACHE_KEY = "airsense:weather:v2";
 const HERO_WEATHER_CACHE_KEY = "airsense:hero-weather:v4";
@@ -66,6 +72,7 @@ const backgroundLayers = backgroundRoot
 
 let activeLayerIndex = 0;
 let currentBackground = null;
+let weatherBackgroundRevision = 0;
 let backgroundUpdateToken = 0;
 let refreshTimer = null;
 let lastPosition = null;
@@ -99,12 +106,14 @@ const airQualityStatusEl = document.querySelector("[data-air-quality-status]");
 const airQualityPm25El = document.querySelector("[data-air-quality-pm25]");
 const airQualityPm10El = document.querySelector("[data-air-quality-pm10]");
 const airQualityRecommendationEl = document.querySelector("[data-air-quality-recommendation]");
+const airQualityScaleEl = document.querySelector("[data-air-quality-scale]");
 const uvScaleMarkerEl = document.querySelector("[data-uv-scale-marker]");
 const uvScaleValueEl = document.querySelector("[data-uv-scale-value]");
 const aqiScaleMarkerEl = document.querySelector("[data-aqi-scale-marker]");
 const aqiScaleValueEl = document.querySelector("[data-aqi-scale-value]");
 const UV_SCALE_MAX = 11;
 const AQI_SCALE_MAX = 500;
+let airQualityRequestRevision = 0;
 const feelsUnitEls = document.querySelectorAll("[data-feels-unit]");
 const feelsMetricUnitEls = document.querySelectorAll("[data-feels-metric-unit]");
 const rangeUnitHighEls = document.querySelectorAll("[data-range-unit-high]");
@@ -219,7 +228,7 @@ function renderUvIndex(weather) {
 }
 
 function classifyAirQuality(aqi) {
-  if (!Number.isFinite(aqi) || aqi < 0 || aqi > 500) return null;
+  if (!Number.isFinite(aqi) || aqi < 0) return null;
   if (aqi <= 50) {
     return {
       key: "good",
@@ -311,39 +320,104 @@ async function updateUvIndexFromOpenMeteo(latitude, longitude) {
 
 async function updateAirQualityIndex(latitude, longitude) {
   if (!airQualityIndexEl || !airQualityStatusEl) return;
+  const requestRevision = ++airQualityRequestRevision;
   renderAirQualityStatus(null);
   renderAqiScale(null);
-  const url = new URL("https://air-quality-api.open-meteo.com/v1/air-quality");
+  if (airQualityIndexEl) airQualityIndexEl.textContent = "--";
+  if (airQualityPm25El) airQualityPm25El.textContent = "-- μg/m³";
+  if (airQualityPm10El) airQualityPm10El.textContent = "-- μg/m³";
+  if (airQualityRecommendationEl) {
+    airQualityRecommendationEl.textContent = "Loading station validation...";
+    airQualityRecommendationEl.hidden = false;
+  }
+  const url = new URL(`${API_BASE_URL}/weather/air-quality`, window.location.href);
   url.searchParams.set("latitude", String(Number(latitude)));
   url.searchParams.set("longitude", String(Number(longitude)));
-  url.searchParams.set("current", "us_aqi,pm2_5,pm10");
 
   try {
     const response = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`AQI request failed (${response.status})`);
+    if (!response.ok) throw new Error(`Air-quality request failed (${response.status})`);
     const payload = await response.json();
-    const aqi = payload?.current?.us_aqi;
-    if (!Number.isFinite(aqi)) throw new Error("AQI is unavailable");
+    if (requestRevision !== airQualityRequestRevision) return;
+    const modelled = payload?.modelled;
+    const aqi = modelled?.aqi?.value;
+    if (!Number.isFinite(aqi)) throw new Error("Modelled AQI is unavailable");
     airQualityIndexEl.textContent = String(Math.round(aqi));
     renderAirQualityStatus(aqi);
     renderAqiScale(aqi);
+    if (airQualityScaleEl) airQualityScaleEl.textContent = `${modelled.provider || "Open-Meteo/CAMS"} · ${modelled.aqi.scale || "US AQI"}`;
+    const modelTimestamp = modelled.timestamp
+      ? `${modelled.timestamp}${modelled.timezone ? ` ${modelled.timezone}` : ""}`
+      : "time unavailable";
+    const classification = classifyAirQuality(aqi);
+    if (airQualityStatusEl) {
+      airQualityStatusEl.textContent = `${classification?.category || "Unavailable"} · Modelled`;
+      airQualityStatusEl.title = `${modelled.aqi.scale || "US AQI"}; as of ${modelTimestamp}`;
+    }
     if (airQualityPm25El) {
-      airQualityPm25El.textContent = Number.isFinite(payload?.current?.pm2_5)
-        ? `${payload.current.pm2_5} μg/m³`
+      const pollutant = modelled.pollutants?.["PM2.5"];
+      airQualityPm25El.textContent = Number.isFinite(pollutant?.value)
+        ? `${pollutant.value} ${pollutant.unit || "μg/m³"}`
         : "-- μg/m³";
     }
     if (airQualityPm10El) {
-      airQualityPm10El.textContent = Number.isFinite(payload?.current?.pm10)
-        ? `${payload.current.pm10} μg/m³`
+      const pollutant = modelled.pollutants?.PM10;
+      airQualityPm10El.textContent = Number.isFinite(pollutant?.value)
+        ? `${pollutant.value} ${pollutant.unit || "μg/m³"}`
         : "-- μg/m³";
     }
+    const stationRows = [];
+    const waqi = payload?.stations?.waqi;
+    if (waqi?.status === "available") {
+      stationRows.push(`WAQI ${waqi.station || "station"}: ${waqi.aqi.value} ${waqi.aqi.scale}`);
+    } else {
+      stationRows.push(`WAQI ${waqi?.status === "not_configured" ? "token not configured" : "unavailable"}`);
+    }
+    const openaq = payload?.stations?.openaq;
+    const nearestStation = openaq?.stations?.[0];
+    if (nearestStation) {
+      const measured = (nearestStation.measurements || []).filter((item) => {
+        const parameter = String(item.parameter || "").toLowerCase().replace(/[._\s]/g, "");
+        return parameter === "pm25" || parameter === "pm10";
+      });
+      const values = measured.map((item) => `${item.parameter} ${item.value} ${item.unit || ""}`.trim());
+      stationRows.push(values.length
+        ? `OpenAQ ${nearestStation.station || "station"}${Number.isFinite(nearestStation.distance_m) ? ` ${nearestStation.distance_m} m` : ""}: ${values.join(", ")}`
+        : `OpenAQ ${nearestStation.station || "station"}: no PM measurements`);
+    } else {
+      stationRows.push(`OpenAQ ${openaq?.status === "not_configured" ? "API key not configured" : "no nearby data"}`);
+    }
+    const stationTimestamps = [waqi?.timestamp, ...(nearestStation?.measurements || []).map((item) => item.timestamp)]
+      .filter(Boolean);
+    const sourceAttributions = (waqi?.attributions || []).map((source) => source.name).filter(Boolean);
+    sourceAttributions.push(...(nearestStation?.attributions || []).map((source) => source.name).filter(Boolean));
+    const advice = classification?.recommendation || "Modelled AQI available; station measurements are shown separately.";
+    if (airQualityRecommendationEl) {
+      airQualityRecommendationEl.textContent = `As of ${modelTimestamp} · ${stationRows.join(" · ")} · ${advice}`;
+      airQualityRecommendationEl.title = [
+        `${modelled.provider || "Open-Meteo/CAMS"} ${modelled.data_type || "modelled"} ${modelled.aqi.scale || "US AQI"} as of ${modelTimestamp}`,
+        ...stationRows,
+        stationTimestamps.length ? `Station timestamps: ${stationTimestamps.join(", ")}` : "",
+        sourceAttributions.length ? `Provider/source attribution: ${sourceAttributions.join(", ")}` : "",
+        "Attributions: Open-Meteo/CAMS ENSEMBLE, WAQI and OpenAQ.",
+        advice,
+      ].filter(Boolean).join("\n");
+      airQualityRecommendationEl.hidden = false;
+    }
+    if (currentHeroWeather) currentHeroWeather.air_quality = payload;
   } catch (error) {
+    if (requestRevision !== airQualityRequestRevision) return;
     console.warn("Air quality unavailable:", error.message);
     airQualityIndexEl.textContent = "--";
     renderAirQualityStatus(null);
     renderAqiScale(null);
     if (airQualityPm25El) airQualityPm25El.textContent = "-- μg/m³";
     if (airQualityPm10El) airQualityPm10El.textContent = "-- μg/m³";
+    if (airQualityScaleEl) airQualityScaleEl.textContent = "US AQI · Open-Meteo/CAMS";
+    if (airQualityRecommendationEl) {
+      airQualityRecommendationEl.textContent = "Modelled AQI and station validation unavailable";
+      airQualityRecommendationEl.hidden = false;
+    }
   }
 }
 
@@ -1400,6 +1474,7 @@ function renderCurrentWeather(weather) {
 
   if (currentStatusEl) {
     currentStatusEl.textContent = weather.is_day === false ? "Night" : "Live";
+    currentStatusEl.removeAttribute("title");
   }
 
   if (currentTempEl) {
@@ -1554,6 +1629,7 @@ async function updateCurrentWeatherHero(position) {
     return;
   }
 
+  const locationRevisionAtRequest = selectedLocationRevision;
   const { latitude, longitude } = position;
 
   let weather = readCachedWeatherHero(latitude, longitude);
@@ -1562,7 +1638,6 @@ async function updateCurrentWeatherHero(position) {
     setHeroLoading(true);
     try {
       weather = await fetchCurrentWeatherHero(latitude, longitude);
-      writeCachedWeatherHero(latitude, longitude, weather);
     } catch (error) {
       console.warn("Current weather card unavailable:", error.message);
       setHeroError("Unable to load weather data. Check your connection or try again.");
@@ -1571,12 +1646,53 @@ async function updateCurrentWeatherHero(position) {
     }
   }
 
+  if (locationRevisionAtRequest !== selectedLocationRevision) return;
+  weather = {
+    ...weather,
+    latitude,
+    longitude,
+    ...(position.source === "device" ? {
+      device_accuracy_meters: position.accuracy,
+      device_location_timestamp: position.timestamp,
+    } : {}),
+  };
+  writeCachedWeatherHero(latitude, longitude, weather);
   renderCurrentWeather(weather);
   applyFallbackBackground();
 }
 
+function formatGeolocationAccuracy(accuracy) {
+  if (!Number.isFinite(accuracy) || accuracy < 0) return "accuracy unavailable";
+  return accuracy >= 1000
+    ? `±${(accuracy / 1000).toFixed(1)} km`
+    : `±${Math.round(accuracy)} m`;
+}
+
+function updateGeolocationAccuracyStatus(position, weather) {
+  const accuracy = position?.accuracy;
+  const unknown = !Number.isFinite(accuracy) || accuracy < 0;
+  const lowAccuracy = unknown || accuracy > GEOLOCATION_ACCURACY_WARNING_METERS;
+  const approximateName = Boolean(weather?.location_is_approximate);
+  const accuracyText = formatGeolocationAccuracy(accuracy);
+  if (currentStatusEl) {
+    currentStatusEl.textContent = approximateName
+      ? `Approximate place · GPS ${accuracyText}`
+      : unknown
+        ? "GPS accuracy unavailable"
+        : lowAccuracy
+          ? `Approximate location ${accuracyText}`
+          : `GPS ${accuracyText}`;
+    currentStatusEl.title = [
+      lowAccuracy ? `Device location may be inaccurate (${accuracyText}). Click Current Location to retry.` : `Device location accuracy: ${accuracyText}.`,
+      approximateName ? "Reverse geocoding could not verify the displayed place name." : "",
+    ].filter(Boolean).join(" ");
+  }
+  return { accuracyText, lowAccuracy, unknown, approximateName };
+}
+
 async function fetchDeviceLocationWeather(options = {}) {
   const isExplicitClick = Boolean(options.explicitClick);
+  const locationRevisionAtRequest = selectedLocationRevision;
   const locationBtn = document.getElementById("current-location-btn");
   const locationLabel = document.getElementById("location-label");
 
@@ -1591,14 +1707,31 @@ async function fetchDeviceLocationWeather(options = {}) {
   try {
     const position = await getBrowserPosition({
       enableHighAccuracy: true,
-      maximumAge: 0,
+      timeout: GEOLOCATION_TIMEOUT_MS,
+      maximumAge: GEOLOCATION_MAXIMUM_AGE_MS,
       forceFresh: isExplicitClick,
     });
-    heroPosition = {
+    if (locationRevisionAtRequest !== selectedLocationRevision) {
+      if (locationBtn) {
+        locationBtn.classList.remove("is-loading");
+        locationBtn.removeAttribute("aria-busy");
+      }
+      return null;
+    }
+    const accuracy = Number.isFinite(position.coords.accuracy) && position.coords.accuracy >= 0
+      ? position.coords.accuracy
+      : null;
+    const devicePosition = {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
+      accuracy,
+      timestamp: Number.isFinite(position.timestamp) && position.timestamp > 0
+        ? position.timestamp
+        : Date.now(),
+      source: "device",
     };
-    lastPosition = heroPosition;
+    heroPosition = devicePosition;
+    lastPosition = { ...devicePosition };
 
     if (isExplicitClick) {
       sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
@@ -1606,30 +1739,38 @@ async function fetchDeviceLocationWeather(options = {}) {
 
     setHeroLoading(true);
     let weather = !isExplicitClick
-      ? readCachedWeatherHero(heroPosition.latitude, heroPosition.longitude)
+      ? readCachedWeatherHero(devicePosition.latitude, devicePosition.longitude)
       : null;
 
     if (!weather) {
       weather = await fetchCurrentWeatherHero(
-        heroPosition.latitude,
-        heroPosition.longitude
-      );
-      writeCachedWeatherHero(
-        heroPosition.latitude,
-        heroPosition.longitude,
-        weather
+        devicePosition.latitude,
+        devicePosition.longitude
       );
     }
+    if (locationRevisionAtRequest !== selectedLocationRevision) return null;
 
+    weather = {
+      ...weather,
+      latitude: devicePosition.latitude,
+      longitude: devicePosition.longitude,
+      device_accuracy_meters: devicePosition.accuracy,
+      device_location_timestamp: devicePosition.timestamp,
+    };
+    writeCachedWeatherHero(devicePosition.latitude, devicePosition.longitude, weather);
     renderCurrentWeather(weather);
-    updateWeatherForPosition(heroPosition).catch(() => {});
+    const accuracyStatus = updateGeolocationAccuracyStatus(devicePosition, weather);
+    updateWeatherForPosition(devicePosition).catch(() => {});
 
     if (locationBtn) {
       locationBtn.classList.remove("is-loading");
       locationBtn.classList.add("is-active");
       locationBtn.removeAttribute("aria-busy");
       const label = formatLocation(weather);
-      locationBtn.setAttribute("title", `Current Location: ${label} (Click to refresh)`);
+      const retryHint = accuracyStatus.lowAccuracy
+        ? ` · ${accuracyStatus.unknown ? "GPS accuracy unavailable" : `low GPS accuracy ${accuracyStatus.accuracyText}`} — click to retry`
+        : " · click to refresh";
+      locationBtn.setAttribute("title", `Current Location: ${label}${retryHint}`);
     }
     if (locationLabel) {
       locationLabel.textContent =
@@ -1639,8 +1780,13 @@ async function fetchDeviceLocationWeather(options = {}) {
     document.dispatchEvent(
       new CustomEvent("weatherly:device-location-active", {
         detail: {
-          latitude: heroPosition.latitude,
-          longitude: heroPosition.longitude,
+          latitude: devicePosition.latitude,
+          longitude: devicePosition.longitude,
+          accuracy: devicePosition.accuracy,
+          timestamp: devicePosition.timestamp,
+          source: "device",
+          approximate: accuracyStatus.lowAccuracy,
+          approximateName: accuracyStatus.approximateName,
           name: weather.location_name || weather.location_label || "Current Location",
           district: weather.location_district || "",
           state: weather.location_state || "",
@@ -1653,6 +1799,7 @@ async function fetchDeviceLocationWeather(options = {}) {
 
     return weather;
   } catch (error) {
+    if (locationRevisionAtRequest !== selectedLocationRevision) return null;
     console.warn("Device location weather error:", error.message || error);
     if (locationBtn) {
       locationBtn.classList.remove("is-loading");
@@ -1696,7 +1843,9 @@ async function initialiseCurrentWeatherHero() {
 
   if (currentRetryBtn) {
     currentRetryBtn.addEventListener("click", () => {
-      if (heroPosition) {
+      if (heroPosition?.source === "device") {
+        fetchDeviceLocationWeather({ explicitClick: true }).catch(() => {});
+      } else if (heroPosition) {
         sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
         updateCurrentWeatherHero(heroPosition);
       } else {
@@ -1744,6 +1893,11 @@ function scheduleHeroWeatherRefresh() {
 
   heroRefreshTimer = setInterval(() => {
     if (document.visibilityState === "hidden" || !heroPosition) {
+      return;
+    }
+    if (heroPosition.source === "device" &&
+        Date.now() - heroPosition.timestamp >= GEOLOCATION_STALE_AFTER_MS) {
+      fetchDeviceLocationWeather({ explicitClick: false }).catch(() => {});
       return;
     }
     sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
@@ -1832,6 +1986,7 @@ async function fetchCurrentWeather(latitude, longitude) {
 }
 
 async function updateWeatherForPosition(position) {
+  const requestRevision = ++weatherBackgroundRevision;
   const { latitude, longitude } = position;
 
   let weather = readCachedWeather(latitude, longitude);
@@ -1846,6 +2001,8 @@ async function updateWeatherForPosition(position) {
       return;
     }
   }
+
+  if (requestRevision !== weatherBackgroundRevision) return;
 
   const background = resolveBackground(weather);
   if (background) {
@@ -1871,14 +2028,17 @@ async function getGeolocationPermissionState() {
 }
 
 let pendingPositionPromise = null;
+let selectedLocationRevision = 0;
 
 function getBrowserPosition(options = {}) {
   if (pendingPositionPromise) {
     return pendingPositionPromise;
   }
 
-  const timeout = typeof options.timeout === "number" ? options.timeout : 15000;
-  const maxAge = typeof options.maximumAge === "number" ? options.maximumAge : 0;
+  const timeout = typeof options.timeout === "number" ? options.timeout : GEOLOCATION_TIMEOUT_MS;
+  const maxAge = typeof options.maximumAge === "number"
+    ? options.maximumAge
+    : GEOLOCATION_MAXIMUM_AGE_MS;
 
   pendingPositionPromise = new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -1890,13 +2050,24 @@ function getBrowserPosition(options = {}) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         pendingPositionPromise = null;
+        const latitude = position?.coords?.latitude;
+        const longitude = position?.coords?.longitude;
+        if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+            !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+          reject(new Error("The browser returned invalid device coordinates."));
+          return;
+        }
         resolve(position);
       },
       (error) => {
         pendingPositionPromise = null;
         reject(error);
       },
-      { enableHighAccuracy: true, timeout, maximumAge: maxAge },
+      {
+        enableHighAccuracy: options.enableHighAccuracy !== false,
+        timeout,
+        maximumAge: maxAge,
+      },
     );
   });
 
@@ -1907,26 +2078,7 @@ async function initialiseWeatherBackground() {
   if (!backgroundRoot) {
     return;
   }
-
-  const permission = await getGeolocationPermissionState();
-
-  if (permission === "denied") {
-    applyFallbackBackground();
-    return;
-  }
-
-  try {
-    const position = await getBrowserPosition({ enableHighAccuracy: true });
-    lastPosition = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-    };
-
-    await updateWeatherForPosition(lastPosition);
-  } catch (error) {
-    console.info("Live weather background unavailable:", error.message);
-    applyFallbackBackground();
-  }
+  if (!heroPosition) applyFallbackBackground();
 }
 
 function scheduleWeatherRefresh() {
@@ -1948,6 +2100,11 @@ document.addEventListener("visibilitychange", () => {
     updateWeatherForPosition(lastPosition);
   }
   if (document.visibilityState === "visible" && heroPosition) {
+    if (heroPosition.source === "device" &&
+        Date.now() - heroPosition.timestamp >= GEOLOCATION_STALE_AFTER_MS) {
+      fetchDeviceLocationWeather({ explicitClick: false }).catch(() => {});
+      return;
+    }
     sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
     updateCurrentWeatherHero(heroPosition);
   }
@@ -1964,10 +2121,16 @@ document.addEventListener("weatherly:location-change", (event) => {
   const locationBtn = document.getElementById("current-location-btn");
   if (locationBtn) {
     locationBtn.classList.remove("is-active");
+    locationBtn.classList.remove("is-loading");
+    locationBtn.removeAttribute("aria-busy");
   }
+  selectedLocationRevision += 1;
   heroPosition = {
     latitude: Number(location.lat),
     longitude: Number(location.lon),
+    accuracy: null,
+    timestamp: Date.now(),
+    source: "manual",
   };
   lastPosition = heroPosition;
   if (currentLocationEl && location.name) {
@@ -1980,6 +2143,7 @@ document.addEventListener("weatherly:location-change", (event) => {
   updateCurrentWeatherHero(heroPosition).catch((error) => {
     console.warn("Selected location weather unavailable:", error.message);
   });
+  updateWeatherForPosition(heroPosition).catch(() => {});
 });
 
 document.addEventListener("weatherly:unit-change", (event) => {

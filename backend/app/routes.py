@@ -175,14 +175,14 @@ async def location_reverse(request: Request, location: Annotated[Coordinates, De
 @router.get("/recommendations")
 async def recommendations(request: Request, location: Annotated[Coordinates, Depends(coordinates)]) -> dict:
     weather = await provider_call(service(request).current(location.latitude, location.longitude))
-    air = weather.get("air_quality") or await provider_call(service(request).air_quality(location.latitude, location.longitude))
+    air = await provider_call(service(request).air_quality(location.latitude, location.longitude))
     return build_recommendations(weather, air, request.app.state.settings)
 
 
 @router.get("/weather/summary")
 async def summary(request: Request, location: Annotated[Coordinates, Depends(coordinates)]) -> dict:
     weather = await provider_call(service(request).current(location.latitude, location.longitude))
-    air = weather.get("air_quality") or await provider_call(service(request).air_quality(location.latitude, location.longitude))
+    air = await provider_call(service(request).air_quality(location.latitude, location.longitude))
     intelligence = build_recommendations(weather, air, request.app.state.settings)
     return {"location": {"name": weather.get("location_label"), "country": weather.get("location_country"),
                          "latitude": weather.get("latitude"), "longitude": weather.get("longitude")},

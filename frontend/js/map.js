@@ -108,6 +108,8 @@
 
     let currentLat = null;
     let currentLon = null;
+    let currentAccuracy = null;
+    let currentPositionTimestamp = null;
     let currentName = 'Finding your location';
     let currentRegion = '';
     let currentCountryCode = '';
@@ -184,7 +186,10 @@
 
     function updateSidebarBadge(name, region, countryCode, lat, lon) {
         if (sidebarCityEl) sidebarCityEl.textContent = name || 'Selected Location';
-        if (sidebarRegionEl) sidebarRegionEl.textContent = region || 'Worldwide';
+        if (sidebarRegionEl) {
+            sidebarRegionEl.textContent = region || 'Worldwide';
+            sidebarRegionEl.title = region || '';
+        }
         if (sidebarFlagEl) sidebarFlagEl.textContent = getCountryFlag(countryCode);
         if (sidebarCoordsEl && Number.isFinite(lat) && Number.isFinite(lon)) {
             const latDir = lat >= 0 ? 'N' : 'S';
@@ -444,6 +449,8 @@
 
         const lat = Number(city.lat);
         const lon = Number(city.lon);
+        currentAccuracy = null;
+        currentPositionTimestamp = null;
 
         // Avoid re-triggering if coordinates are essentially unchanged
         if (Math.abs(lat - currentLat) < 0.0001 && Math.abs(lon - currentLon) < 0.0001) {
@@ -466,12 +473,28 @@
     document.addEventListener('weatherly:device-location-active', (e) => {
         const detail = e.detail;
         if (detail && Number.isFinite(detail.latitude) && Number.isFinite(detail.longitude)) {
+            currentAccuracy = Number.isFinite(detail.accuracy) ? detail.accuracy : null;
+            currentPositionTimestamp = Number.isFinite(detail.timestamp) ? detail.timestamp : null;
             const deviceCountry = String(detail.country || '').trim();
             const countryCode = String(detail.countryCode || '').trim().toUpperCase() ||
                 (/^[A-Za-z]{2}$/.test(deviceCountry) ? deviceCountry.toUpperCase() : '');
+            const accuracy = Number.isFinite(detail.accuracy) ? detail.accuracy : null;
+            const needsAccuracyNotice = detail.approximate || !Number.isFinite(accuracy) || accuracy > 1000;
+            const accuracyLabel = Number.isFinite(accuracy)
+                ? accuracy >= 1000 ? `±${(accuracy / 1000).toFixed(1)} km` : `±${Math.round(accuracy)} m`
+                : 'unavailable';
+            const baseRegion = detail.region || [detail.district, detail.state, detail.country].filter(Boolean).join(', ') || 'Device location';
+            const locationNotices = [];
+            if (needsAccuracyNotice) {
+                locationNotices.push(`Approximate GPS accuracy ${accuracyLabel}; tap Current Location to retry`);
+            }
+            if (detail.approximateName) {
+                locationNotices.push('Place name could not be verified by reverse geocoding');
+            }
+            const region = [baseRegion, ...locationNotices].filter(Boolean).join(' · ');
             handleMapSelection(detail.latitude, detail.longitude, 10, true, {
                 name: detail.name || 'Current Device Location',
-                region: detail.region || [detail.district, detail.state, detail.country].filter(Boolean).join(', ') || 'Device location',
+                region,
                 country: detail.country || '',
                 countryCode
             });
