@@ -382,17 +382,17 @@
 
     function readSavedBaseMode() {
         try {
-            return window.localStorage.getItem('airsense:map-layer') === 'satellite'
-                ? 'satellite'
-                : 'standard';
+            const stored = window.localStorage.getItem('airsense:map-layer');
+            return stored === 'standard' ? 'standard' : 'satellite';
         } catch {
-            return 'standard';
+            return 'satellite';
         }
     }
 
     function setBaseLayer(mode) {
         if (!sidebarMap || !standardBaseLayer) return;
-        const nextMode = mode === 'satellite' ? 'satellite' : 'standard';
+        // Satellite imagery remains the canvas beneath every weather layer.
+        const nextMode = mode === 'standard' ? 'standard' : 'satellite';
         if (activeBaseMode === nextMode && sidebarMap.hasLayer(standardBaseLayer) === (nextMode === 'standard')) return;
 
         if (sidebarMap.hasLayer(standardBaseLayer)) sidebarMap.removeLayer(standardBaseLayer);

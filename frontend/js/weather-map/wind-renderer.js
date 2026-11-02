@@ -170,6 +170,9 @@
                 this._staticDrawn = false;
                 this._respawn(true);
             },
+            setOpacity: function (value) {
+                this._opacity = Math.max(0, Math.min(1, Number(value)));
+            },
             _resize: function () {
                 const size = this._map.getSize();
                 const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -217,6 +220,7 @@
                 context.clearRect(0, 0, size.x, size.y);
                 const palette = window.AirSensePalettes;
                 context.lineCap = 'round';
+                context.globalAlpha = this._opacity ?? 0.9;
                 for (let index = 0; index < 60; index += 1) {
                     const lat = this._field.south + Math.random() * (this._field.north - this._field.south);
                     const lon = this._field.west + Math.random() * (this._field.east - this._field.west);
@@ -244,6 +248,7 @@
                 const palette = window.AirSensePalettes;
                 context.lineCap = 'round';
                 context.lineJoin = 'round';
+                context.globalAlpha = this._opacity ?? 0.9;
 
                 this._particles.forEach((particle) => {
                     const point = this._map.containerPointToLatLng(L.point(particle.x, particle.y));

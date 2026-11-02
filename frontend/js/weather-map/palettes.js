@@ -61,6 +61,10 @@
             [30, [94, 103, 233]],
             [50, [135, 75, 221]],
             [80, [195, 66, 214]]
+        ],
+        pressure: [
+            [940, [35, 74, 190]], [970, [55, 170, 220]], [990, [77, 205, 160]],
+            [1010, [245, 220, 90]], [1030, [245, 140, 70]], [1060, [205, 55, 95]]
         ]
     };
 
@@ -85,6 +89,7 @@
         temperature: {
             label: 'Temperature',
             family: 'weather',
+            provider: 'weatherapi',
             variable: 'temperature_2m',
             unit: '°C',
             domain: [-40, 50],
@@ -94,6 +99,7 @@
         wind: {
             label: 'Wind',
             family: 'weather',
+            provider: 'weatherapi',
             variable: 'wind_speed_10m',
             unit: 'km/h',
             domain: [0, 80],
@@ -112,6 +118,7 @@
         rainfall: {
             label: 'Rainfall',
             family: 'weather',
+            provider: 'weatherapi',
             variable: 'precipitation',
             unit: 'mm',
             domain: [0, 10],
@@ -126,6 +133,14 @@
             domain: [0, 100],
             ticks: [0, 25, 50, 75, 100],
             opacity: 0.7
+        },
+        pressure: {
+            label: 'Atmospheric Pressure', family: 'weather', provider: 'weatherapi', variable: 'pressure_msl',
+            unit: 'hPa', domain: [940, 1060], ticks: [940, 970, 990, 1010, 1030, 1060], opacity: 0.62
+        },
+        radar: {
+            label: 'Weather Radar', family: 'radar', variable: null,
+            unit: 'Reflectivity', domain: [0, 1], ticks: [], opacity: 0.72
         },
         aqi: {
             label: 'Air Quality',

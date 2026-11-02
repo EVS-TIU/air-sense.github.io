@@ -86,14 +86,14 @@
         return { canvas: display, bbox: segment.bbox };
     }
 
-    function render(map, payload, mode) {
+    function render(map, payload, mode, opacityOverride) {
         const L = window.L;
         ensureWeatherPane(map);
         const group = L.layerGroup();
         if (!payload?.segments || mode === 'standard') return group;
 
         const meta = window.AirSensePalettes.MODES[mode];
-        const opacity = meta?.opacity ?? 0.6;
+        const opacity = opacityOverride ?? meta?.opacity ?? 0.6;
 
         payload.segments.forEach((segment) => {
             const rendered = buildSegmentCanvas(segment, mode);

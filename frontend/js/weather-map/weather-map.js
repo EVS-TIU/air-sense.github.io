@@ -23,6 +23,8 @@
     }
 
     const controllers = new Map();
+    let radarManifestCache = null;
+    let radarManifestFetchedAt = 0;
     const selects = [
         document.getElementById('sidebar-map-layer'),
         document.getElementById('modal-map-layer')
@@ -39,7 +41,7 @@
         } catch {
             // Storage can be unavailable in privacy modes.
         }
-        return 'standard';
+        return 'satellite';
     }
 
     function storeMode(mode) {
@@ -59,10 +61,14 @@
     }
 
     function isMapVisible(controller) {
-        if (!window.WeatherlyMap?.isMaximized?.()) return false;
         const container = controller.map.getContainer?.();
         if (!container) return false;
-        return container.offsetWidth > 20 && container.offsetHeight > 20;
+        // The same Leaflet instance moves between the sidebar and full-screen
+        // modal. Weather layers must work in both places; only skip a map that
+        // is genuinely hidden or has not been laid out yet.
+        const bounds = container.getBoundingClientRect();
+        return bounds.width > 20 && bounds.height > 20 &&
+            getComputedStyle(container).visibility !== 'hidden';
     }
 
     function viewportBbox(map) {
@@ -89,11 +95,14 @@
     function updateLegend(controller, state) {
         if (!controller.legend) return;
         const mode = controller.mode;
-        controller.legend.update({
+        controller.legendState = {
+            ...(controller.legendState || {}),
             mode,
             status: 'ready',
+            opacity: controller.opacities[controller.mode] ?? palettes.MODES[controller.mode]?.opacity ?? 0.6,
             ...state
-        });
+        };
+        controller.legend.update(controller.legendState);
     }
 
     function removeScalar(controller) {
@@ -112,6 +121,8 @@
     function clearVisuals(controller) {
         removeScalar(controller);
         removeWind(controller);
+        if (controller.radar && controller.map.hasLayer(controller.radar)) controller.map.removeLayer(controller.radar);
+        if (controller.weatherApiTile && controller.map.hasLayer(controller.weatherApiTile)) controller.map.removeLayer(controller.weatherApiTile);
     }
 
     function applyPayload(controller, payload, mode, key) {
@@ -144,8 +155,11 @@
                 return;
             }
             removeScalar(controller);
-            controller.overlay = scalarRenderer.render(controller.map, payload, mode);
-            controller.overlay.addTo(controller.map);
+            removeScalar(controller);
+            if (meta.provider !== 'weatherapi') {
+                controller.overlay = scalarRenderer.render(controller.map, payload, mode, controller.opacities[mode]);
+                controller.overlay.addTo(controller.map);
+            }
             if (!controller.wind) {
                 controller.wind = windRenderer.createLayer(controller.map);
             }
@@ -153,6 +167,7 @@
                 controller.map.addLayer(controller.wind);
             }
             controller.wind.setData(payload);
+            controller.wind.setOpacity(controller.opacities[mode] ?? meta.opacity);
             updateLegend(controller, { payload });
             return;
         }
@@ -167,7 +182,7 @@
             return;
         }
         removeScalar(controller);
-        controller.overlay = scalarRenderer.render(controller.map, payload, mode);
+        controller.overlay = scalarRenderer.render(controller.map, payload, mode, controller.opacities[mode]);
         controller.overlay.addTo(controller.map);
         updateLegend(controller, { payload });
     }
@@ -176,6 +191,10 @@
         const mode = controller.mode;
         const meta = palettes.MODES[mode];
 
+        if (mode === 'radar') {
+            loadRadar(controller);
+            return;
+        }
         if (mode === 'standard' || mode === 'satellite' || !meta || meta.family === 'none') {
             clearVisuals(controller);
             updateLegend(controller, { mode });
@@ -183,6 +202,11 @@
         }
 
         if (!isMapVisible(controller)) return;
+
+        if (meta.provider === 'weatherapi') {
+            loadWeatherApiTile(controller, mode);
+            if (mode !== 'wind') return;
+        }
 
         const bbox = viewportBbox(controller.map);
         if (!bbox) return;
@@ -214,6 +238,63 @@
             });
     }
 
+    function loadWeatherApiTile(controller, mode) {
+        const layerPaths = {
+            temperature: 'tmp2m', rainfall: 'precip', pressure: 'pressure', wind: 'wind'
+        };
+        const path = layerPaths[mode];
+        if (!path) return;
+        scalarRenderer.ensureWeatherPane(controller.map);
+        const validTime = new Date();
+        validTime.setUTCMinutes(0, 0, 0);
+        const stamp = validTime.toISOString().replace(/[-:T]/g, '').slice(0, 10);
+        const opacity = controller.opacities[mode] ?? palettes.MODES[mode].opacity;
+        if (controller.weatherApiTile && controller.weatherApiTileMode === mode && controller.weatherApiStamp === stamp) {
+            controller.weatherApiTile.setOpacity(opacity);
+            if (!controller.map.hasLayer(controller.weatherApiTile)) controller.weatherApiTile.addTo(controller.map);
+            updateLegend(controller, { tileTime: validTime.toISOString(), tileSource: 'WeatherAPI' });
+            return;
+        }
+        if (controller.weatherApiTile && controller.map.hasLayer(controller.weatherApiTile)) controller.map.removeLayer(controller.weatherApiTile);
+        controller.weatherApiTileMode = mode;
+        controller.weatherApiStamp = stamp;
+        controller.weatherApiTile = window.L.tileLayer(
+            `https://weathermaps.weatherapi.com/${path}/tiles/${stamp}/{z}/{x}/{y}.png`,
+            { minZoom: 0, maxZoom: 19, opacity, pane: 'weatherPane', attribution: 'Weather map tiles by <a href="https://www.weatherapi.com/docs/weather-maps/">WeatherAPI.com</a>' }
+        ).addTo(controller.map);
+        updateLegend(controller, { status: 'ready', tileTime: validTime.toISOString(), tileSource: 'WeatherAPI' });
+    }
+
+    async function loadRadar(controller) {
+        if (!isMapVisible(controller)) return;
+        scalarRenderer.ensureWeatherPane(controller.map);
+        const requestId = controller.requestId;
+        updateLegend(controller, { status: 'loading' });
+        try {
+            let manifest = radarManifestCache;
+            if (!manifest || Date.now() - radarManifestFetchedAt > 120000) {
+                const response = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-store' });
+                if (!response.ok) throw new Error(`Radar metadata unavailable (${response.status})`);
+                manifest = await response.json();
+                radarManifestCache = manifest;
+                radarManifestFetchedAt = Date.now();
+            }
+            if (requestId !== controller.requestId || controller.mode !== 'radar') return;
+            const frames = manifest?.radar?.past;
+            const frame = Array.isArray(frames) && frames.length ? frames[frames.length - 1] : null;
+            if (!frame?.path || !manifest.host) throw new Error('No recent radar frame is available for this view.');
+            if (controller.radar) controller.map.removeLayer(controller.radar);
+            controller.radar = window.L.tileLayer(`${manifest.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
+                minZoom: 0, maxNativeZoom: 7, maxZoom: 19, opacity: controller.opacities.radar ?? palettes.MODES.radar.opacity,
+                pane: 'weatherPane', attribution: 'Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>'
+            }).addTo(controller.map);
+            updateLegend(controller, { status: 'ready', radarTime: frame.time, radarGenerated: manifest.generated });
+        } catch (error) {
+            if (requestId !== controller.requestId) return;
+            updateLegend(controller, { status: 'error', error: error?.message || 'Radar data unavailable. Check again shortly.' });
+        }
+    }
+
     function scheduleUpdate(controller, delay) {
         if (!controller) return;
         clearTimeout(controller.timer);
@@ -230,6 +311,7 @@
         clearTimeout(controller.timer);
         controller.timer = null;
         controller.mode = mode;
+        controller.legendState = {};
         controller.requestId += 1;
         clearVisuals(controller);
 
@@ -269,6 +351,12 @@
             payloadKey: null,
             overlay: null,
             wind: null,
+            radar: null,
+            weatherApiTile: null,
+            weatherApiTileMode: null,
+            weatherApiStamp: null,
+            legendState: {},
+            opacities: {},
             requestId: 0,
             timer: null
         };
@@ -326,6 +414,20 @@
     selects.forEach((select) => {
         select.addEventListener('change', () => {
             setMode(select.value);
+        });
+    });
+
+    document.addEventListener('input', (event) => {
+        if (!event.target.matches('[data-map-opacity]')) return;
+        const value = Number(event.target.value);
+        controllers.forEach((controller) => {
+            controller.opacities[controller.mode] = value;
+            if (controller.overlay?.eachLayer) controller.overlay.eachLayer((layer) => layer.setOpacity?.(value));
+            else controller.overlay?.setOpacity?.(value);
+            controller.radar?.setOpacity(value);
+            controller.weatherApiTile?.setOpacity(value);
+            controller.wind?.setOpacity?.(value);
+            updateLegend(controller, { opacity: value });
         });
     });
 

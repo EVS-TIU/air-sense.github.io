@@ -14,6 +14,12 @@
         }[character]));
     }
 
+    function formatDataTime(value) {
+        if (!value) return '—';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? '—' : `${date.toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC')}`;
+    }
+
     function createControl(map, mapId) {
         const L = window.L;
         const control = L.control({ position: 'bottomleft' });
@@ -40,6 +46,39 @@
                         <a href="https://www.esri.com/en-us/arcgis/products/arcgis-imagery" target="_blank" rel="noopener">Imagery and reference layers by Esri</a>
                     </div>
                 `;
+                return;
+            }
+
+            if (mode === 'radar') {
+                const time = state.radarTime ? new Date(state.radarTime * 1000) : null;
+                const timeLabel = time && !Number.isNaN(time.getTime()) ? `${time.toISOString().replace('T', ' ').slice(0, 19)} UTC` : '—';
+                const generated = state.radarGenerated ? new Date(state.radarGenerated * 1000) : null;
+                const generatedLabel = generated && !Number.isNaN(generated.getTime()) ? `${generated.toISOString().replace('T', ' ').slice(0, 19)} UTC` : '—';
+                container.innerHTML = `
+                    <div class="airsense-legend__title"><span>Weather Radar</span><span class="airsense-legend__unit">dBZ</span></div>
+                    <div class="airsense-legend__bar" style="background:linear-gradient(90deg,#8ee9ff,#43b8ff,#3057e8,#a43ac4,#e63e6a,#ffd44a)"></div>
+                    <div class="airsense-legend__ticks"><span>Light</span><span>Moderate</span><span>Heavy</span></div>
+                    ${state.status === 'loading' ? '<div class="airsense-legend__status is-loading">Loading latest radar frame…</div>' : ''}
+                    ${state.status === 'error' ? `<div class="airsense-legend__status is-error">${escapeHtml(state.error)}</div>` : ''}
+                    <div class="airsense-legend__meta"><div>Frame: ${timeLabel}</div><div>Manifest updated: ${generatedLabel}</div><div>Coverage varies by radar · native zoom 7 · past frames only</div><div>10 minute steps · no nowcast</div></div>
+                    <div class="airsense-legend__attribution"><a href="https://www.rainviewer.com/api.html" target="_blank" rel="noopener">Weather data by RainViewer</a></div>
+                    <label class="airsense-opacity">Overlay opacity <input data-map-opacity type="range" min="0.15" max="1" step="0.05" value="0.72"></label>`;
+                return;
+            }
+
+            if (meta?.provider === 'weatherapi') {
+                const validTime = state.tileTime ? new Date(state.tileTime) : null;
+                const timeLabel = validTime && !Number.isNaN(validTime.getTime())
+                    ? `${validTime.toISOString().replace('T', ' ').slice(0, 16)} UTC`
+                    : '—';
+                container.innerHTML = `
+                    <div class="airsense-legend__title"><span>${meta.label}</span><span class="airsense-legend__unit">${meta.unit}</span></div>
+                    <div class="airsense-legend__status">${mode === 'wind' ? 'WeatherAPI speed tile · Open-Meteo animated flow' : 'Provider-rendered map colors · units shown above'}</div>
+                    ${state.status === 'loading' ? '<div class="airsense-legend__status is-loading">Loading latest map tiles…</div>' : ''}
+                    ${state.status === 'error' ? `<div class="airsense-legend__status is-error">${escapeHtml(state.error)}${mode === 'wind' ? ' · speed tile remains available' : ''}</div>` : ''}
+                    <div class="airsense-legend__meta"><div>Tile valid: ${timeLabel}</div>${mode === 'wind' ? `<div>Flow data: ${escapeHtml(formatDataTime(state.payload?.data_time))} · grid ≈ ${state.payload?.resolution_deg ?? '—'}°</div>` : ''}<div>Hourly map tiles · global coverage</div><div>Source: ${mode === 'wind' ? 'WeatherAPI + Open-Meteo' : 'WeatherAPI.com'}</div></div>
+                    <div class="airsense-legend__attribution"><a href="https://www.weatherapi.com/docs/weather-maps/" target="_blank" rel="noopener">WeatherAPI map tiles · free, no key</a>${mode === 'wind' ? ' · <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>' : ''}</div>
+                    <label class="airsense-opacity">Overlay opacity <input data-map-opacity type="range" min="0.15" max="1" step="0.05" value="${state.opacity ?? meta.opacity}"></label>`;
                 return;
             }
 
@@ -87,6 +126,7 @@
                 ${state.status === 'loading' ? '<div class="airsense-legend__status is-loading">Loading Open-Meteo data…</div>' : ''}
                 ${state.status === 'error' ? `<div class="airsense-legend__status is-error">${escapeHtml(state.error)}${typeof state.onRetry === 'function' ? ' <button type="button" class="airsense-legend__retry">Retry</button>' : ''}</div>` : ''}
                 ${state.payload?.stale ? '<div class="airsense-legend__status">Cached data</div>' : ''}
+                <label class="airsense-opacity">Overlay opacity <input data-map-opacity type="range" min="0.15" max="1" step="0.05" value="${state.opacity ?? meta.opacity ?? 0.6}"></label>
                 <div class="airsense-legend__meta">
                     <div>Data: ${timeLabel}</div>
                     <div>Grid ≈ ${gridLabel} · ${pointCount} pts</div>
