@@ -115,6 +115,7 @@
     }
 
     function applyPayload(controller, payload, mode, key) {
+        const meta = palettes.MODES[mode];
         if (!payload || !Array.isArray(payload.segments)) {
             updateLegend(controller, {
                 status: 'error',
@@ -135,7 +136,16 @@
                 });
                 return;
             }
+            if (!scalarRenderer.hasData(payload, mode)) {
+                updateLegend(controller, {
+                    status: 'error',
+                    error: 'No wind intensity data was returned for this view.'
+                });
+                return;
+            }
             removeScalar(controller);
+            controller.overlay = scalarRenderer.render(controller.map, payload, mode);
+            controller.overlay.addTo(controller.map);
             if (!controller.wind) {
                 controller.wind = windRenderer.createLayer(controller.map);
             }
@@ -148,6 +158,14 @@
         }
 
         removeWind(controller);
+        if (!scalarRenderer.hasData(payload, mode)) {
+            removeScalar(controller);
+            updateLegend(controller, {
+                status: 'error',
+                error: `No ${meta.label.toLowerCase()} data was returned for this view.`
+            });
+            return;
+        }
         removeScalar(controller);
         controller.overlay = scalarRenderer.render(controller.map, payload, mode);
         controller.overlay.addTo(controller.map);
@@ -158,9 +176,9 @@
         const mode = controller.mode;
         const meta = palettes.MODES[mode];
 
-        if (mode === 'standard' || !meta || meta.family === 'none') {
+        if (mode === 'standard' || mode === 'satellite' || !meta || meta.family === 'none') {
             clearVisuals(controller);
-            updateLegend(controller, { mode: 'standard' });
+            updateLegend(controller, { mode });
             return;
         }
 
@@ -215,8 +233,8 @@
         controller.requestId += 1;
         clearVisuals(controller);
 
-        if (mode === 'standard') {
-            updateLegend(controller, { mode: 'standard' });
+        if (mode === 'standard' || mode === 'satellite') {
+            updateLegend(controller, { mode });
             return;
         }
 

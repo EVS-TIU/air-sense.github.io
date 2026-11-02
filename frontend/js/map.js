@@ -77,16 +77,44 @@
         popupAnchor: [0, -34]
     });
 
-    // Tile options: Esri Dark Canvas with OSM fallback (no API key required)
+    // The satellite base uses real Esri World Imagery. Reference layers keep
+    // roads, administrative boundaries and place labels visible above imagery.
     const esriDarkUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-    const osmUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const esriImageryUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    const esriRoadsUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}';
+    const esriPlacesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
 
     function createTileLayer() {
         return window.L.tileLayer(esriDarkUrl, {
             maxZoom: 16,
             minZoom: 2,
-            attribution: '&copy; <a href="https://www.esri.com/">Esri</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>'
+            attribution: 'Map tiles &copy; <a href="https://www.esri.com/">Esri</a>'
         });
+    }
+
+    function createSatelliteLayers() {
+        const attribution = 'Imagery &copy; <a href="https://www.esri.com/">Esri</a>, Vantor, Earthstar Geographics and GIS User Community';
+        return [
+            window.L.tileLayer(esriImageryUrl, {
+                maxZoom: 19,
+                minZoom: 2,
+                attribution
+            }),
+            window.L.tileLayer(esriRoadsUrl, {
+                maxZoom: 19,
+                minZoom: 2,
+                opacity: 0.9,
+                pane: 'mapReferencePane',
+                attribution: 'Roads &copy; <a href="https://www.esri.com/">Esri</a>'
+            }),
+            window.L.tileLayer(esriPlacesUrl, {
+                maxZoom: 19,
+                minZoom: 2,
+                opacity: 0.95,
+                pane: 'mapReferencePane',
+                attribution: 'Boundaries and place labels &copy; <a href="https://www.esri.com/">Esri</a>'
+            })
+        ];
     }
 
     const sidebarMapEl = document.getElementById('interactive-map');
@@ -117,6 +145,9 @@
 
     let sidebarMap = null;
     let sidebarMarker = null;
+    let standardBaseLayer = null;
+    let satelliteBaseLayers = [];
+    let activeBaseMode = 'standard';
     let mapMaximized = false;
     let mapResizeFrame = null;
 
@@ -317,10 +348,15 @@
             scrollWheelZoom: true,
             attributionControl: true
         });
+        const referencePane = sidebarMap.createPane('mapReferencePane');
+        referencePane.style.zIndex = '430';
+        referencePane.style.pointerEvents = 'none';
         sidebarMap.fitWorld();
 
-        const tileLayer = createTileLayer();
-        tileLayer.addTo(sidebarMap);
+        standardBaseLayer = createTileLayer();
+        satelliteBaseLayers = createSatelliteLayers();
+        standardBaseLayer.addTo(sidebarMap);
+        setBaseLayer(readSavedBaseMode());
 
         sidebarMap.on('click', (e) => {
             handleMapSelection(e.latlng.lat, e.latlng.lng, null, false);
@@ -343,6 +379,38 @@
         updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
         announceMap('map', sidebarMap);
     }
+
+    function readSavedBaseMode() {
+        try {
+            return window.localStorage.getItem('airsense:map-layer') === 'satellite'
+                ? 'satellite'
+                : 'standard';
+        } catch {
+            return 'standard';
+        }
+    }
+
+    function setBaseLayer(mode) {
+        if (!sidebarMap || !standardBaseLayer) return;
+        const nextMode = mode === 'satellite' ? 'satellite' : 'standard';
+        if (activeBaseMode === nextMode && sidebarMap.hasLayer(standardBaseLayer) === (nextMode === 'standard')) return;
+
+        if (sidebarMap.hasLayer(standardBaseLayer)) sidebarMap.removeLayer(standardBaseLayer);
+        satelliteBaseLayers.forEach((layer) => {
+            if (sidebarMap.hasLayer(layer)) sidebarMap.removeLayer(layer);
+        });
+
+        if (nextMode === 'satellite') {
+            satelliteBaseLayers.forEach((layer) => layer.addTo(sidebarMap));
+        } else {
+            standardBaseLayer.addTo(sidebarMap);
+        }
+        activeBaseMode = nextMode;
+    }
+
+    document.addEventListener('weatherly:layer-change', (event) => {
+        setBaseLayer(event.detail?.mode);
+    });
 
     /* ----------------------------------------------------------------------
        Modal (Maximized) Map

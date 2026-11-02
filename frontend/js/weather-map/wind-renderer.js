@@ -23,7 +23,7 @@
         if (!segment) return null;
         const speedGrid = segment.values?.wind_speed_10m;
         const dirGrid = segment.values?.wind_direction_10m;
-        if (!Array.isArray(speedGrid)) return null;
+        if (!Array.isArray(speedGrid) || !Array.isArray(dirGrid)) return null;
 
         const rows = segment.rows;
         const columns = segment.columns;
@@ -96,12 +96,19 @@
             read(x0, y1) * (1 - tx) * ty +
             read(x1, y1) * tx * ty
         );
-        const direction = (
-            readDir(x0, y0) * (1 - tx) * (1 - ty) +
-            readDir(x1, y0) * tx * (1 - ty) +
-            readDir(x0, y1) * (1 - tx) * ty +
-            readDir(x1, y1) * tx * ty
-        );
+        const weights = [
+            [readDir(x0, y0), (1 - tx) * (1 - ty)],
+            [readDir(x1, y0), tx * (1 - ty)],
+            [readDir(x0, y1), (1 - tx) * ty],
+            [readDir(x1, y1), tx * ty]
+        ];
+        const directionVector = weights.reduce((vector, [degrees, weight]) => {
+            const radians = (degrees * Math.PI) / 180;
+            vector.x += Math.sin(radians) * weight;
+            vector.y += Math.cos(radians) * weight;
+            return vector;
+        }, { x: 0, y: 0 });
+        const direction = (Math.atan2(directionVector.x, directionVector.y) * 180 / Math.PI + 360) % 360;
 
         const radians = (direction * Math.PI) / 180;
         return {

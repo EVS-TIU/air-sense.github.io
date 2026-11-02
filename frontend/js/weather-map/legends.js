@@ -31,6 +31,18 @@
             const palettes = window.AirSensePalettes;
             const mode = state.mode;
             const meta = palettes.MODES[mode];
+            if (mode === 'satellite') {
+                container.innerHTML = `
+                    <div class="airsense-legend__title"><span>Satellite Imagery</span></div>
+                    <div class="airsense-legend__status">Real imagery · roads, boundaries and place labels</div>
+                    <div class="airsense-legend__meta"><div>Imagery date varies by location and tile</div></div>
+                    <div class="airsense-legend__attribution">
+                        <a href="https://www.esri.com/en-us/arcgis/products/arcgis-imagery" target="_blank" rel="noopener">Imagery and reference layers by Esri</a>
+                    </div>
+                `;
+                return;
+            }
+
             if (mode === 'standard' || !meta || meta.family === 'none') {
                 container.innerHTML = `
                     <div class="airsense-legend__title">
@@ -58,9 +70,9 @@
             const gridLabel = resolution
                 ? `~${resolution}°${resolutionKm ? ` (~${resolutionKm} km)` : ''}`
                 : '--';
-            const modelNote = meta.family === 'air'
-                ? 'CAMS global (~40 km)'
-                : 'Open-Meteo best match (~11–25 km)';
+            const sourceNote = meta.family === 'air'
+                ? 'Open-Meteo · CAMS ENSEMBLE global model (~40 km)'
+                : 'Open-Meteo forecast model (~11–25 km)';
             const pointCount = state.payload?.point_count || '--';
 
             container.innerHTML = `
@@ -78,7 +90,7 @@
                 <div class="airsense-legend__meta">
                     <div>Data: ${timeLabel}</div>
                     <div>Grid ≈ ${gridLabel} · ${pointCount} pts</div>
-                    <div>Model: ${modelNote}</div>
+                    <div>Source: ${sourceNote}</div>
                 </div>
                 <div class="airsense-legend__attribution">
                     <a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com (CC BY 4.0)</a><br>

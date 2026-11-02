@@ -13,7 +13,7 @@
     <!-- Map component styles -->
     <link rel="stylesheet" href="./css/map.css?v=20261102-5">
     <!-- Weather visualization layers -->
-    <link rel="stylesheet" href="./css/weather-layers.css?v=20261102-2">
+    <link rel="stylesheet" href="./css/weather-layers.css?v=20261102-3">
     <!-- Popular cities sidebar section -->
     <link rel="stylesheet" href="./css/popular-cities.css?v=20261102-1">
     <!-- Forecast Hourly component styles (Roshan) -->
@@ -285,6 +285,7 @@
                     <label class="map-layer-label" for="sidebar-map-layer">Weather layer</label>
                     <select class="map-layer-select" id="sidebar-map-layer" aria-label="Weather layer">
                         <option value="standard">Standard Map</option>
+                        <option value="satellite">Satellite</option>
                         <option value="temperature">Temperature</option>
                         <option value="wind">Wind</option>
                         <option value="humidity">Humidity</option>
@@ -742,6 +743,7 @@
                     <label class="map-layer-label" for="modal-map-layer">Weather layer</label>
                     <select class="map-layer-select map-layer-select--modal" id="modal-map-layer" aria-label="Weather layer">
                         <option value="standard">Standard Map</option>
+                        <option value="satellite">Satellite</option>
                         <option value="temperature">Temperature</option>
                         <option value="wind">Wind</option>
                         <option value="humidity">Humidity</option>
@@ -765,15 +767,15 @@
     <!-- Leaflet Map library -->
     <script src="./assets/vendor/leaflet/leaflet.js"></script>
     <!-- Map synchronization & interaction component -->
-    <script src="./js/map.js?v=20261102-6"></script>
+    <script src="./js/map.js?v=20261102-7"></script>
     <!-- Weather visualization layers -->
-    <script src="./js/weather-map/palettes.js?v=20261102-1"></script>
+    <script src="./js/weather-map/palettes.js?v=20261102-2"></script>
     <script src="./js/weather-map/data-store.js?v=20261102-2"></script>
     <script src="./js/weather-map/scalar-renderer.js?v=20261102-1"></script>
-    <script src="./js/weather-map/wind-renderer.js?v=20261102-1"></script>
-    <script src="./js/weather-map/legends.js?v=20261102-1"></script>
+    <script src="./js/weather-map/wind-renderer.js?v=20261102-2"></script>
+    <script src="./js/weather-map/legends.js?v=20261102-2"></script>
     <script src="./js/weather-map/popup.js?v=20261102-3"></script>
-    <script src="./js/weather-map/weather-map.js?v=20261102-2"></script>
+    <script src="./js/weather-map/weather-map.js?v=20261102-3"></script>
     <script src="./js/app.js?v=20261102-7" defer></script>
     <script src="./js/topbar.js?v=20261102-3" defer></script>
     <!-- Popular cities sidebar section -->
