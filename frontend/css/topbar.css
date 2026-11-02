@@ -1,6 +1,6 @@
 /* ==========================================================================
    TOP NAVIGATION (AKSHAT) - search, location selector, section nav,
-   temperature-unit switch, profile.
+   temperature-unit switch, profile, and responsive navigation menu.
    Loaded AFTER style.css. Placement (grid slot) stays in style.css.
    Uses new class names so it does not depend on the old .topbar__* rules.
    ========================================================================== */
@@ -590,6 +590,57 @@
     min-width: 200px;
 }
 
+.mobile-nav-menu {
+    display: none;
+}
+
+.mobile-nav-menu__trigger {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+}
+
+.mobile-nav-menu__trigger svg {
+    width: 21px;
+    height: 21px;
+}
+
+.mobile-nav-menu__panel {
+    min-width: 210px;
+}
+
+.mobile-nav-menu__item {
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    background: transparent;
+    border: 0;
+}
+
+.mobile-nav-menu__item[aria-checked="true"] {
+    color: #ffffff;
+    background: var(--accent-soft);
+}
+
+.mobile-nav-menu__item svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.mobile-nav-menu__separator {
+    height: 1px;
+    margin: 5px 8px;
+    background: rgba(116, 174, 213, 0.18);
+}
+
 /* --------------------------------------------------------------------------
    Focus
    -------------------------------------------------------------------------- */
@@ -623,16 +674,22 @@
     }
 }
 
-/* Mobile: row 1 search, row 2 location + unit + profile, row 3 nav links. */
+/* Mobile: keep the menu trigger beside search and move account/unit actions into its menu. */
 @media (max-width: 900px) {
     .topbar {
         flex-wrap: wrap;
         gap: 10px;
     }
 
+    .mobile-nav-menu {
+        display: block;
+        order: 0;
+    }
+
     .search-box {
         order: 1;
-        flex: 1 1 100%;
+        flex: 1 1 180px;
+        min-width: 0;
     }
 
     .location-btn,
@@ -649,28 +706,14 @@
     }
 
     .unit-select {
-        order: 3;
-        margin-left: 0 !important;
+        display: none;
     }
 
     .profile {
-        order: 4;
+        display: none;
     }
 
     .topbar-nav {
-        order: 5;
-        flex: 1 1 100%;
-
-        display: flex;
-        margin-left: 0;
-        padding-top: 6px;
-        overflow-x: auto;
-
-        border-top: 1px solid rgba(116, 174, 213, 0.12);
-        scrollbar-width: none;
-    }
-
-    .topbar-nav::-webkit-scrollbar {
         display: none;
     }
 }

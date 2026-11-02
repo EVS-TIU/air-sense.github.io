@@ -6,7 +6,7 @@
      weatherly:location-change  detail: { id, name, region, lat, lon }
      weatherly:unit-change      detail: { unit: 'C' | 'F' }
      weatherly:navigate         detail: { view: 'now' | 'today' | 'weekly' | 'history' }
-     weatherly:profile-action   detail: { action: 'profile' | 'settings' | 'signout' }
+     weatherly:profile-action   detail: { action: 'login' | 'profile' | 'settings' | 'signout' }
 
    Pull the current state at any time (e.g. when your module loads):
      WeatherlyTopbar.getLocation()      -> current location object
@@ -524,9 +524,25 @@
         unitLabel.textContent = '\u00B0' + state.unit;
         document.documentElement.dataset.unit = state.unit;
         unitDropdown.setSelected(state.unit);
+        const mobileUnitOptions = topbar.querySelectorAll('.mobile-nav-menu [role="menuitemradio"]');
+        mobileUnitOptions.forEach((option) => {
+            option.setAttribute('aria-checked', String(option.dataset.value === state.unit));
+        });
         writeStorage(STORAGE_KEYS.unit, state.unit);
         emit('unit-change', { unit: state.unit });
     }
+
+    const mobileMenuRoot = topbar.querySelector('.mobile-nav-menu');
+    createDropdown(mobileMenuRoot, (action) => {
+        if (action === 'C' || action === 'F') {
+            setUnit(action);
+        } else if (action === 'login') {
+            emit('profile-action', { action: action });
+        } else if (action === 'climate-analysis') {
+            emit('navigate', { view: action });
+            window.location.assign('./climate-analysis/climate-analysis.html');
+        }
+    });
 
     function toDisplayTemp(celsius) {
         return Math.round(state.unit === 'F' ? (celsius * 9) / 5 + 32 : celsius);
