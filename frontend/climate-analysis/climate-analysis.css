@@ -454,7 +454,7 @@
    Responsive — keep desktop proportions, gracefully stack on smaller widths
    -------------------------------------------------------------------------- */
 
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
     .ca-body {
         grid-template-columns: 1fr;
     }
