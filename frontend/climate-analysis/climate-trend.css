@@ -1,0 +1,493 @@
+/* ==========================================================================
+   Climate Trend tab — styles
+   Everything is scoped under #ca-climate-trend / .ct-* so it cannot affect
+   any existing page, panel or component.
+   ========================================================================== */
+
+#ca-climate-trend {
+    --ct-cyan: #21a9ff;
+    --ct-cyan-soft: rgba(33, 169, 255, 0.14);
+    --ct-orange: #ff7a3d;
+    --ct-green: #2ee59d;
+    --ct-text: var(--text, #eef6ff);
+    --ct-muted: #a8c3d8;
+    --ct-line: rgba(116, 174, 213, 0.16);
+    --ct-card-bg: linear-gradient(150deg, rgba(14, 38, 58, 0.78), rgba(6, 22, 38, 0.86));
+}
+
+/* The panel already has its own background/border from climate-analysis.css.
+   Only let it scroll if the content ever outgrows it. */
+#ca-climate-trend.is-active {
+    overflow: auto;
+}
+
+.ct {
+    height: 100%;
+    min-height: 0;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    color: var(--ct-text);
+}
+
+/* ---------- Header ---------- */
+
+.ct-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ct-line);
+}
+
+.ct-head__icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--ct-cyan);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ct-head__text {
+    min-width: 0;
+    flex: 1;
+}
+
+.ct-head__title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+}
+
+.ct-head__sub {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    color: var(--ct-muted);
+}
+
+/* ---------- Range dropdown ---------- */
+
+.ct-range {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.ct-range__btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 40px;
+    padding: 0 14px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ct-text);
+    background: rgba(8, 26, 42, 0.72);
+    border: 1px solid var(--ct-line);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.ct-range__btn:hover,
+.ct-range__btn[aria-expanded="true"] {
+    border-color: rgba(33, 169, 255, 0.45);
+    background: rgba(33, 169, 255, 0.1);
+}
+
+.ct-range__btn svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ct-range__btn .ct-range__chev {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+}
+
+.ct-range__btn[aria-expanded="true"] .ct-range__chev {
+    transform: rotate(180deg);
+}
+
+.ct-range__menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 100%;
+    margin: 0;
+    padding: 5px;
+    list-style: none;
+    background: #0a2236;
+    border: 1px solid rgba(116, 174, 213, 0.28);
+    border-radius: 12px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+.ct-range__menu[hidden] {
+    display: none;
+}
+
+.ct-range__item {
+    padding: 9px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+    color: var(--ct-muted);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.ct-range__item:hover,
+.ct-range__item:focus-visible {
+    outline: none;
+    color: #fff;
+    background: var(--ct-cyan-soft);
+}
+
+.ct-range__item[aria-selected="true"] {
+    color: #fff;
+    background: rgba(33, 169, 255, 0.22);
+}
+
+/* ---------- KPI cards ---------- */
+
+.ct-stats {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.ct-stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 12px 14px;
+    background: var(--ct-card-bg);
+    border: 1px solid var(--ct-line);
+    border-radius: 14px;
+}
+
+.ct-stat--heat   { --tone: var(--ct-orange); border-color: rgba(255, 122, 61, 0.38); }
+.ct-stat--rain   { --tone: var(--ct-green);  border-color: rgba(46, 229, 157, 0.30); }
+.ct-stat--hot    { --tone: #ffb547;          border-color: rgba(255, 181, 71, 0.36); }
+.ct-stat--season { --tone: var(--ct-cyan);   border-color: rgba(33, 169, 255, 0.34); }
+
+.ct-stat__icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--tone);
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ct-stat__body {
+    min-width: 0;
+    flex: 1;
+}
+
+.ct-stat__label {
+    display: block;
+    font-size: 11.5px;
+    color: var(--ct-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ct-stat__value {
+    display: block;
+    margin-top: 2px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+    color: var(--tone);
+    white-space: nowrap;
+}
+
+.ct-stat__badge {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--tone);
+    background: color-mix(in srgb, var(--tone) 18%, transparent);
+    border: 1px solid color-mix(in srgb, var(--tone) 40%, transparent);
+}
+
+.ct-stat__badge svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ---------- Chart cards ---------- */
+
+.ct-charts {
+    flex: 1;
+    min-height: 230px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.ct-chart {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 14px 14px 10px;
+    background: var(--ct-card-bg);
+    border: 1px solid var(--ct-line);
+    border-radius: 14px;
+}
+
+.ct-chart__head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.ct-chart__head svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--ct-cyan);
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ct-chart__title {
+    margin: 0;
+    flex: 1;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.ct-chip {
+    padding: 4px 10px;
+    font-size: 11.5px;
+    color: #dcefff;
+    background: rgba(8, 26, 42, 0.8);
+    border: 1px solid var(--ct-line);
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+.ct-chart__plot {
+    position: relative;
+    flex: 1;
+    min-height: 150px;
+}
+
+.ct-chart__plot > svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.ct-svg-text {
+    font-family: inherit;
+    font-size: 11px;
+    fill: #c4d8e8;
+}
+
+.ct-grid-line {
+    stroke: rgba(116, 174, 213, 0.12);
+    stroke-width: 1;
+}
+
+.ct-hit {
+    fill: transparent;
+    cursor: crosshair;
+}
+
+/* Floating value tag (also used as the pinned "latest year" tag) */
+.ct-tip {
+    position: absolute;
+    z-index: 5;
+    min-width: 62px;
+    padding: 5px 9px;
+    text-align: center;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    background: rgba(5, 20, 34, 0.94);
+    border: 1px solid rgba(116, 174, 213, 0.3);
+    border-radius: 8px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transition: left 0.12s ease, top 0.12s ease;
+}
+
+.ct-tip[hidden] {
+    display: none;
+}
+
+.ct-tip__year {
+    display: block;
+    font-size: 11px;
+    color: var(--ct-muted);
+}
+
+.ct-tip__val {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ct-orange);
+}
+
+.ct-tip--rain .ct-tip__val {
+    color: #52c4ff;
+}
+
+.ct-legend {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    padding-top: 8px;
+    font-size: 12px;
+    color: #dcefff;
+}
+
+.ct-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.ct-legend__dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid var(--ct-orange);
+}
+
+.ct-legend__sq {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: var(--ct-cyan);
+}
+
+.ct-legend__dash {
+    width: 26px;
+    height: 0;
+    border-top: 2px dashed var(--ct-green);
+}
+
+/* ---------- Insight bar ---------- */
+
+.ct-insight {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 18px;
+    background: var(--ct-card-bg);
+    border: 1px solid var(--ct-line);
+    border-radius: 14px;
+}
+
+.ct-insight__title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+    padding-right: 18px;
+    border-right: 1px solid var(--ct-line);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.ct-insight__title svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: var(--ct-green);
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ct-insight__text {
+    margin: 0;
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #dcefff;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1300px) {
+    .ct-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1100px) {
+    .ct-charts {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ct-chart__plot {
+        min-height: 220px;
+    }
+}
+
+@media (max-width: 640px) {
+    .ct-head {
+        flex-wrap: wrap;
+    }
+
+    .ct-stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ct-insight {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .ct-insight__title {
+        border-right: 0;
+        padding-right: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #ca-climate-trend * {
+        transition: none !important;
+    }
+}
