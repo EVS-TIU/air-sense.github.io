@@ -16,17 +16,16 @@
     <!-- Leaflet interactive map styles -->
     <link rel="stylesheet" href="../assets/vendor/leaflet/leaflet.css">
     <!-- Map component styles -->
-    <link rel="stylesheet" href="../css/map.css?v=20261102-3">
+    <link rel="stylesheet" href="../css/map.css?v=20261102-4">
     <!-- Popular cities sidebar section -->
     <link rel="stylesheet" href="../css/popular-cities.css?v=20261102-1">
     <!-- Climate Analysis module styles -->
-    <link rel="stylesheet" href="./climate-analysis.css?v=20261102-3">
+    <link rel="stylesheet" href="./climate-analysis.css?v=20261102-5">
 
     <!-- Page-specific overrides: make Climate Analysis always visible on this page -->
     <style>
         /* Hide dashboard weather sections that don't belong on this page
            (markup isn't here, but just in case shared JS adds them). */
-        .current-weather,
         .hourly-forecast,
         .weather-details,
         .week-forecast {
@@ -135,6 +134,11 @@
                     </svg>
                 </div>
                 <span class="sidebar__brand-name">AirSense</span>
+                <button class="sidebar-close" type="button" aria-label="Close navigation menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                    </svg>
+                </button>
             </div>
 
             <!-- 2. Current Location Card -->
@@ -152,7 +156,7 @@
 
             <!-- 3. Sidebar Navigation -->
             <nav class="sidebar__nav" aria-label="Main sidebar navigation">
-                <a href="../index.html" data-nav="current-weather" data-view="current-weather">
+                <a href="../index.html">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="12" r="5"/>
                         <line x1="12" y1="1" x2="12" y2="3"/>
@@ -402,9 +406,10 @@
     <!-- Leaflet Map library -->
     <script src="../assets/vendor/leaflet/leaflet.js"></script>
     <!-- Map synchronization & interaction component -->
-    <script src="../js/map.js?v=20261102-3"></script>
+    <script src="../js/map.js?v=20261102-4"></script>
     <script src="../js/app.js?v=20261101-16" defer></script>
-    <script src="../js/topbar.js?v=20261101-3" defer></script>
+    <script src="../js/topbar.js?v=20261102-4" defer></script>
+    <script src="../js/sidebar.js?v=20261102-1" defer></script>
     <!-- Popular cities sidebar section -->
     <script src="../js/popular-cities-data.js?v=20261102-1" defer></script>
     <script src="../js/popular-cities.js?v=20261102-1" defer></script>

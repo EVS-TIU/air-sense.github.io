@@ -533,28 +533,30 @@
     }
 
     const mobileMenuRoot = topbar.querySelector('.mobile-nav-menu');
-    createDropdown(mobileMenuRoot, (action) => {
-        if (action === 'C' || action === 'F') {
-            setUnit(action);
-        } else if (action === 'login') {
-            emit('profile-action', { action: action });
-        } else if (action === 'climate-analysis') {
-            emit('navigate', { view: action });
-            window.location.assign('./climate-analysis/climate-analysis.html');
-        } else {
-            const sidebarLink = document.querySelector(`.sidebar__nav a[data-nav="${action}"]`);
-            if (sidebarLink) {
-                sidebarLink.click();
-                mobileMenuRoot.querySelectorAll('[data-nav]').forEach((item) => {
-                    item.removeAttribute('aria-current');
-                });
-                const mobileNavItem = mobileMenuRoot.querySelector(`[data-value="${action}"]`);
-                if (mobileNavItem) mobileNavItem.setAttribute('aria-current', 'page');
+    if (mobileMenuRoot) {
+        createDropdown(mobileMenuRoot, (action) => {
+            if (action === 'C' || action === 'F') {
+                setUnit(action);
+            } else if (action === 'login') {
+                emit('profile-action', { action: action });
+            } else if (action === 'climate-analysis') {
+                emit('navigate', { view: action });
+                window.location.assign('./climate-analysis/climate-analysis.html');
             } else {
-                console.error(`Mobile navigation target "${action}" is missing from the sidebar.`);
+                const sidebarLink = document.querySelector(`.sidebar__nav a[data-nav="${action}"]`);
+                if (sidebarLink) {
+                    sidebarLink.click();
+                    mobileMenuRoot.querySelectorAll('[data-nav]').forEach((item) => {
+                        item.removeAttribute('aria-current');
+                    });
+                    const mobileNavItem = mobileMenuRoot.querySelector(`[data-value="${action}"]`);
+                    if (mobileNavItem) mobileNavItem.setAttribute('aria-current', 'page');
+                } else {
+                    console.error(`Mobile navigation target "${action}" is missing from the sidebar.`);
+                }
             }
-        }
-    });
+        });
+    }
 
     function toDisplayTemp(celsius) {
         return Math.round(state.unit === 'F' ? (celsius * 9) / 5 + 32 : celsius);
