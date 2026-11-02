@@ -90,8 +90,18 @@
         return { lat: Number(location.lat), lon: Number(location.lon) };
     }
 
+    // Accept either a two-letter code or a full country name.
+    function countryCodeFor(location) {
+        const raw = String(location?.countryCode || location?.country || '').trim();
+        if (!raw) return '';
+        if (/^[A-Za-z]{2}$/.test(raw)) return raw.toUpperCase();
+
+        const match = countries.find((country) => normalise(country.name) === normalise(raw));
+        return match ? match.code : '';
+    }
+
     function locationBelongsToCountry(location, country) {
-        const code = String(location?.countryCode || '').trim().toUpperCase();
+        const code = countryCodeFor(location);
         return !code || code === country.code;
     }
 
@@ -138,7 +148,7 @@
         const coordinates = locationCoordinates(location);
         if (!coordinates) return null;
 
-        const code = String(location.countryCode || '').trim().toUpperCase();
+        const code = countryCodeFor(location);
         if (code && countryByCode.has(code)) return countryByCode.get(code);
 
         // Reverse geocoding can omit the country code; fall back to the
@@ -402,18 +412,37 @@
     /* ----------------------------------------------------------------------
        Synchronisation with the rest of the dashboard
        ---------------------------------------------------------------------- */
-    document.addEventListener('weatherly:location-change', (event) => {
-        const location = event.detail;
+    function applyLocation(location) {
         if (!locationCoordinates(location)) return;
-
         currentLocation = location;
-        const country = findCountryForLocation(location);
 
+        const country = findCountryForLocation(location);
         if (country && country !== selectedCountry && locationBelongsToCountry(location, country)) {
             setCountry(country, location);
         } else if (selectedCountry) {
             renderCities(location);
         }
+    }
+
+    document.addEventListener('weatherly:location-change', (event) => {
+        applyLocation(event.detail);
+    });
+
+    // The dashboard's GPS flow announces the device location separately from
+    // manual location changes, so follow it as well.
+    document.addEventListener('weatherly:device-location-active', (event) => {
+        const detail = event.detail || {};
+        if (!isFiniteCoordinate(detail.latitude) || !isFiniteCoordinate(detail.longitude)) return;
+
+        const country = detail.country || '';
+        applyLocation({
+            name: detail.name || 'Current Location',
+            region: country,
+            country,
+            countryCode: country,
+            lat: Number(detail.latitude),
+            lon: Number(detail.longitude)
+        });
     });
 
     // Initial state: use the current dashboard location when possible.

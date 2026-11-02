@@ -425,11 +425,13 @@
     document.addEventListener('weatherly:device-location-active', (e) => {
         const detail = e.detail;
         if (detail && Number.isFinite(detail.latitude) && Number.isFinite(detail.longitude)) {
+            const deviceCountry = String(detail.country || '').trim();
+            const countryCode = /^[A-Za-z]{2}$/.test(deviceCountry) ? deviceCountry.toUpperCase() : '';
             handleMapSelection(detail.latitude, detail.longitude, 10, true, {
                 name: detail.name || 'Current Device Location',
                 region: detail.country || 'Device GPS',
                 country: detail.country || '',
-                countryCode: ''
+                countryCode
             });
         }
     });
@@ -440,6 +442,11 @@
             e.preventDefault();
             document.querySelectorAll('.sidebar__nav a').forEach((l) => l.classList.remove('is-active'));
             link.classList.add('is-active');
+
+            // Open the sidebar map in its maximized modal state.
+            if (link.dataset.nav === 'hotspot-map' || link.dataset.view === 'hotspot-map') {
+                openModalMap();
+            }
 
             document.dispatchEvent(new CustomEvent('weatherly:navigate', {
                 detail: { view: link.dataset.view || link.dataset.nav },
