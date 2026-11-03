@@ -51,7 +51,8 @@
     }
 
     function gridKey(family, bbox, zoom, variables, forecastTime) {
-        return `${family}:${zoom}:${roundedBbox(bbox)}:${variables || ''}:${forecastTime || 'current'}`;
+        const rendererVersion = family === 'air' ? 'cams-native-v3' : 'v1';
+        return `${family}:${rendererVersion}:${zoom}:${roundedBbox(bbox)}:${variables || ''}:${forecastTime || 'current'}`;
     }
 
     async function requestJson(url, signal) {
@@ -148,6 +149,19 @@
         return payload;
     }
 
+    async function getStations(bbox, signal) {
+        const url = new URL(`${apiBase()}/map/air-quality/stations`);
+        url.searchParams.set('bbox', bbox.map((value) => Number(value).toFixed(4)).join(','));
+        return requestJson(url.toString(), signal);
+    }
+
+    async function getStation(stationId, signal) {
+        const id = Number(stationId);
+        if (!Number.isInteger(id) || id < 1) throw new Error('Invalid station id');
+        const url = `${apiBase()}/map/air-quality/stations/${id}`;
+        return requestJson(url, signal);
+    }
+
     function clear() {
         entries.clear();
         points.clear();
@@ -157,6 +171,8 @@
     window.AirSenseMapData = {
         getGrid,
         getPoint,
+        getStations,
+        getStation,
         clear,
         apiBase,
         roundedBbox

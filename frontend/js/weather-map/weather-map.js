@@ -188,6 +188,227 @@
         }
     }
 
+    function removeAqiStations(controller) {
+        controller.stationRequestId = (controller.stationRequestId || 0) + 1;
+        if (controller.stationOverlay && controller.map.hasLayer(controller.stationOverlay)) {
+            controller.map.removeLayer(controller.stationOverlay);
+        }
+        controller.stationOverlay = null;
+    }
+
+    function removeAqiCities(controller) {
+        if (controller.cityOverlay && controller.map.hasLayer(controller.cityOverlay)) {
+            controller.map.removeLayer(controller.cityOverlay);
+        }
+        controller.cityOverlay = null;
+        controller.cityCount = 0;
+        controller.cityState = 'none';
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[character]));
+    }
+
+    function refreshAqiStations(controller, bbox, zoom) {
+        removeAqiStations(controller);
+        if (zoom < 7) {
+            updateLegend(controller, { stationStatus: 'zoom-in', stationCount: 0 });
+            return;
+        }
+        const requestId = controller.stationRequestId;
+        const viewportRequestId = controller.requestId;
+        updateLegend(controller, { stationStatus: 'loading', stationCount: 0 });
+        dataStore.getStations(bbox)
+            .then((result) => {
+                if (controller.mode !== 'aqi' || requestId !== controller.stationRequestId ||
+                    viewportRequestId !== controller.requestId) return;
+                const stations = Array.isArray(result?.stations) ? result.stations : [];
+                if (result?.status !== 'available' || !stations.length) {
+                    updateLegend(controller, {
+                        stationStatus: result?.status === 'not_configured' ? 'not-configured' : 'unavailable',
+                        stationCount: 0
+                    });
+                    return;
+                }
+                const group = window.L.layerGroup();
+                const stationRenderer = window.L.canvas({ padding: 0.5 });
+                stations.forEach((station) => {
+                    const lat = Number(station.latitude);
+                    const lon = Number(station.longitude);
+                    const value = Number(station.aqi);
+                    if (![lat, lon, value].every(Number.isFinite)) return;
+                    const rgb = palettes.colorFor('aqi', value) || [150, 150, 150];
+                    const color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+                    const marker = window.L.circleMarker([lat, lon], {
+                        radius: zoom >= 10 ? 8 : 6,
+                        renderer: stationRenderer,
+                        color: '#f5f9fc',
+                        weight: 1.5,
+                        opacity: 1,
+                        fillColor: color,
+                        fillOpacity: 0.96
+                    });
+                    const link = /^https?:\/\//i.test(station.url)
+                        ? `<br><a href="${escapeHtml(station.url)}" target="_blank" rel="noopener">WAQI station</a>`
+                        : '';
+                    marker.bindPopup(`<strong>${escapeHtml(station.name)}</strong><br>WAQI station AQI: <b>${Math.round(value)}</b><br>Loading PM readings…${link}`);
+                    marker.on('popupopen', () => {
+                        if (marker.stationDetailsLoaded) return;
+                        marker.stationDetailsLoaded = true;
+                        dataStore.getStation(station.id)
+                            .then((details) => {
+                                if (!marker.isPopupOpen()) return;
+                                const pm25 = Number(details?.pm2_5);
+                                const pm10 = Number(details?.pm10);
+                                const detailLink = /^https?:\/\//i.test(details?.url)
+                                    ? `<br><a href="${escapeHtml(details.url)}" target="_blank" rel="noopener">WAQI source</a>` : link;
+                                const time = details?.timestamp ? `<br><small>${escapeHtml(details.timestamp)} · WAQI</small>` : '';
+                                marker.setPopupContent(
+                                    `<strong>${escapeHtml(details?.name || station.name)}</strong>` +
+                                    `<br>WAQI station AQI: <b>${Number.isFinite(Number(details?.aqi)) ? Math.round(Number(details.aqi)) : Math.round(value)}</b>` +
+                                    `<br>PM2.5: ${Number.isFinite(pm25) ? pm25.toFixed(1) : '—'} µg/m³` +
+                                    `<br>PM10: ${Number.isFinite(pm10) ? pm10.toFixed(1) : '—'} µg/m³${time}${detailLink}`
+                                );
+                            })
+                            .catch(() => {
+                                if (marker.isPopupOpen()) marker.setPopupContent(
+                                    `<strong>${escapeHtml(station.name)}</strong><br>WAQI station AQI: <b>${Math.round(value)}</b><br>PM readings unavailable${link}`
+                                );
+                            });
+                    });
+                    marker.bindTooltip(`${escapeHtml(station.name)} · AQI ${Math.round(value)}`, { direction: 'top' });
+                    group.addLayer(marker);
+                });
+                controller.stationOverlay = group.addTo(controller.map);
+                updateLegend(controller, { stationStatus: 'available', stationCount: stations.length });
+            })
+            .catch(() => {
+                if (controller.mode === 'aqi' && requestId === controller.stationRequestId &&
+                    viewportRequestId === controller.requestId) {
+                    updateLegend(controller, { stationStatus: 'unavailable', stationCount: 0 });
+                }
+            });
+    }
+
+    /* -------------------------------------------------------------------
+       City AQI indicators (maximized AQI view)
+       The most populated city per country is labeled with the US AQI of the
+       nearest real CAMS grid cell — the cell IS the displayed value, so no
+       interpolation or invented city detail is introduced.
+       ------------------------------------------------------------------- */
+    const AQI_CITY_ZOOM_MIN = 4;
+    const AQI_CITY_MAX_MARKERS = 110;
+
+    function nearestSampleValue(payload, latitude, longitude) {
+        let best = null;
+        let bestDistance = Infinity;
+        payload.segments.forEach((segment) => {
+            const matrix = segment.values?.us_aqi;
+            if (!Array.isArray(matrix)) return;
+            let latIndex = -1;
+            let latDistance = Infinity;
+            segment.latitudes.forEach((sample, index) => {
+                const delta = Math.abs(sample - latitude);
+                if (delta < latDistance) {
+                    latDistance = delta;
+                    latIndex = index;
+                }
+            });
+            let lonIndex = -1;
+            let lonDistance = Infinity;
+            segment.longitudes.forEach((sample, index) => {
+                const delta = Math.abs(sample - longitude);
+                if (delta < lonDistance) {
+                    lonDistance = delta;
+                    lonIndex = index;
+                }
+            });
+            const value = Number(matrix[latIndex]?.[lonIndex]);
+            if (!Number.isFinite(value)) return;
+            const maxDistance = Math.max(latDistance, lonDistance);
+            if (maxDistance < bestDistance) {
+                bestDistance = maxDistance;
+                // Attribute the value only when the city lies inside that
+                // segment's real sampling cell; otherwise nothing is shown.
+                const step = segment.resolution_deg || 1;
+                best = maxDistance <= step * 0.5 ? value : null;
+            }
+        });
+        return best;
+    }
+
+    function refreshAqiCities(controller) {
+        removeAqiCities(controller);
+        const zoom = viewportZoom(controller.map);
+        if (zoom < AQI_CITY_ZOOM_MIN) {
+            controller.cityState = 'zoom-in';
+            return;
+        } else if (controller.cityState === 'zoom-in') {
+            controller.cityState = 'available';
+        }
+        const payload = controller.payload;
+        if (!payload?.segments?.length) return;
+        const countries = window.AIRSENSE_POPULAR_CITIES;
+        if (!Array.isArray(countries)) return;
+        const bounds = controller.map.getBounds();
+        const group = window.L.layerGroup();
+
+        cities:
+        for (const country of countries) {
+            const city = country?.cities?.[0];
+            if (!city) continue;
+            const [name, rawLat, rawLon] = city;
+            const lat = Number(rawLat);
+            const lon = Number(rawLon);
+            if (![lat, lon].every(Number.isFinite)) continue;
+            if (!bounds.contains([lat, lon])) continue;
+            const value = nearestSampleValue(payload, lat, lon);
+            if (value === null) continue;
+            const rgb = palettes.colorFor('aqi', value) || [160, 160, 160];
+            // Keep the city label readable on every category colour band.
+            const luminance = rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
+            const nameColor = luminance > 145 ? '#0b1a28' : '#f2f7fc';
+            const marker = window.L.marker([lat, lon], {
+                icon: window.L.divIcon({
+                    className: 'airsense-aqi-chip-host',
+                    html:
+                        `<span class="airsense-aqi-chip" style="background:rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})">` +
+                        `<b>${Math.round(value)}</b><i style="color:${nameColor}">${escapeHtml(name)}</i></span>`,
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 0]
+                }),
+                pane: 'aqiCityPane',
+                keyboard: false,
+                title: `${name} — CAMS US AQI ≈ ${Math.round(value)}`
+            });
+            marker.bindPopup(
+                `<div class="airsense-popup"><div class="airsense-popup__heading"><b>${escapeHtml(name)}</b></div>` +
+                `<div class="airsense-popup__loading">Loading live air-quality details…</div></div>`
+            );
+            marker.on('popupopen', () => {
+                window.AirSenseLocationPopup?.enhance?.({
+                    mapId: `${controller.id}-cities`,
+                    marker,
+                    lat,
+                    lon,
+                    name
+                });
+            });
+            group.addLayer(marker);
+            if (group.getLayers().length >= AQI_CITY_MAX_MARKERS) break cities;
+        }
+
+        if (group.getLayers().length) {
+            controller.cityOverlay = group.addTo(controller.map);
+            controller.cityCount = group.getLayers().length;
+            controller.cityState = 'available';
+        } else {
+            controller.cityState = 'none';
+        }
+    }
+
     function removeWind(controller) {
         if (controller.wind && controller.map.hasLayer(controller.wind)) {
             controller.map.removeLayer(controller.wind);
@@ -221,7 +442,18 @@
         }
     }
 
+    function ensureAqiCityPane(map) {
+        let pane = map.getPane('aqiCityPane');
+        if (!pane) {
+            pane = map.createPane('aqiCityPane');
+            pane.style.zIndex = '640';
+        }
+        return pane;
+    }
+
     function clearVisuals(controller) {
+        removeAqiStations(controller);
+        removeAqiCities(controller);
         removeScalar(controller);
         removeWind(controller);
         removeOpenWeatherWindTile(controller);
@@ -232,6 +464,7 @@
     function applyPayload(controller, payload, mode, key) {
         const meta = palettes.MODES[mode];
         if (!payload || !Array.isArray(payload.segments)) {
+            removeAqiCities(controller);
             updateLegend(controller, {
                 status: 'error',
                 error: 'Weather data is unavailable for this view.'
@@ -241,6 +474,12 @@
 
         controller.payload = payload;
         controller.payloadKey = key;
+
+        if (mode === 'aqi') {
+            ensureAqiCityPane(controller.map);
+            refreshAqiStations(controller, viewportBbox(controller.map), viewportZoom(controller.map));
+            refreshAqiCities(controller);
+        }
 
         if (mode === 'wind') {
             removeOpenWeatherWindTile(controller);
@@ -286,7 +525,14 @@
         removeScalar(controller);
         controller.overlay = scalarRenderer.render(controller.map, payload, mode, controller.opacities[mode]);
         controller.overlay.addTo(controller.map);
-        updateLegend(controller, { payload });
+        updateLegend(controller, {
+            payload,
+            warning: mode === 'aqi' && payload.resolution_limited
+                ? 'This view is sampled coarser than the CAMS native grid; zoom in for source-cell detail.'
+                : null,
+            cityStatus: controller.cityState || 'none',
+            cityCount: controller.cityCount || 0
+        });
     }
 
     function updateController(controller) {

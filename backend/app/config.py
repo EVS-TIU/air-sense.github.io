@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     map_max_points: int = Field(
         default=400, validation_alias="MAP_MAX_POINTS", ge=4, le=2000
     )
+    # Air-quality grids sample the CAMS lattice with their own budget: real
+    # AQI detail is entirely point-limited, and each extra Open-Meteo
+    # location is one more real model cell rendered without interpolation.
+    map_air_max_points: int = Field(
+        default=2000, validation_alias="MAP_AIR_MAX_POINTS", ge=4, le=6000
+    )
     map_max_batch_points: int = Field(
         default=100, validation_alias="MAP_MAX_BATCH_POINTS", ge=1, le=100
     )

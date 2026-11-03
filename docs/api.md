@@ -45,6 +45,11 @@ ports are allowed by the backend CORS configuration.
   the forecast timeline.
 * `GET /api/v1/map/air-quality?bbox=west,south,east,north&zoom=5` - viewport
   US AQI grid from the Open-Meteo Air Quality API (CAMS).
+* `GET /api/v1/map/air-quality/stations?bbox=west,south,east,north` - live
+  WAQI monitoring stations for close map zooms; requires `WAQI_API_TOKEN` and
+  is intentionally not cached.
+* `GET /api/v1/map/air-quality/stations/{station_id}` - live WAQI station AQI
+  and PM2.5/PM10 details, also uncached.
 * `GET /api/v1/map/point?lat=35.46&lon=-97.51` - combined live weather and
   air-quality point values used by the map popup.
 * `GET /api/v1/map/historical?bbox=west,south,east,north&zoom=5&date=2025-01-15`
@@ -57,8 +62,12 @@ Map endpoints accept a Leaflet-style `bbox` (`west,south,east,north`), a
 zoom level `0..19`, and an optional comma-separated `variables` filter. The
 backend splits viewports that cross the antimeridian, clamps latitude to the
 Web-Mercator-safe `-85..85` range, and chooses a grid step from a fixed ladder
-so nearby viewports share cache entries. Grids are capped by
-`MAP_MAX_POINTS` (400 by default).
+so nearby viewports share cache entries. Weather and historical grids are
+capped by `MAP_MAX_POINTS` (400 by default); air-quality grids use their own
+`MAP_AIR_MAX_POINTS` budget (2000 by default) so the finest CAMS lattice the
+budget supports is always requested for the visible viewport. AQI samples sit
+on a fixed degree lattice matching the CAMS native spacing, so sampling density
+follows the viewport rather than inventing sub-grid detail.
 
 Responses contain `provider`, `family`, `dataset`, `bbox`, `zoom`,
 `resolution_deg`, `columns`, `rows`, `point_count`, `data_time`, `units`,
@@ -86,6 +95,19 @@ OpenWeather One Call 3.0 `current.uvi`; if the configured OpenWeather plan
 does not provide One Call 3.0, it is `null` rather than fabricated. Provider
 failures return a safe JSON `detail` with HTTP 502;
 missing configuration returns 503.
+
+AQI sample spacing is limited to the published CAMS model resolution: about
+0.4° (~45 km) globally and 0.1° (~11 km) within the European CAMS domain. The
+AQI overlay keeps those samples as discrete cells instead of smoothing them
+into finer-looking detail. When a viewport is too wide to sample every native
+cell within `MAP_AIR_MAX_POINTS`, the air-quality grid is honestly coarser:
+`resolution_limited` is `true`, a warning names the effective spacing, and the
+grid still contains the real sampled values (never blank, interpolated, or
+hidden). Point clicks use `/map/point` for the requested coordinates and
+return the modelled US AQI, PM2.5 and PM10 values available from Open-Meteo,
+plus `air_model` and `air_native_resolution_deg` so the popup can state the
+CAMS domain and its native cell size. Live WAQI station AQI is shown separately
+and is never mixed into the model grid.
 
 The live air-quality response keeps datasets separate. `modelled` contains
 Open-Meteo/CAMS `us_aqi`, its US AQI category/scale, six pollutant

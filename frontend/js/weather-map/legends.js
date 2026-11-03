@@ -112,33 +112,49 @@
                 ? `~${resolution}°${resolutionKm ? ` (~${resolutionKm} km)` : ''}`
                 : '--';
             const sourceNote = meta.family === 'air'
-                ? 'Open-Meteo · CAMS ENSEMBLE global model (~40 km)'
+                ? `${state.payload?.model || 'Open-Meteo · CAMS'} · nominal native grid ${state.payload?.native_resolution_deg ?? '—'}° (~${state.payload?.native_resolution_km ?? '—'} km)`
                 : 'Open-Meteo forecast model (~11–25 km)';
             const pointCount = state.payload?.point_count || '--';
+            const aqiCategories = [
+                ['#00e400', '0–50', 'Good'],
+                ['#ffff00', '51–100', 'Moderate'],
+                ['#ff7e00', '101–150', 'USG sensitive'],
+                ['#ff0000', '151–200', 'Unhealthy'],
+                ['#8f3f97', '201–300', 'Very unhealthy'],
+                ['#7e0023', '301+', 'Hazardous']
+            ];
+            const stationStatus = state.stationStatus === 'available'
+                ? `${state.stationCount} live WAQI station${state.stationCount === 1 ? '' : 's'} shown · click a marker for its station AQI`
+                : state.stationStatus === 'loading' ? 'Loading live monitor stations…'
+                    : state.stationStatus === 'not-configured' ? 'Live city monitors require WAQI_API_TOKEN'
+                        : state.stationStatus === 'unavailable' ? 'Live monitor stations unavailable'
+                            : state.stationStatus === 'zoom-in' ? 'Zoom in to see available monitor stations' : '';
+            const cityStatus = state.cityStatus === 'available'
+                ? `${state.cityCount} city indicator${state.cityCount === 1 ? '' : 's'} · values from the nearest CAMS cell · click for PM2.5/PM10`
+                : state.cityStatus === 'zoom-in' ? 'Zoom in for city-level AQI indicators' : '';
 
             container.innerHTML = `
                 <div class="airsense-legend__title">
                     <span>${meta.label}</span>
                     <span class="airsense-legend__unit">${meta.unit}</span>
                 </div>
-                <div class="airsense-legend__bar" style="background:${gradient}"></div>
-                <div class="airsense-legend__ticks">
-                    ${ticks.map((tick) => `<span>${tick}</span>`).join('')}
-                </div>
+                ${mode === 'aqi' ? `<div class="airsense-legend__aqi-categories">${aqiCategories.map(([color, range, category]) => `<div><i style="background:${color}"></i><b>${range}</b><span>${category}</span></div>`).join('')}</div>` : `<div class="airsense-legend__bar" style="background:${gradient}"></div><div class="airsense-legend__ticks">${ticks.map((tick) => `<span>${tick}</span>`).join('')}</div>`}
                 ${state.status === 'loading' ? '<div class="airsense-legend__status is-loading">Loading Open-Meteo data…</div>' : ''}
                 ${state.status === 'error' ? `<div class="airsense-legend__status is-error">${escapeHtml(state.error)}${typeof state.onRetry === 'function' ? ' <button type="button" class="airsense-legend__retry">Retry</button>' : ''}</div>` : ''}
                 ${state.payload?.stale ? '<div class="airsense-legend__status">Cached data</div>' : ''}
                 ${state.warning ? `<div class="airsense-legend__status">${escapeHtml(state.warning)}</div>` : ''}
+                ${mode === 'aqi' && stationStatus ? `<div class="airsense-legend__status">${escapeHtml(stationStatus)}</div>` : ''}
+                ${mode === 'aqi' && cityStatus ? `<div class="airsense-legend__status">${escapeHtml(cityStatus)}</div>` : ''}
                 <label class="airsense-opacity">Overlay opacity <input data-map-opacity type="range" min="0.15" max="1" step="0.05" value="${state.opacity ?? meta.opacity ?? 0.6}"></label>
                 <div class="airsense-legend__meta">
                     <div>Data: ${timeLabel}</div>
-                    <div>Grid ≈ ${gridLabel} · ${pointCount} pts</div>
+                    <div>${state.payload?.point_count ? `${pointCount} sample${state.payload.point_count === 1 ? '' : 's'} at ≈ ${gridLabel}` : 'No samples for this view'}</div>
                     <div>Source: ${sourceNote}</div>
                     ${state.warning ? `<div>${escapeHtml(state.warning)}</div>` : ''}
                 </div>
                 <div class="airsense-legend__attribution">
                     <a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com (CC BY 4.0)</a><br>
-                    <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noopener">Air quality by Open-Meteo / CAMS</a>
+                    <a href="https://open-meteo.com/en/docs/air-quality-api" target="_blank" rel="noopener">Air quality by Open-Meteo / CAMS</a>${mode === 'aqi' ? '<br><a href="https://waqi.info/" target="_blank" rel="noopener">Live monitoring stations by WAQI</a>' : ''}
                 </div>
             `;
 

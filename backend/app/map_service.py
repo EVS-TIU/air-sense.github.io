@@ -11,7 +11,7 @@ from .config import Settings
 from .forecast import FORECAST_VARIABLES, ForecastService
 from .historical import HISTORICAL_VARIABLES, HistoricalService
 from .map_cache import BoundedTTLCache
-from .map_grid import GridSegment, build_grid_segments
+from .map_grid import GridSegment, build_grid_segments, build_native_grid_segments
 from .openmeteo import OpenMeteoClient
 from .services import WeatherServiceError
 
@@ -332,20 +332,75 @@ class MapService:
         variables: tuple[str, ...] | None = None,
     ) -> dict:
         selected = self._assert_variables(variables, AIR_LAYER_VARIABLES, "air-quality")
-        segments = self._segments(west, south, east, north, zoom)
+        # Open-Meteo selects CAMS Global (~0.4°) worldwide and CAMS Europe
+        # (~0.1°) in its European domain. Keep requested samples on those
+        # nominal model spacings; denser API coordinates only smooth/interpolate
+        # the same model and do not add real pollution detail.
+        european_domain = west >= -25 and east <= 45 and south >= 30 and north <= 72
+        native_step = 0.1 if european_domain else 0.4
+        # AQI grids get their own sampling budget so the finest CAMS lattice
+        # the budget supports is always requested for the visible viewport.
+        segments = build_native_grid_segments(
+            west, south, east, north, zoom, self.settings.map_air_max_points, native_step
+        )
+        sample_step = max(segment.resolution_deg for segment in segments)
+        # True when the viewport is too wide to sample every native cell within
+        # the budget. The real, honestly-sampled cells are still returned —
+        # they are never interpolated or hidden.
+        resolution_limited = sample_step > native_step
         key = _grid_key("air", segments, zoom)
 
         async def load() -> dict:
             points = [point for segment in segments for point in segment.points]
-            records = await self.air_quality.fetch(points)
-            return self._build_payload(
+            domain = "cams_europe" if european_domain else "cams_global"
+            records = await self.air_quality.fetch(points, domain)
+            payload = self._build_payload(
                 "air", segments, records, tuple(AIR_QUALITY_VARIABLES)
             )
+            if resolution_limited:
+                payload.setdefault("warnings", []).append(
+                    f"Sampled at {sample_step}° — coarser than the {native_step}° "
+                    "CAMS native grid; zoom in for source-cell detail"
+                )
+            return payload
 
         payload = await self._cached(key, self.settings.map_air_cache_ttl_seconds, load)
         payload = copy.deepcopy(payload)
         payload["zoom"] = zoom
+        payload["resolution_limited"] = resolution_limited
+        payload["native_resolution_deg"] = native_step
+        payload["native_resolution_km"] = 45 if native_step == 0.4 else 11
+        payload["model"] = "CAMS European Air Quality Forecast" if european_domain else "CAMS Global Atmospheric Composition Forecasts"
         return self._filter_variables(payload, selected)
+
+    async def air_quality_stations(
+        self, west: float, south: float, east: float, north: float
+    ) -> dict:
+        """Return live WAQI station readings without caching or merging scales."""
+        span = east - west
+        if span < 0:
+            span += 360.0
+        span = min(360.0, span)
+        west = ((west + 180.0) % 360.0) - 180.0
+        east = west + span
+        if east <= 180:
+            return await self.air_quality.fetch_stations(north, west, south, east)
+        left, right = await asyncio.gather(
+            self.air_quality.fetch_stations(north, west, south, 180),
+            self.air_quality.fetch_stations(north, -180, south, east),
+            return_exceptions=True,
+        )
+        available = [result for result in (left, right) if isinstance(result, dict)]
+        stations = [station for result in available for station in result.get("stations", [])]
+        status = "available" if stations else (
+            "not_configured" if all(result.get("status") == "not_configured" for result in available)
+            else "unavailable"
+        )
+        return {"status": status, "provider": "WAQI", "stations": stations}
+
+    async def air_quality_station(self, station_id: int) -> dict:
+        """Return one live, uncached WAQI monitor reading."""
+        return await self.air_quality.fetch_station(station_id)
 
     async def historical_grid(
         self,
@@ -417,6 +472,11 @@ class MapService:
                     values[variable] = _clean_number(air_source.get(variable))
                 units.update(air_record.get("current_units") or {})
 
+            # The AQI values follow one CAMS domain; state its native cell size
+            # next to the modelled values instead of implying point accuracy.
+            native_air_step = 0.1 if (
+                -25 <= longitude <= 45 and 30 <= latitude <= 72
+            ) else 0.4
             return {
                 "provider": "open-meteo",
                 "family": "point",
@@ -428,6 +488,10 @@ class MapService:
                 "values": values,
                 "stale": False,
                 "warnings": warnings,
+                "air_model": "CAMS European Air Quality Forecast"
+                if native_air_step == 0.1
+                else "CAMS Global Atmospheric Composition Forecasts",
+                "air_native_resolution_deg": native_air_step,
             }
 
         payload = await self._cached(key, self.settings.map_cache_ttl_seconds, load)

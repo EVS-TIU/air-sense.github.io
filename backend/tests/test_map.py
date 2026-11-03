@@ -61,7 +61,7 @@ def weather_records(points):
     ]
 
 
-def air_records(points):
+def air_records(points, domain="auto"):
     return [
         {
             "current": {**AIR_VALUES, "time": "2026-11-02T06:00"},
@@ -217,6 +217,23 @@ def test_air_quality_and_point_contract(map_client):
     assert point_payload["values"]["temperature_2m"] == 20.5
     assert point_payload["values"]["us_aqi"] == 42
     assert point_payload["units"]["temperature_2m"] == "°C"
+
+
+def test_air_quality_grid_still_returns_real_cells_when_below_native_detail(
+    map_client,
+):
+    """Wide viewports are coarsely sampled, never blank or interpolated."""
+    client, service = map_client
+    service.settings.map_air_max_points = 80
+    response = client.get("/api/v1/map/air-quality?bbox=-10,35,30,60&zoom=4")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["resolution_limited"] is True
+    assert payload["segments"], "coarse viewports must keep real grid cells"
+    assert payload["segments"][0]["values"]["us_aqi"], "values must not be blank"
+    assert any("coarser than the" in warning for warning in payload["warnings"])
+    assert payload["native_resolution_deg"] == 0.1
+    assert payload["point_count"] == payload["segments"][0]["rows"] * payload["segments"][0]["columns"]
 
 
 def test_historical_grid_uses_archive_dataset(map_client):

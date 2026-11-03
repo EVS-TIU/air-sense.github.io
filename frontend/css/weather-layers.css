@@ -79,6 +79,64 @@
     transition: opacity 0.22s ease;
 }
 
+.weather-layer-image--aqi {
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+}
+
+/* --------------------------------------------------------------------------
+   City-level AQI indicators (AQI layer while zoomed in)
+   DOM chips above the raster; the value pill uses the official category
+   colour of the nearest real CAMS grid cell.
+   -------------------------------------------------------------------------- */
+.airsense-aqi-chip-host {
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+}
+
+.airsense-aqi-chip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 150px;
+    padding: 1px 6px 1px 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    border-radius: 999px;
+    border: 1px solid rgba(8, 20, 33, 0.55);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    text-overflow: ellipsis;
+}
+
+.airsense-aqi-chip b {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: rgba(8, 20, 33, 0.62);
+    color: #f2f7fc;
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.airsense-aqi-chip i {
+    font-style: normal;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: #0b1a28;
+}
+
 .airsense-wind-canvas,
 .airsense-wind-thermal-canvas {
     position: absolute;
@@ -137,6 +195,36 @@
     margin-top: 2px;
     font-size: 8.5px;
     color: #a9c8df;
+    font-variant-numeric: tabular-nums;
+}
+
+.airsense-legend__aqi-categories {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+    margin: 7px 0 3px;
+}
+
+.airsense-legend__aqi-categories > div {
+    display: grid;
+    grid-template-columns: 9px 36px 1fr;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    color: #d9e8f3;
+    font-size: 8px;
+    line-height: 1.2;
+}
+
+.airsense-legend__aqi-categories i {
+    width: 8px;
+    height: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 2px;
+}
+
+.airsense-legend__aqi-categories b {
+    color: #f5f9fc;
     font-variant-numeric: tabular-nums;
 }
 
