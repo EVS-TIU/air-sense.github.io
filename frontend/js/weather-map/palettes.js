@@ -118,7 +118,6 @@
         rainfall: {
             label: 'Rainfall',
             family: 'weather',
-            provider: 'weatherapi',
             variable: 'precipitation',
             unit: 'mm',
             domain: [0, 10],

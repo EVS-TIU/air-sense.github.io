@@ -79,13 +79,13 @@
 
     // The satellite base uses real Esri World Imagery. Reference layers keep
     // roads, administrative boundaries and place labels visible above imagery.
-    const esriDarkUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+    const standardWorldUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
     const esriImageryUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
     const esriRoadsUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}';
     const esriPlacesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
 
     function createTileLayer() {
-        return window.L.tileLayer(esriDarkUrl, {
+        return window.L.tileLayer(standardWorldUrl, {
             maxZoom: 16,
             minZoom: 2,
             attribution: 'Map tiles &copy; <a href="https://www.esri.com/">Esri</a>'
@@ -382,15 +382,15 @@
     }
 
     function readSavedBaseMode() {
-        // Satellite is the only supported base map and is restored on every
-        // fresh page load. Weather overlays remain independently selectable.
-        return 'satellite';
+        // Open with the standard dark-blue world map; Satellite remains an
+        // explicit selectable basemap.
+        return 'standard';
     }
 
     function setBaseLayer(mode) {
         if (!sidebarMap || !standardBaseLayer) return;
-        // Satellite imagery remains the canvas beneath every weather layer.
-        const nextMode = mode === 'standard' ? 'standard' : 'satellite';
+        // Satellite stays unchanged; weather layers use the standard CARTO base.
+        const nextMode = mode === 'satellite' ? 'satellite' : 'standard';
         if (activeBaseMode === nextMode && sidebarMap.hasLayer(standardBaseLayer) === (nextMode === 'standard')) return;
 
         if (sidebarMap.hasLayer(standardBaseLayer)) sidebarMap.removeLayer(standardBaseLayer);

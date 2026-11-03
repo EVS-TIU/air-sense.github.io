@@ -47,7 +47,7 @@ class TTLCache:
 
 
 def _cache_key(lat: float, lon: float, suffix: str) -> str:
-    return f"{suffix}:{lat.hex()}:{lon.hex()}"
+    return f"{suffix}:{float(lat).hex()}:{float(lon).hex()}"
 
 
 def wind_cardinal(degrees: float | None) -> str | None:

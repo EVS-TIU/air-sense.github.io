@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date as date_type, datetime
+from datetime import date as date_type, datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -59,6 +59,19 @@ def historical_date(value: str) -> str:
     return parsed.isoformat()
 
 
+def forecast_time(value: str | None) -> str | None:
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(400, "time must be an ISO-8601 timestamp") from None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    parsed = parsed.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    return parsed.isoformat().replace("+00:00", "Z")
+
+
 async def provider_call(call):
     try:
         return await call
@@ -112,11 +125,12 @@ async def map_weather(
     bbox: Annotated[str, Query(description="west,south,east,north")],
     zoom: Annotated[int, Query(ge=0, le=19)] = 6,
     variables: Annotated[str | None, Query()] = None,
+    time: Annotated[str | None, Query(description="UTC forecast hour, ISO-8601")] = None,
 ) -> dict:
     west, south, east, north = bounds(bbox)
     return await provider_call(
         map_service(request).weather_grid(
-            west, south, east, north, zoom, map_variables(variables)
+            west, south, east, north, zoom, map_variables(variables), forecast_time(time)
         )
     )
 

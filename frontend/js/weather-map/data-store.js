@@ -50,8 +50,8 @@
         return bbox.map((value) => Number(value).toFixed(2)).join(',');
     }
 
-    function gridKey(family, bbox, zoom, variables) {
-        return `${family}:${zoom}:${roundedBbox(bbox)}:${variables || ''}`;
+    function gridKey(family, bbox, zoom, variables, forecastTime) {
+        return `${family}:${zoom}:${roundedBbox(bbox)}:${variables || ''}:${forecastTime || 'current'}`;
     }
 
     async function requestJson(url, signal) {
@@ -89,13 +89,13 @@
         throw lastError || new Error('Weather map request failed');
     }
 
-    async function getGrid(family, bbox, zoom, variables, signal) {
+    async function getGrid(family, bbox, zoom, variables, signal, forecastTime) {
         if (variables && typeof variables.aborted === 'boolean') {
             signal = variables;
             variables = null;
         }
         const variableList = Array.isArray(variables) ? variables : [];
-        const key = gridKey(family, bbox, zoom, variableList.join(','));
+        const key = gridKey(family, bbox, zoom, variableList.join(','), forecastTime);
         const ttl = family === 'air' ? AIR_TTL_MS : WEATHER_TTL_MS;
         const cached = entries.get(key) || readStored(key);
         if (cached && Date.now() - cached.savedAt < ttl) {
@@ -109,6 +109,7 @@
         url.searchParams.set('bbox', bbox.map((value) => Number(value).toFixed(4)).join(','));
         url.searchParams.set('zoom', String(zoom));
         if (variableList.length) url.searchParams.set('variables', variableList.join(','));
+        if (forecastTime) url.searchParams.set('time', forecastTime);
 
         const task = requestJson(url.toString(), signal)
             .then((payload) => {

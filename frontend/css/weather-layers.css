@@ -79,6 +79,7 @@
     transition: opacity 0.22s ease;
 }
 
+.airsense-wind-canvas,
 .airsense-wind-thermal-canvas {
     position: absolute;
     top: 0;

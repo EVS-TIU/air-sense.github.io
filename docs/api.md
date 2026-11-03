@@ -40,7 +40,9 @@ ports are allowed by the backend CORS configuration.
 * `GET /api/v1/map/weather?bbox=west,south,east,north&zoom=5` - viewport
   weather grid for the map layers (temperature, wind, humidity, rainfall,
   clouds). Fetching one grid returns every variable, so switching between
-  weather layers does not create another provider request.
+  weather layers does not create another provider request. An optional
+  `time=2026-11-04T12:00:00Z` selects the nearest hourly forecast slice for
+  the forecast timeline.
 * `GET /api/v1/map/air-quality?bbox=west,south,east,north&zoom=5` - viewport
   US AQI grid from the Open-Meteo Air Quality API (CAMS).
 * `GET /api/v1/map/point?lat=35.46&lon=-97.51` - combined live weather and

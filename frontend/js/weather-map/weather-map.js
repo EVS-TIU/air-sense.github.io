@@ -10,6 +10,7 @@
     const VIEWPORT_DEBOUNCE_MS = 450;
     const MODAL_OPEN_DELAY_MS = 350;
     const INITIAL_DELAY_MS = 300;
+    const FORECAST_MODES = new Set(['wind', 'humidity', 'rainfall', 'clouds']);
 
     const palettes = window.AirSensePalettes;
     const dataStore = window.AirSenseMapData;
@@ -29,6 +30,21 @@
         document.getElementById('sidebar-map-layer'),
         document.getElementById('modal-map-layer')
     ].filter(Boolean);
+    const layerButtons = [...document.querySelectorAll('[data-layer-mode]')];
+    const timeSlider = document.querySelector('[data-map-time-slider]');
+    const timeLabel = document.querySelector('[data-map-time-label]');
+    const timeStatus = document.querySelector('[data-map-time-status]');
+    const timeTicks = document.querySelector('[data-map-time-ticks]');
+    const timePlay = document.querySelector('[data-map-time-play]');
+    const timePrev = document.querySelector('[data-map-time-prev]');
+    const timeNext = document.querySelector('[data-map-time-next]');
+    const timelineStart = new Date();
+    timelineStart.setUTCMinutes(0, 0, 0);
+    const timelineTimes = Array.from({ length: 25 }, (_, index) =>
+        new Date(timelineStart.getTime() + index * 60 * 60 * 1000).toISOString()
+    );
+    let currentForecastTime = null;
+    let timelineTimer = null;
 
     function isKnownMode(mode) {
         return Object.prototype.hasOwnProperty.call(palettes.MODES, mode);
@@ -88,8 +104,68 @@
         return Math.max(0, Math.min(19, Math.round(Number.isFinite(zoom) ? zoom : 5)));
     }
 
-    function viewportKey(family, bbox, zoom, mode) {
-        return `${family}:${mode || ''}:${zoom}:${dataStore.roundedBbox(bbox)}`;
+    function viewportKey(family, bbox, zoom, mode, forecastTime) {
+        return `${family}:${mode || ''}:${zoom}:${dataStore.roundedBbox(bbox)}:${forecastTime || 'current'}`;
+    }
+
+    function isForecastMode(mode) {
+        return FORECAST_MODES.has(mode);
+    }
+
+    function formatTimelineTime(value) {
+        if (!value) return 'Now';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? 'Now' : date.toLocaleString([], {
+            weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZoneName: 'short'
+        });
+    }
+
+    function updateTimeline() {
+        const enabled = isForecastMode(currentMode);
+        if (timeSlider) {
+            timeSlider.disabled = !enabled;
+            timeSlider.max = String(timelineTimes.length - 1);
+            timeSlider.value = currentForecastTime ? String(Math.max(0, timelineTimes.indexOf(currentForecastTime))) : '0';
+        }
+        if (timeLabel) timeLabel.textContent = currentForecastTime ? formatTimelineTime(currentForecastTime) : 'Now';
+        if (timeStatus) timeStatus.textContent = enabled
+            ? (currentForecastTime ? 'Forecast hour' : 'Current conditions')
+            : 'Available for forecast layers';
+        if (timeTicks) {
+            timeTicks.innerHTML = [0, 6, 12, 18, 24].map((index) => `<span>${index === 0 ? 'Now' : `+${index}h`}</span>`).join('');
+        }
+        layerButtons.forEach((button) => {
+            button.classList.toggle('is-active', button.dataset.layerMode === currentMode);
+            button.setAttribute('aria-pressed', button.dataset.layerMode === currentMode ? 'true' : 'false');
+        });
+    }
+
+    function stopTimeline() {
+        if (timelineTimer) window.clearInterval(timelineTimer);
+        timelineTimer = null;
+        if (timePlay) {
+            timePlay.classList.remove('is-playing');
+            timePlay.textContent = '▶';
+        }
+    }
+
+    function setForecastTime(index) {
+        const numeric = Math.max(0, Math.min(timelineTimes.length - 1, Number(index) || 0));
+        currentForecastTime = numeric === 0 ? null : timelineTimes[numeric];
+        updateTimeline();
+        controllers.forEach((controller) => {
+            if (isForecastMode(controller.mode)) scheduleUpdate(controller, 80);
+        });
+    }
+
+    function stepTimeline(amount) {
+        const currentIndex = currentForecastTime ? Math.max(0, timelineTimes.indexOf(currentForecastTime)) : 0;
+        const next = currentIndex + amount;
+        if (next >= timelineTimes.length || next < 0) {
+            stopTimeline();
+            return;
+        }
+        setForecastTime(next);
     }
 
     function updateLegend(controller, state) {
@@ -184,8 +260,8 @@
                 return;
             }
             removeScalar(controller);
-            // Wind is rendered as a static speed field, not as a blurry
-            // provider tile. Keep the base map visible underneath it.
+            // Wind is rendered by the bounded Canvas particle field. Keep the
+            // base map visible underneath it while the vector data loads.
             if (!controller.wind) {
                 controller.wind = windRenderer.createLayer(controller.map);
             }
@@ -239,7 +315,8 @@
 
         const zoom = viewportZoom(controller.map);
         const family = meta.family;
-        const key = viewportKey(family, bbox, zoom, mode);
+        const forecastTime = isForecastMode(mode) ? currentForecastTime : null;
+        const key = viewportKey(family, bbox, zoom, mode, forecastTime);
 
         if (controller.payload && controller.payloadKey === key) {
             applyPayload(controller, controller.payload, mode, key);
@@ -252,7 +329,7 @@
         const variables = mode === 'wind'
             ? ['wind_speed_10m', 'wind_direction_10m']
             : (family === 'weather' && meta.variable ? [meta.variable] : null);
-        dataStore.getGrid(family, bbox, zoom, variables)
+        dataStore.getGrid(family, bbox, zoom, variables, undefined, forecastTime)
             .then((payload) => {
                 if (requestId !== controller.requestId || controller.mode !== mode) return;
                 applyPayload(controller, payload, mode, key);
@@ -411,12 +488,15 @@
     function setMode(mode) {
         if (!isKnownMode(mode) || mode === currentMode) {
             updateSelects(currentMode);
+            updateTimeline();
             return;
         }
         currentMode = mode;
         storeMode(mode);
+        if (!isForecastMode(mode)) stopTimeline();
         updateSelects(mode);
         controllers.forEach((controller) => prepareModeChange(controller, mode));
+        updateTimeline();
         document.dispatchEvent(new CustomEvent('weatherly:layer-change', {
             detail: { mode }
         }));
@@ -491,15 +571,34 @@
         clearTimeout(controller.timer);
         controller.timer = null;
         controller.requestId += 1;
-        // Remove the wind layer while the map is compact; it is restored
-        // from the cached payload the next time the modal opens.
-        removeWind(controller);
+        // Keep the same Canvas layer alive while the map element moves back
+        // to the sidebar. The renderer pauses during the move and resumes
+        // after Leaflet reports the new viewport, avoiding a blank/flickering
+        // wind layer and avoiding a second data fetch.
     });
 
     selects.forEach((select) => {
         select.addEventListener('change', () => {
             setMode(select.value);
         });
+    });
+
+    layerButtons.forEach((button) => {
+        button.addEventListener('click', () => setMode(button.dataset.layerMode));
+    });
+
+    timeSlider?.addEventListener('input', () => setForecastTime(timeSlider.value));
+    timePrev?.addEventListener('click', () => stepTimeline(-1));
+    timeNext?.addEventListener('click', () => stepTimeline(1));
+    timePlay?.addEventListener('click', () => {
+        if (!isForecastMode(currentMode)) return;
+        if (timelineTimer) {
+            stopTimeline();
+            return;
+        }
+        timePlay.classList.add('is-playing');
+        timePlay.textContent = '❚❚';
+        timelineTimer = window.setInterval(() => stepTimeline(1), 1400);
     });
 
     document.addEventListener('input', (event) => {
@@ -518,6 +617,7 @@
 
     function init() {
         updateSelects(currentMode);
+        updateTimeline();
         registerExistingMaps();
     }
 

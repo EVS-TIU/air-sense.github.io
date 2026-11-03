@@ -257,12 +257,17 @@ class MapService:
         north: float,
         zoom: int,
         variables: tuple[str, ...] | None = None,
+        forecast_time: str | None = None,
     ) -> dict:
         selected = self._assert_variables(variables, WEATHER_LAYER_VARIABLES, "weather")
         # Wind animation needs only two fields. Keep that request compact so
         # one viewport consumes a single Open-Meteo batch instead of several
         # concurrent calls that commonly trigger public API throttling.
-        wind_only = set(selected) == {"wind_speed_10m", "wind_direction_10m"}
+        wind_only = forecast_time is None and set(selected) == {"wind_speed_10m", "wind_direction_10m"}
+        provider_variables = (
+            ("wind_speed_10m", "wind_direction_10m")
+            if wind_only else FORECAST_VARIABLES
+        )
         if wind_only:
             try:
                 segments = build_grid_segments(
@@ -273,13 +278,17 @@ class MapService:
                 raise WeatherServiceError(f"Invalid map viewport: {exc}", 400) from None
         else:
             segments = self._segments(west, south, east, north, zoom)
-        key = _grid_key("weather", segments, zoom, suffix=','.join(selected))
+        key = _grid_key("weather", segments, zoom, suffix=f"{forecast_time or 'current'}:{','.join(provider_variables)}")
 
         async def load() -> dict:
             points = [point for segment in segments for point in segment.points]
             fallback_used = False
             try:
-                records = await self.forecast.fetch(points, selected)
+                records = await (
+                    self.forecast.fetch_at(points, provider_variables, forecast_time)
+                    if forecast_time
+                    else self.forecast.fetch(points) if not wind_only else self.forecast.fetch(points, provider_variables)
+                )
             except WeatherServiceError as primary_error:
                 # Wind animation can use the free NOAA GFS model as a
                 # provider fallback. Other map layers keep their existing
@@ -287,14 +296,20 @@ class MapService:
                 if not wind_only or getattr(primary_error, "status_code", 502) < 500:
                     raise
                 try:
-                    records = await self.forecast.fetch_gfs(points, selected)
+                    records = await (
+                        self.forecast.fetch_at(points, provider_variables, forecast_time, gfs=True)
+                        if forecast_time
+                        else self.forecast.fetch_gfs(points) if not wind_only else self.forecast.fetch_gfs(points, provider_variables)
+                    )
                     fallback_used = True
                 except WeatherServiceError:
                     raise primary_error
 
             payload = self._build_payload(
-                "weather", segments, records, selected
+                "weather", segments, records, provider_variables
             )
+            if forecast_time:
+                payload["forecast_time"] = forecast_time
             if fallback_used:
                 payload["provider"] = "noaa-gfs"
                 payload.setdefault("warnings", []).append(
