@@ -70,21 +70,13 @@
 /* Leaflet weather panes: overlays must never consume map interactions. */
 .leaflet-weather-pane,
 .leaflet-weather-pane canvas,
-.weather-layer-image,
-.airsense-wind-canvas {
+.weather-layer-image {
     pointer-events: none !important;
 }
 
 .weather-layer-image {
     image-rendering: auto;
     transition: opacity 0.22s ease;
-}
-
-.airsense-wind-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 1;
 }
 
 .airsense-wind-thermal-canvas {

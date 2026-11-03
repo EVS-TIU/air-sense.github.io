@@ -184,8 +184,8 @@
                 return;
             }
             removeScalar(controller);
-            // Wind is rendered as directional vector flow, not as a blurry
-            // provider tile. Keep the base map visible underneath the lines.
+            // Wind is rendered as a static speed field, not as a blurry
+            // provider tile. Keep the base map visible underneath it.
             if (!controller.wind) {
                 controller.wind = windRenderer.createLayer(controller.map);
             }
@@ -260,7 +260,7 @@
             .catch((error) => {
                 if (requestId !== controller.requestId || controller.mode !== mode) return;
                 // A WeatherAPI tile is an independent, valid layer. An
-                // Open-Meteo failure only removes the optional wind animation;
+                // Open-Meteo failure only removes the optional wind field;
                 // it must never turn a working speed tile into a layer error.
                 if (meta.provider === 'weatherapi' && controller.weatherApiTile) {
                     updateLegend(controller, {
@@ -400,7 +400,7 @@
         updateLegend(controller, { status: 'loading' });
         // Put the real wind tile on screen immediately. If the gridded
         // Open-Meteo request succeeds, applyPayload removes this tile and
-        // replaces it with the animated vector field; if it is rate-limited,
+        // replaces it with the static wind field; if it is rate-limited,
         // the tile remains visible instead of leaving the user with no layer.
         if (mode === 'wind') {
             showOpenWeatherWindTile(controller);
@@ -491,7 +491,7 @@
         clearTimeout(controller.timer);
         controller.timer = null;
         controller.requestId += 1;
-        // Stop the wind animation while the map is compact; it is restored
+        // Remove the wind layer while the map is compact; it is restored
         // from the cached payload the next time the modal opens.
         removeWind(controller);
     });

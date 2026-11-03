@@ -73,7 +73,7 @@
                     : '—';
                 container.innerHTML = `
                     <div class="airsense-legend__title"><span>${meta.label}</span><span class="airsense-legend__unit">${meta.unit}</span></div>
-                    <div class="airsense-legend__status">${mode === 'wind' ? 'WeatherAPI speed tile · Open-Meteo animated flow' : 'Provider-rendered map colors · units shown above'}</div>
+                    <div class="airsense-legend__status">${mode === 'wind' ? 'WeatherAPI speed tile · Open-Meteo wind field' : 'Provider-rendered map colors · units shown above'}</div>
                     ${state.status === 'loading' ? '<div class="airsense-legend__status is-loading">Loading latest map tiles…</div>' : ''}
                     ${state.warning ? `<div class="airsense-legend__status">${escapeHtml(state.warning)}</div>` : ''}
                     ${state.payload?.stale ? '<div class="airsense-legend__status">Using last valid wind field · stale</div>' : ''}
