@@ -236,6 +236,14 @@
         const warnings = Array.isArray(payload?.warnings) ? payload.warnings.filter(Boolean) : [];
         const metaParts = [];
         if (time) metaParts.push(`Data: ${time}`);
+        if (payload?.air_model) {
+            const cellDeg = Number(payload.air_native_resolution_deg);
+            const cellKm = Number.isFinite(cellDeg) ? Math.round(cellDeg * 111) : null;
+            metaParts.push(escapeHtml(payload.air_model) +
+                (Number.isFinite(cellDeg)
+                    ? ` · native cell ≈ ${cellDeg}° (~${cellKm} km)`
+                    : ''));
+        }
         if (payload?.stale) metaParts.push('Cached data');
         if (warnings.length) metaParts.push(escapeHtml(warnings.join(' · ')));
         if (metaParts.length) {

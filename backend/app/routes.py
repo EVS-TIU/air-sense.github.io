@@ -4,7 +4,7 @@ import logging
 from datetime import date as date_type, datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -160,6 +160,25 @@ async def map_air_quality(
             west, south, east, north, zoom, map_variables(variables)
         )
     )
+
+
+@router.get("/map/air-quality/stations")
+async def map_air_quality_stations(
+    request: Request,
+    bbox: Annotated[str, Query(description="west,south,east,north")],
+) -> dict:
+    west, south, east, north = bounds(bbox)
+    return await provider_call(
+        map_service(request).air_quality_stations(west, south, east, north)
+    )
+
+
+@router.get("/map/air-quality/stations/{station_id}")
+async def map_air_quality_station(
+    request: Request,
+    station_id: Annotated[int, Path(ge=1)],
+) -> dict:
+    return await provider_call(map_service(request).air_quality_station(station_id))
 
 
 @router.get("/map/point")

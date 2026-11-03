@@ -1,12 +1,15 @@
 /* ==========================================================================
    AirSense — scalar weather layer renderer
-   Converts the backend's regular lat/lon value grid into a smoothly upscaled
-   Canvas image and places it on the existing Leaflet map as an image overlay.
+   Converts the backend's regular lat/lon value grid into a Canvas image and
+   places it on the existing Leaflet map as an image overlay. AQI is drawn as
+   discrete, outlined source cells (no interpolation); other scalars are
+   smoothly upscaled.
    ========================================================================== */
 (function () {
     'use strict';
 
     const MAX_CANVAS = 384;
+    const AQI_CELL_PX = 8;
 
     function ensureWeatherPane(map) {
         let pane = map.getPane('weatherPane');
@@ -29,6 +32,44 @@
         });
     }
 
+    function buildAqiCellCanvas(segment, matrix, mode) {
+        // AQI is rendered one pixel per real CAMS grid cell, squared up with a
+        // thin cell outline and nearest-neighbour scaling. No smoothing pass:
+        // each block on screen is one measured model cell, never an
+        // interpolated gradient, so city-level patterns stay honest.
+        const pad = window.AirSensePalettes;
+        const canvas = document.createElement('canvas');
+        canvas.width = segment.columns * AQI_CELL_PX;
+        canvas.height = segment.rows * AQI_CELL_PX;
+        const context = canvas.getContext('2d');
+
+        for (let row = 0; row < segment.rows; row += 1) {
+            for (let column = 0; column < segment.columns; column += 1) {
+                // Flip latitude: Canvas row 0 is north while the API matrix
+                // starts at its southern edge.
+                const value = matrix[segment.rows - row - 1]?.[column];
+                const color = pad.colorFor(mode, value);
+                if (!color) continue;
+                const alpha = pad.alphaFor(mode, value);
+                context.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+                context.globalAlpha = alpha;
+                context.fillRect(column * AQI_CELL_PX, row * AQI_CELL_PX, AQI_CELL_PX, AQI_CELL_PX);
+                // A hairline inside every filled cell marks the sampling grid
+                // without drawing anything over the map between real cells.
+                context.globalAlpha = 1;
+                context.strokeStyle = 'rgba(4, 14, 26, 0.22)';
+                context.lineWidth = 1;
+                context.strokeRect(
+                    column * AQI_CELL_PX + 0.5,
+                    row * AQI_CELL_PX + 0.5,
+                    AQI_CELL_PX - 1,
+                    AQI_CELL_PX - 1
+                );
+            }
+        }
+        return canvas;
+    }
+
     function buildSegmentCanvas(segment, mode) {
         const variable = window.AirSensePalettes.MODES[mode]?.variable;
         const matrix = segment.values?.[variable];
@@ -36,6 +77,14 @@
 
         const rows = segment.rows;
         const columns = segment.columns;
+        if (mode === 'aqi') {
+            return {
+                canvas: buildAqiCellCanvas(segment, matrix, mode),
+                bbox: segment.bbox,
+                className: 'weather-layer-image--aqi'
+            };
+        }
+
         const small = document.createElement('canvas');
         small.width = columns;
         small.height = rows;
@@ -112,7 +161,7 @@
                         opacity,
                         interactive: false,
                         pane: 'weatherPane',
-                        className: 'weather-layer-image',
+                        className: `weather-layer-image${rendered.className ? ` ${rendered.className}` : ''}`,
                         attribution: 'Weather data by Open-Meteo.com (CC BY 4.0)'
                     }
                 );

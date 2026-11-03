@@ -152,6 +152,15 @@
         }
     };
 
+    const AQI_BANDS = [
+        { start: 0, end: 50, color: [0, 228, 0] },
+        { start: 51, end: 100, color: [255, 255, 0] },
+        { start: 101, end: 150, color: [255, 126, 0] },
+        { start: 151, end: 200, color: [255, 0, 0] },
+        { start: 201, end: 300, color: [143, 63, 151] },
+        { start: 301, end: 500, color: [126, 0, 35] }
+    ];
+
     function clamp(value, minimum, maximum) {
         return Math.min(maximum, Math.max(minimum, value));
     }
@@ -171,6 +180,28 @@
         }
         const numeric = Number(value);
         if (mode === 'rainfall' && numeric <= 0.05) return null;
+
+        if (mode === 'aqi') {
+            // AQI cells follow the official US-AQI category colours, shaded
+            // inside each band by the actual value: AQI 45 stays visibly
+            // lighter than AQI 100. Every shade maps to a real measured
+            // value — no decoration independent of the data.
+            let band = AQI_BANDS[AQI_BANDS.length - 1];
+            for (let index = 0; index < AQI_BANDS.length; index += 1) {
+                if (numeric <= AQI_BANDS[index].end) {
+                    band = AQI_BANDS[index];
+                    break;
+                }
+            }
+            const span = band.end - band.start + 1;
+            const fraction = clamp((numeric - band.start) / span, 0, 1);
+            const darken = 0.16 * fraction;
+            return [
+                Math.round(band.color[0] * (1 - darken)),
+                Math.round(band.color[1] * (1 - darken)),
+                Math.round(band.color[2] * (1 - darken))
+            ];
+        }
 
         const stops = STOPS[mode];
         if (!stops) return null;
@@ -198,7 +229,9 @@
             return clamp(0.04 + Number(value) / 100 * 0.4, 0, 0.45);
         }
         if (mode === 'aqi') {
-            return Number(value) > 0 ? 0.62 : 0;
+            // Low readings stay translucent so the basemap and city shapes
+            // remain readable; higher (worse) AQI values gain contrast.
+            return clamp(0.52 + Number(value) / 300 * 0.28, 0.52, 0.8);
         }
         return 0.68;
     }
