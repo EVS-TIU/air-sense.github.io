@@ -34,11 +34,10 @@
             [10, [56, 0, 107]]
         ],
         clouds: [
-            [0, [255, 255, 255]],
-            [25, [255, 255, 255]],
-            [50, [245, 248, 252]],
-            [75, [230, 238, 246]],
-            [100, [210, 222, 235]]
+            [0, [214, 228, 240]],
+            [50, [238, 246, 250]],
+            [75, [248, 251, 253]],
+            [100, [255, 255, 255]]
         ],
         aqi: [
             [0, [0, 228, 0]],
@@ -110,7 +109,8 @@
             unit: '%',
             domain: [0, 100],
             ticks: [0, 25, 50, 75, 100],
-            opacity: 0.5
+            // Strong enough to read dry vs humid regions against the map.
+            opacity: 0.78
         },
         rainfall: {
             label: 'Rainfall',
@@ -119,7 +119,7 @@
             unit: 'mm',
             domain: [0, 10],
             ticks: [0, 0.5, 1, 2.5, 5, 10],
-            opacity: 0.65
+            opacity: 0.82
         },
         clouds: {
             label: 'Clouds',
@@ -128,7 +128,7 @@
             unit: '%',
             domain: [0, 100],
             ticks: [0, 25, 50, 75, 100],
-            opacity: 0.7
+            opacity: 0.8
         },
         pressure: {
             // MSL pressure is not in the backend's supported list; surface
@@ -219,7 +219,9 @@
             return clamp(0.28 + Number(value) / 12, 0.28, 0.9);
         }
         if (mode === 'clouds') {
-            return clamp(0.04 + Number(value) / 100 * 0.4, 0, 0.45);
+            // Clear sky stays nearly transparent; dense cloud becomes a
+            // solid white veil. (Layer opacity multiplies this further.)
+            return clamp(0.06 + Number(value) / 100 * 0.89, 0.06, 0.95);
         }
         if (mode === 'aqi') {
             // Low readings stay translucent so the basemap and city shapes
