@@ -991,6 +991,20 @@ button {
     overflow: hidden;
 }
 
+.air-quality-panel__provider-status {
+    margin: 6px 0 0;
+    padding-top: 6px;
+    border-top: 1px solid rgba(116, 174, 213, 0.14);
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    cursor: default;
+}
+
 .weather-info__list {
     flex: 1;
     min-height: 0;

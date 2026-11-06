@@ -106,6 +106,7 @@ const airQualityStatusEl = document.querySelector("[data-air-quality-status]");
 const airQualityPm25El = document.querySelector("[data-air-quality-pm25]");
 const airQualityPm10El = document.querySelector("[data-air-quality-pm10]");
 const airQualityRecommendationEl = document.querySelector("[data-air-quality-recommendation]");
+const airQualityProvidersEl = document.querySelector("[data-air-quality-providers]");
 const airQualityScaleEl = document.querySelector("[data-air-quality-scale]");
 const uvScaleMarkerEl = document.querySelector("[data-uv-scale-marker]");
 const uvScaleValueEl = document.querySelector("[data-uv-scale-value]");
@@ -277,6 +278,7 @@ function renderAirQualityStatus(aqi) {
   if (!classification) {
     airQualityStatusEl.textContent = "Unavailable";
     airQualityStatusEl.removeAttribute("data-aqi-level");
+    airQualityRecommendationEl.textContent = "";
     airQualityRecommendationEl.hidden = true;
     return;
   }
@@ -285,6 +287,19 @@ function renderAirQualityStatus(aqi) {
   airQualityStatusEl.dataset.aqiLevel = classification.key;
   airQualityRecommendationEl.textContent = classification.recommendation;
   airQualityRecommendationEl.hidden = false;
+}
+
+function renderAirQualityProviderStatus(text, tooltip = "") {
+  if (!airQualityProvidersEl) return;
+  if (!text) {
+    airQualityProvidersEl.textContent = "";
+    airQualityProvidersEl.title = "";
+    airQualityProvidersEl.hidden = true;
+    return;
+  }
+  airQualityProvidersEl.textContent = text;
+  airQualityProvidersEl.title = tooltip || text;
+  airQualityProvidersEl.hidden = false;
 }
 
 async function updateUvIndexFromOpenMeteo(latitude, longitude) {
@@ -323,13 +338,10 @@ async function updateAirQualityIndex(latitude, longitude) {
   const requestRevision = ++airQualityRequestRevision;
   renderAirQualityStatus(null);
   renderAqiScale(null);
+  renderAirQualityProviderStatus(null);
   if (airQualityIndexEl) airQualityIndexEl.textContent = "--";
   if (airQualityPm25El) airQualityPm25El.textContent = "-- μg/m³";
   if (airQualityPm10El) airQualityPm10El.textContent = "-- μg/m³";
-  if (airQualityRecommendationEl) {
-    airQualityRecommendationEl.textContent = "Loading station validation...";
-    airQualityRecommendationEl.hidden = false;
-  }
   const url = new URL(`${API_BASE_URL}/weather/air-quality`, window.location.href);
   url.searchParams.set("latitude", String(Number(latitude)));
   url.searchParams.set("longitude", String(Number(longitude)));
@@ -391,18 +403,20 @@ async function updateAirQualityIndex(latitude, longitude) {
       .filter(Boolean);
     const sourceAttributions = (waqi?.attributions || []).map((source) => source.name).filter(Boolean);
     sourceAttributions.push(...(nearestStation?.attributions || []).map((source) => source.name).filter(Boolean));
-    const advice = classification?.recommendation || "Modelled AQI available; station measurements are shown separately.";
-    if (airQualityRecommendationEl) {
-      airQualityRecommendationEl.textContent = `As of ${modelTimestamp} · ${stationRows.join(" · ")} · ${advice}`;
-      airQualityRecommendationEl.title = [
+    // Health recommendation keeps its original single-purpose element, fed by
+    // renderAirQualityStatus(classifyAirQuality(aqi)) above. WAQI/OpenAQ
+    // station status is informational only and renders on its own line below
+    // so provider problems never replace the health guidance.
+    if (airQualityProvidersEl) {
+      const providerTooltip = [
         `${modelled.provider || "Open-Meteo/CAMS"} ${modelled.data_type || "modelled"} ${modelled.aqi.scale || "US AQI"} as of ${modelTimestamp}`,
+        `AQI category: ${classification?.category || modelled.aqi.category || "unavailable"}`,
         ...stationRows,
         stationTimestamps.length ? `Station timestamps: ${stationTimestamps.join(", ")}` : "",
         sourceAttributions.length ? `Provider/source attribution: ${sourceAttributions.join(", ")}` : "",
-        "Attributions: Open-Meteo/CAMS ENSEMBLE, WAQI and OpenAQ.",
-        advice,
+        "Attributions: Open-Meteo/CAMS ENSEMBLE, WAQI and OpenAQ."
       ].filter(Boolean).join("\n");
-      airQualityRecommendationEl.hidden = false;
+      renderAirQualityProviderStatus(`As of ${modelTimestamp} · ${stationRows.join(" · ")}`, providerTooltip);
     }
     if (currentHeroWeather) currentHeroWeather.air_quality = payload;
   } catch (error) {
@@ -414,10 +428,13 @@ async function updateAirQualityIndex(latitude, longitude) {
     if (airQualityPm25El) airQualityPm25El.textContent = "-- μg/m³";
     if (airQualityPm10El) airQualityPm10El.textContent = "-- μg/m³";
     if (airQualityScaleEl) airQualityScaleEl.textContent = "US AQI · Open-Meteo/CAMS";
+    // Keep the health recommendation slot empty when nothing can be computed
+    // and explain the outage on the separate provider-status line instead.
     if (airQualityRecommendationEl) {
-      airQualityRecommendationEl.textContent = "Modelled AQI and station validation unavailable";
-      airQualityRecommendationEl.hidden = false;
+      airQualityRecommendationEl.textContent = "";
+      airQualityRecommendationEl.hidden = true;
     }
+    renderAirQualityProviderStatus("Modelled AQI unavailable — health recommendations cannot be computed", "");
   }
 }
 

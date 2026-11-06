@@ -98,12 +98,16 @@ missing configuration returns 503.
 
 AQI sample spacing is limited to the published CAMS model resolution: about
 0.4° (~45 km) globally and 0.1° (~11 km) within the European CAMS domain. The
-AQI overlay keeps those samples as discrete cells instead of smoothing them
-into finer-looking detail. When a viewport is too wide to sample every native
-cell within `MAP_AIR_MAX_POINTS`, the air-quality grid is honestly coarser:
-`resolution_limited` is `true`, a warning names the effective spacing, and the
-grid still contains the real sampled values (never blank, interpolated, or
-hidden). Point clicks use `/map/point` for the requested coordinates and
+AQI overlay draws a smooth colour field whose colours blend only between
+neighbouring real sample points, so the resolution remains exactly the
+measured grid — smoothing never adds new readings. Sampling points sit at
+pixel centres of the overlay image and rows are re-projected onto Web
+Mercator so the field stays geographically aligned. When a viewport is too
+wide to sample every native cell within `MAP_AIR_MAX_POINTS`, the
+air-quality grid is honestly coarser: `resolution_limited` is `true`, a
+warning names the effective spacing, and the grid still contains the real
+sampled values (never blank, interpolated, or hidden). Point clicks use
+`/map/point` for the requested coordinates and
 return the modelled US AQI, PM2.5 and PM10 values available from Open-Meteo,
 plus `air_model` and `air_native_resolution_deg` so the popup can state the
 CAMS domain and its native cell size. Live WAQI station AQI is shown separately

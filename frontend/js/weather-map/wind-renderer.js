@@ -13,12 +13,17 @@
     'use strict';
 
     const MAX_DPR = 2;
+    const TAU = Math.PI * 2;
     const MIN_PARTICLES = 700;
     const MAX_PARTICLES = 3600;
     const FIELD_COLUMNS = 32;
     const FIELD_ROWS = 20;
     const MIN_SPEED_KMH = 0.35;
     const MAX_FRAME_DELTA = 0.05;
+    // Length of each visible particle trail, in frame positions. A short,
+    // faint tail plus a bright head dot keeps the direction of flow readable
+    // without turning the layer into a wall of streaks.
+    const TAIL_PAIRS = 8;
     const KM_PER_DEGREE = 111.32;
 
     function ensureWeatherPane(map) {
@@ -172,6 +177,7 @@
                 this._lastTime = 0;
                 parentMap.getPane('weatherPane').appendChild(container);
                 this._resize();
+                this._syncPosition();
                 this._bindEvents();
                 this._visibilityHandler = () => {
                     this._paused = document.visibilityState === 'hidden';
@@ -213,6 +219,12 @@
                 this._map.on('resize', this._resize, this);
                 this._map.on('movestart zoomstart', this._interactionStart, this);
                 this._map.on('moveend zoomend', this._interactionEnd, this);
+                // Keep the canvas counter-offset to the map pane's transform.
+                // The pane origin moves with every pan/zoom, and painting in
+                // container coordinates from the pane origin would otherwise
+                // shift the whole animation (it showed up pinned to one map
+                // quadrant instead of covering the viewport).
+                this._map.on('move zoomend', this._syncPosition, this);
                 this._resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(() => this._resize()) : null;
                 this._resizeObserver?.observe(container);
             },
@@ -222,6 +234,16 @@
                 this._map.off('resize', this._resize, this);
                 this._map.off('movestart zoomstart', this._interactionStart, this);
                 this._map.off('moveend zoomend', this._interactionEnd, this);
+                this._map.off('move zoomend', this._syncPosition, this);
+                this._resizeObserver?.disconnect();
+                this._resizeObserver = null;
+            },
+
+            _syncPosition: function () {
+                if (!this._map) return;
+                // Anchor at layer-point(0,0): cancels the map pane offset so
+                // canvas coordinates agree with on-screen viewport pixels.
+                window.L.DomUtil.setPosition(container, this._map.containerPointToLayerPoint([0, 0]));
             },
 
             _interactionStart: function () {
@@ -247,6 +269,7 @@
                 canvas.style.height = `${size.y}px`;
                 context.setTransform(dpr, 0, 0, dpr, 0, 0);
                 this._particleTotal = particleCount(size.x, size.y);
+                this._syncPosition();
                 this._rebuildScreenField();
                 this._resetParticles(false);
                 this._clearCanvas();
@@ -292,6 +315,11 @@
                         valid[index] = 1;
                     }
                 }
+                // Time-lapse factor: values above are pixels per HOUR. Raw
+                // physical motion is invisible at overview zooms and frantic
+                // close up, so scale it toward a steady ~1 px/frame for a
+                // typical 40 km/h wind at every zoom level.
+                this._motionScale = Math.min(90, Math.max(0.02, 208 * Math.pow(0.526, zoom)));
                 this._screenField = { columns, rows, width: size.x, height: size.y, east, down, speeds, valid };
             },
 
@@ -342,6 +370,7 @@
                     particle.age = randomAge ? Math.random() * 50 : 0;
                     particle.maxAge = 45 + Math.random() * 90;
                     particle.speed = 0;
+                    particle.trail = null;
                 }
             },
 
@@ -355,8 +384,12 @@
 
             _isVisible: function () {
                 if (!this._map || document.visibilityState === 'hidden') return false;
-                const rect = container.getBoundingClientRect();
-                return rect.width > 20 && rect.height > 20;
+                // The wrapper div sits inside a Leaflet pane with no intrinsic
+                // size, so its own rect always collapses to 0x0 here. The
+                // map's size is the reliable signal: Leaflet reports 0 when
+                // the map element is genuinely hidden.
+                const size = this._map.getSize();
+                return size.x > 20 && size.y > 20;
             },
 
             _stopFrame: function () {
@@ -382,9 +415,10 @@
 
             _draw: function (delta) {
                 const size = this._map.getSize();
-                const palette = window.AirSensePalettes;
                 const sampleResult = { east: 0, down: 0, speed: 0 };
-                const fade = Math.min(0.24, Math.max(0.08, delta * 5.5));
+                // A slow erase lets the drawn trails linger a few frames so
+                // each particle reads as a comet instead of a lonely dot.
+                const fade = Math.min(0.16, Math.max(0.05, delta * 3.6));
                 context.globalCompositeOperation = 'destination-out';
                 context.globalAlpha = fade;
                 context.fillStyle = '#000';
@@ -401,12 +435,14 @@
                         particle.x = Math.random() * size.x;
                         particle.y = Math.random() * size.y;
                         particle.age = 0;
+                        particle.trail = null;
                         continue;
                     }
 
-                    // The screen field contains local projection scale. This
-                    // multiplier converts km/h into readable pixels per frame.
-                    const motionScale = 0.19 * delta;
+                    // The screen field is pixels per hour; _motionScale (set
+                    // per viewport in _rebuildScreenField) is the time-lapse
+                    // turning km/h into readable on-screen drift.
+                    const motionScale = (this._motionScale ?? 0.19) * delta;
                     particle.x += sampleResult.east * motionScale;
                     particle.y += sampleResult.down * motionScale;
                     particle.speed = sampleResult.speed;
@@ -416,18 +452,81 @@
                         particle.x = Math.random() * size.x;
                         particle.y = Math.random() * size.y;
                         particle.age = 0;
+                        particle.trail = null;
                         continue;
                     }
 
-                    const color = palette?.colorFor?.('wind', particle.speed);
-                    context.strokeStyle = color ? `rgb(${color[0]}, ${color[1]}, ${color[2]})` : 'rgb(130, 205, 255)';
-                    context.lineWidth = 0.7 + Math.min(1.15, particle.speed / 45);
-                    context.beginPath();
-                    context.moveTo(oldX, oldY);
-                    context.lineTo(particle.x, particle.y);
-                    context.stroke();
+                    this._drawParticleTrail(particle, oldX, oldY);
                 }
                 context.globalAlpha = 1;
+            },
+
+            // Very light comet: a thin translucent white tail with a gentle
+            // sperm-like wiggle behind a small bright head dot. The tail is
+            // the direction cue; particle history supplies its curvature.
+            _drawParticleTrail: function (particle, oldX, oldY) {
+                if (!particle.trail) particle.trail = [];
+                const trail = particle.trail;
+                trail.push(oldX, oldY);
+                if (trail.length > TAIL_PAIRS * 2) trail.splice(0, trail.length - TAIL_PAIRS * 2);
+
+                const base = Math.max(0.15, Math.min(1, this._opacity ?? 0.9));
+                if (context.globalAlpha !== base) context.globalAlpha = base;
+
+                // Head dot: always drawn, even on the first frame.
+                context.fillStyle = 'rgb(255, 255, 255)';
+                context.beginPath();
+                context.arc(particle.x, particle.y, 1.05 + Math.min(0.85, particle.speed / 90), 0, TAU);
+                context.globalAlpha = base * 0.95;
+                context.fill();
+
+                const pairs = trail.length / 2;
+                if (pairs < 2) return;
+
+                // Perpendicular sway, strongest mid-tail: the wiggle that
+                // makes the trail read as a flowing ribbon, not a rigid line.
+                const phase = particle.age * 2.3;
+                const size = TAIL_PAIRS + 1;
+                const tailX = this._tailX || (this._tailX = new Float32Array(size));
+                const tailY = this._tailY || (this._tailY = new Float32Array(size));
+
+                for (let i = 0; i < pairs; i += 1) {
+                    const x = trail[i * 2];
+                    const y = trail[i * 2 + 1];
+                    const nextX = i + 1 < pairs ? trail[(i + 1) * 2] : particle.x;
+                    const nextY = i + 1 < pairs ? trail[(i + 1) * 2 + 1] : particle.y;
+                    let dx = nextX - x;
+                    let dy = nextY - y;
+                    const length = Math.hypot(dx, dy) || 1;
+                    dx /= length;
+                    dy /= length;
+                    const sway = Math.sin(phase - i * 0.85) * 1.15;
+                    tailX[i] = x - dy * sway;
+                    tailY[i] = y + dx * sway;
+                }
+                tailX[pairs] = particle.x;
+                tailY[pairs] = particle.y;
+
+                // Faint full-length tail.
+                context.strokeStyle = 'rgb(222, 236, 255)';
+                context.lineWidth = 0.9;
+                context.globalAlpha = base * 0.38;
+                context.beginPath();
+                context.moveTo(tailX[0], tailY[0]);
+                for (let i = 1; i <= pairs; i += 1) context.lineTo(tailX[i], tailY[i]);
+                context.stroke();
+
+                // Brighter pulse just behind the head: the "neck" that makes
+                // the head direction unmistakable.
+                let neckIndex = Math.max(0, pairs - 2);
+                if (pairs > neckIndex && pairs - 1 > neckIndex) {
+                    context.lineWidth = 1.35;
+                    context.globalAlpha = base * 0.85;
+                    context.beginPath();
+                    context.moveTo(tailX[neckIndex], tailY[neckIndex]);
+                    context.lineTo(tailX[pairs], tailY[pairs]);
+                    context.stroke();
+                }
             }
         });
 

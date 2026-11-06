@@ -7,7 +7,6 @@
     'use strict';
 
     const STORAGE_KEY = 'airsense:map-layer';
-    const VIEWPORT_DEBOUNCE_MS = 450;
     const MODAL_OPEN_DELAY_MS = 350;
     const INITIAL_DELAY_MS = 300;
     const FORECAST_MODES = new Set(['wind', 'humidity', 'rainfall', 'clouds']);
@@ -239,7 +238,7 @@
                     const lon = Number(station.longitude);
                     const value = Number(station.aqi);
                     if (![lat, lon, value].every(Number.isFinite)) return;
-                    const rgb = palettes.colorFor('aqi', value) || [150, 150, 150];
+                    const rgb = palettes.aqiCategoryColor(value) || [150, 150, 150];
                     const color = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
                     const marker = window.L.circleMarker([lat, lon], {
                         radius: zoom >= 10 ? 8 : 6,
@@ -350,7 +349,10 @@
         }
         const payload = controller.payload;
         if (!payload?.segments?.length) return;
-        const countries = window.AIRSENSE_POPULAR_CITIES;
+        const dataset = window.AIRSENSE_POPULAR_CITIES;
+        // The dataset is either a country array or an object wrapping one
+        // under `countries` (source/license metadata sits beside it).
+        const countries = Array.isArray(dataset) ? dataset : dataset?.countries;
         if (!Array.isArray(countries)) return;
         const bounds = controller.map.getBounds();
         const group = window.L.layerGroup();
@@ -366,7 +368,7 @@
             if (!bounds.contains([lat, lon])) continue;
             const value = nearestSampleValue(payload, lat, lon);
             if (value === null) continue;
-            const rgb = palettes.colorFor('aqi', value) || [160, 160, 160];
+            const rgb = palettes.aqiCategoryColor(value) || [160, 160, 160];
             // Keep the city label readable on every category colour band.
             const luminance = rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
             const nameColor = luminance > 145 ? '#0b1a28' : '#f2f7fc';
@@ -776,9 +778,12 @@
             ? { mode: 'standard' }
             : { status: 'loading' });
 
-        map.on('moveend', () => {
+        // Weather data refreshes where the user clicks, not while the map is
+        // panned or zoomed: overlays stay geo-anchored during navigation, so
+        // only a click (or a mode/timeline change) fetches fresh data.
+        map.on('click', () => {
             if (controller.mode !== 'standard') {
-                scheduleUpdate(controller, VIEWPORT_DEBOUNCE_MS);
+                scheduleUpdate(controller, 0);
             }
         });
 

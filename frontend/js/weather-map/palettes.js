@@ -42,16 +42,12 @@
         ],
         aqi: [
             [0, [0, 228, 0]],
-            [50, [0, 228, 0]],
-            [51, [255, 255, 0]],
-            [100, [255, 255, 0]],
-            [101, [255, 126, 0]],
-            [150, [255, 126, 0]],
-            [151, [255, 0, 0]],
-            [200, [255, 0, 0]],
-            [201, [143, 63, 151]],
-            [300, [143, 63, 151]],
-            [301, [126, 0, 35]],
+            [25, [0, 228, 0]],
+            [75, [255, 255, 0]],
+            [125, [255, 126, 0]],
+            [175, [255, 0, 0]],
+            [250, [143, 63, 151]],
+            [400, [126, 0, 35]],
             [500, [126, 0, 35]]
         ],
         wind: [
@@ -153,12 +149,12 @@
     };
 
     const AQI_BANDS = [
-        { start: 0, end: 50, color: [0, 228, 0] },
-        { start: 51, end: 100, color: [255, 255, 0] },
-        { start: 101, end: 150, color: [255, 126, 0] },
-        { start: 151, end: 200, color: [255, 0, 0] },
-        { start: 201, end: 300, color: [143, 63, 151] },
-        { start: 301, end: 500, color: [126, 0, 35] }
+        { max: 50, color: [0, 228, 0] },
+        { max: 100, color: [255, 255, 0] },
+        { max: 150, color: [255, 126, 0] },
+        { max: 200, color: [255, 0, 0] },
+        { max: 300, color: [143, 63, 151] },
+        { max: 500, color: [126, 0, 35] }
     ];
 
     function clamp(value, minimum, maximum) {
@@ -181,28 +177,6 @@
         const numeric = Number(value);
         if (mode === 'rainfall' && numeric <= 0.05) return null;
 
-        if (mode === 'aqi') {
-            // AQI cells follow the official US-AQI category colours, shaded
-            // inside each band by the actual value: AQI 45 stays visibly
-            // lighter than AQI 100. Every shade maps to a real measured
-            // value — no decoration independent of the data.
-            let band = AQI_BANDS[AQI_BANDS.length - 1];
-            for (let index = 0; index < AQI_BANDS.length; index += 1) {
-                if (numeric <= AQI_BANDS[index].end) {
-                    band = AQI_BANDS[index];
-                    break;
-                }
-            }
-            const span = band.end - band.start + 1;
-            const fraction = clamp((numeric - band.start) / span, 0, 1);
-            const darken = 0.16 * fraction;
-            return [
-                Math.round(band.color[0] * (1 - darken)),
-                Math.round(band.color[1] * (1 - darken)),
-                Math.round(band.color[2] * (1 - darken))
-            ];
-        }
-
         const stops = STOPS[mode];
         if (!stops) return null;
         if (numeric <= stops[0][0]) return stops[0][1];
@@ -217,6 +191,21 @@
             }
         }
         return stops[stops.length - 1][1];
+    }
+
+    /* Official US-AQI category colour for a single value. Used by discrete
+       markers (city chips, station dots) so their colours stay anchored to
+       the official bands while the raster itself shades continuously. */
+    function aqiCategoryColor(value) {
+        const numeric = Number(value);
+        if (value === null || value === undefined || !Number.isFinite(numeric)) {
+            return null;
+        }
+        if (numeric <= AQI_BANDS[0].max) return AQI_BANDS[0].color.slice();
+        for (let index = 1; index < AQI_BANDS.length; index += 1) {
+            if (numeric <= AQI_BANDS[index].max) return AQI_BANDS[index].color.slice();
+        }
+        return AQI_BANDS[AQI_BANDS.length - 1].color.slice();
     }
 
     function alphaFor(mode, value) {
@@ -262,6 +251,7 @@
         STOPS,
         colorFor,
         alphaFor,
+        aqiCategoryColor,
         gradientCss,
         formatValue
     };

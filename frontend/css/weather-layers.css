@@ -79,11 +79,6 @@
     transition: opacity 0.22s ease;
 }
 
-.weather-layer-image--aqi {
-    image-rendering: crisp-edges;
-    image-rendering: pixelated;
-}
-
 /* --------------------------------------------------------------------------
    City-level AQI indicators (AQI layer while zoomed in)
    DOM chips above the raster; the value pill uses the official category
@@ -240,6 +235,80 @@
 
 .airsense-legend__status.is-loading {
     color: #8fd4ff;
+}
+
+.airsense-legend__status.is-live {
+    color: #8fd8a8;
+}
+
+.airsense-legend__status.is-stale {
+    color: #e8c47c;
+}
+
+.airsense-legend__about {
+    margin-top: 6px;
+    font-size: 8.5px;
+    line-height: 1.4;
+    color: #c3d9ea;
+}
+
+.airsense-legend__bands {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+    margin: 7px 0 3px;
+}
+
+.airsense-legend__bands > div {
+    display: grid;
+    grid-template-columns: 9px 40px 1fr;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    color: #d9e8f3;
+    font-size: 8px;
+    line-height: 1.2;
+}
+
+.airsense-legend__bands i {
+    width: 8px;
+    height: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 2px;
+}
+
+.airsense-legend__bands i.is-spacer {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.airsense-legend__bands b {
+    color: #f5f9fc;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.airsense-legend__bands.is-single {
+    grid-template-columns: 1fr;
+    margin: 6px 0 3px;
+    max-height: 118px;
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(116, 174, 213, 0.4) transparent;
+}
+
+.airsense-legend__bands.is-single > div {
+    align-items: start;
+}
+
+.airsense-legend__bands.is-single span {
+    color: #bed3e4;
+}
+
+.airsense-legend__bands.is-single em {
+    color: #f5f9fc;
+    font-style: normal;
+    font-weight: 600;
 }
 
 .airsense-legend__retry {
