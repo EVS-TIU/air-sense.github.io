@@ -7,7 +7,6 @@
     'use strict';
 
     const STORAGE_KEY = 'airsense:map-layer';
-    const VIEWPORT_DEBOUNCE_MS = 450;
     const MODAL_OPEN_DELAY_MS = 350;
     const INITIAL_DELAY_MS = 300;
     // Wind blend: the Open-Meteo speed field is colorized as a soft
@@ -122,17 +121,6 @@
         return [west - padX, south - padY, east + padX, north + padY];
     }
 
-    function bboxCoversViewport(bbox, viewport) {
-        if (!Array.isArray(bbox) || !Array.isArray(viewport)) return false;
-        if (bbox.length !== 4 || viewport.length !== 4) return false;
-        return bbox[0] <= viewport[0] + 0.01 && bbox[1] <= viewport[1] + 0.01 &&
-            bbox[2] >= viewport[2] - 0.01 && bbox[3] >= viewport[3] - 0.01;
-    }
-
-    function payloadCoversViewport(payload, viewport) {
-        if (!payload || !Array.isArray(payload.segments)) return false;
-        return payload.segments.some((segment) => bboxCoversViewport(segment.bbox, viewport));
-    }
 
     function isForecastMode(mode) {
         return FORECAST_MODES.has(mode);
@@ -495,7 +483,6 @@
         removeWind(controller);
         removeOpenWeatherWindTile(controller);
         if (controller.radar && controller.map.hasLayer(controller.radar)) controller.map.removeLayer(controller.radar);
-        if (controller.weatherApiTile && controller.map.hasLayer(controller.weatherApiTile)) controller.map.removeLayer(controller.weatherApiTile);
     }
 
     function applyPayload(controller, payload, mode, key) {
@@ -592,11 +579,6 @@
 
         if (!isMapVisible(controller)) return;
 
-        if (meta.provider === 'weatherapi') {
-            loadWeatherApiTile(controller, mode);
-            if (mode !== 'wind') return;
-        }
-
         const bbox = viewportBbox(controller.map);
         if (!bbox) return;
 
@@ -607,7 +589,6 @@
         const key = viewportKey(family, fetchBbox, zoom, mode, forecastTime);
 
         if (controller.payload && controller.payloadKey === key) {
-            controller.payloadZoom = zoom;
             applyPayload(controller, controller.payload, mode, key);
             return;
         }
@@ -621,37 +602,15 @@
         dataStore.getGrid(family, fetchBbox, zoom, variables, undefined, forecastTime)
             .then((payload) => {
                 if (requestId !== controller.requestId || controller.mode !== mode) return;
-                controller.payloadZoom = zoom;
                 applyPayload(controller, payload, mode, key);
             })
             .catch((error) => {
                 if (requestId !== controller.requestId || controller.mode !== mode) return;
-                // A WeatherAPI tile is an independent, valid layer. An
-                // Open-Meteo failure only removes the optional wind field;
-                // it must never turn a working speed tile into a layer error.
-                if (meta.provider === 'weatherapi' && controller.weatherApiTile) {
-                    updateLegend(controller, {
-                        status: 'ready',
-                        warning: mode === 'wind'
-                            ? 'Animated flow temporarily unavailable; WeatherAPI speed tile is current.'
-                            : 'WeatherAPI map tile is current; secondary point data is unavailable.',
-                        warningTimestamp: new Date().toISOString(),
-                        payload: controller.payload || null
-                    });
-                    return;
-                }
                 if (mode === 'wind') {
-                    // Keep Wind usable when the gridded Open-Meteo request is
-                    // rate-limited: the backend tile is still real wind data.
-                    // Remove any stale vector layer before showing the tile.
+                    // Keep the blended wind field usable when the gridded
+                    // Open-Meteo request is rate-limited: keep whatever is
+                    // already on screen rather than flashing an error.
                     removeWind(controller);
-                    removeScalar(controller);
-                    showOpenWeatherWindTile(controller);
-                    updateLegend(controller, {
-                        status: 'ready',
-                        warning: 'Live vector wind unavailable; showing the real-time wind tile fallback.'
-                    });
-                    return;
                 }
                 if (controller.overlay) {
                     updateLegend(controller, {
@@ -667,46 +626,6 @@
                     onRetry: () => scheduleUpdate(controller, 0)
                 });
             });
-    }
-
-    function loadWeatherApiTile(controller, mode) {
-        const layerPaths = {
-            temperature: 'tmp2m', rainfall: 'precip', pressure: 'pressure', wind: 'wind'
-        };
-        const path = layerPaths[mode];
-        if (!path) return;
-        scalarRenderer.ensureWeatherPane(controller.map);
-        const validTime = new Date();
-        validTime.setUTCMinutes(0, 0, 0);
-        const stamp = validTime.toISOString().replace(/[-:T]/g, '').slice(0, 10);
-        const opacity = controller.opacities[mode] ?? (mode === 'wind' ? 0.5 : palettes.MODES[mode].opacity);
-        if (controller.weatherApiTile && controller.weatherApiTileMode === mode && controller.weatherApiStamp === stamp) {
-            controller.weatherApiTile.setOpacity(opacity);
-            if (!controller.map.hasLayer(controller.weatherApiTile)) controller.weatherApiTile.addTo(controller.map);
-            updateLegend(controller, { tileTime: validTime.toISOString(), tileSource: 'WeatherAPI' });
-            return;
-        }
-        if (controller.weatherApiTile && controller.map.hasLayer(controller.weatherApiTile)) controller.map.removeLayer(controller.weatherApiTile);
-        controller.weatherApiTileMode = mode;
-        controller.weatherApiStamp = stamp;
-        controller.weatherApiTile = window.L.tileLayer(
-            `https://weathermaps.weatherapi.com/${path}/tiles/${stamp}/{z}/{x}/{y}.png`,
-            { minZoom: 0, maxZoom: 19, opacity, pane: 'weatherPane', attribution: 'Weather map tiles by <a href="https://www.weatherapi.com/docs/weather-maps/">WeatherAPI.com</a>' }
-        ).addTo(controller.map);
-        controller.weatherApiTile.on('tileerror', () => {
-            controller.weatherApiTileErrors = (controller.weatherApiTileErrors || 0) + 1;
-            if (controller.weatherApiTileErrors >= 3 && controller.mode === mode) {
-                updateLegend(controller, {
-                    status: 'ready',
-                    warning: 'Some WeatherAPI tiles could not be loaded; retrying on the next map move.'
-                });
-            }
-        });
-        controller.weatherApiTile.on('load', () => {
-            controller.weatherApiTileErrors = 0;
-            if (controller.mode === mode) updateLegend(controller, { status: 'ready', warning: null });
-        });
-        updateLegend(controller, { status: 'ready', tileTime: validTime.toISOString(), tileSource: 'WeatherAPI' });
     }
 
     async function loadRadar(controller) {
@@ -806,10 +725,7 @@
             overlay: null,
             wind: null,
             radar: null,
-            weatherApiTile: null,
             openWeatherWindTile: null,
-            weatherApiTileMode: null,
-            weatherApiStamp: null,
             legendState: {},
             opacities: {},
             requestId: 0,
@@ -822,25 +738,11 @@
 
         // Weather data refreshes where the user clicks, not while the map is
         // panned or zoomed: overlays stay geo-anchored during navigation, so
-        // only a click (or a mode/timeline change) fetches fresh data.
+        // only a click (or a mode/timeline change) fetches fresh data. This
+        // applies to every data layer - air quality and all weather modes.
         map.on('click', () => {
-            if (controller.mode !== 'standard') {
+            if (controller.mode !== 'standard' && controller.mode !== 'satellite') {
                 scheduleUpdate(controller, 0);
-            }
-        });
-
-        // One exception: a lazy background refresh once the viewport has
-        // slid outside the area the fetched grid covers, or zoomed in past
-        // the resolution the grid was fetched at. Scrolling within covered
-        // data still fetches nothing, so the common case stays quiet.
-        map.on('moveend', () => {
-            if (controller.mode === 'standard') return;
-            const bbox = viewportBbox(controller.map);
-            const zoom = viewportZoom(controller.map);
-            const stale = !bbox || !payloadCoversViewport(controller.payload, bbox) ||
-                controller.payloadZoom == null || zoom > controller.payloadZoom + 0.3;
-            if (stale) {
-                scheduleUpdate(controller, VIEWPORT_DEBOUNCE_MS);
             }
         });
 
@@ -917,7 +819,6 @@
             if (controller.overlay?.eachLayer) controller.overlay.eachLayer((layer) => layer.setOpacity?.(value));
             else controller.overlay?.setOpacity?.(value);
             controller.radar?.setOpacity(value);
-            controller.weatherApiTile?.setOpacity(value);
             controller.wind?.setOpacity?.(value);
             updateLegend(controller, { opacity: value });
         });

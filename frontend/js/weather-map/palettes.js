@@ -86,7 +86,6 @@
         temperature: {
             label: 'Temperature',
             family: 'weather',
-            provider: 'weatherapi',
             variable: 'temperature_2m',
             unit: '°C',
             domain: [-40, 50],
@@ -132,7 +131,10 @@
             opacity: 0.7
         },
         pressure: {
-            label: 'Atmospheric Pressure', family: 'weather', provider: 'weatherapi', variable: 'pressure_msl',
+            // MSL pressure is not in the backend's supported list; surface
+            // pressure (hPa) comes from the same Open-Meteo grid instead of
+            // third-party tiles.
+            label: 'Atmospheric Pressure', family: 'weather', variable: 'surface_pressure',
             unit: 'hPa', domain: [940, 1060], ticks: [940, 970, 990, 1010, 1030, 1060], opacity: 0.62
         },
         radar: {
