@@ -24,10 +24,10 @@
     // faint tail plus a bright head dot keeps the direction of flow readable
     // without turning the layer into a wall of streaks.
     const TAIL_PAIRS = 12;
-    // Standard pacing: a typical 40 km/h wind drifts ~1.6 px/frame at any
+    // Relaxed pacing: a typical 40 km/h wind drifts ~1.1 px/frame at any
     // zoom, while the strongest gusts are capped below jolt territory.
-    const TIME_LAPSE_BASE = 340;
-    const MAX_PARTICLE_JUMP_PX = 3.2;
+    const TIME_LAPSE_BASE = 230;
+    const MAX_PARTICLE_JUMP_PX = 2.3;
     const KM_PER_DEGREE = 111.32;
 
     function ensureWeatherPane(map) {
@@ -37,7 +37,15 @@
             pane.style.zIndex = '350';
             pane.style.pointerEvents = 'none';
         }
-        return pane;
+        // The particle canvas gets its own pane above the scalar
+        // speed-field images so the blended layers never swap order.
+        let vectorPane = map.getPane('windVectorPane');
+        if (!vectorPane) {
+            vectorPane = map.createPane('windVectorPane');
+            vectorPane.style.zIndex = '352';
+            vectorPane.style.pointerEvents = 'none';
+        }
+        return vectorPane;
     }
 
     function finite(value) {
@@ -179,7 +187,7 @@
                 this._particles = [];
                 this._screenField = null;
                 this._lastTime = 0;
-                parentMap.getPane('weatherPane').appendChild(container);
+                parentMap.getPane('windVectorPane').appendChild(container);
                 this._resize();
                 this._syncPosition();
                 this._bindEvents();
@@ -487,11 +495,12 @@
                 const base = Math.max(0.15, Math.min(1, this._opacity ?? 0.9));
                 if (context.globalAlpha !== base) context.globalAlpha = base;
 
-                // Head dot: always drawn, even on the first frame.
+                // Head dot: always drawn, even on the first frame. Small and
+                // light so it blends over the wind-speed tile.
                 context.fillStyle = 'rgb(255, 255, 255)';
                 context.beginPath();
-                context.arc(particle.x, particle.y, 1.05 + Math.min(0.85, particle.speed / 90), 0, TAU);
-                context.globalAlpha = base * 0.95;
+                context.arc(particle.x, particle.y, 0.75 + Math.min(0.5, particle.speed / 110), 0, TAU);
+                context.globalAlpha = base * 0.8;
                 context.fill();
 
                 const pairs = trail.length / 2;
@@ -523,8 +532,8 @@
 
                 // Faint full-length tail.
                 context.strokeStyle = 'rgb(222, 236, 255)';
-                context.lineWidth = 0.9;
-                context.globalAlpha = base * 0.38;
+                context.lineWidth = 0.7;
+                context.globalAlpha = base * 0.32;
                 context.beginPath();
                 context.moveTo(tailX[0], tailY[0]);
                 for (let i = 1; i <= pairs; i += 1) context.lineTo(tailX[i], tailY[i]);
@@ -534,8 +543,8 @@
                 // the head direction unmistakable.
                 let neckIndex = Math.max(0, pairs - 2);
                 if (pairs > neckIndex && pairs - 1 > neckIndex) {
-                    context.lineWidth = 1.35;
-                    context.globalAlpha = base * 0.85;
+                    context.lineWidth = 1.05;
+                    context.globalAlpha = base * 0.7;
                     context.beginPath();
                     context.moveTo(tailX[neckIndex], tailY[neckIndex]);
                     context.lineTo(tailX[pairs], tailY[pairs]);

@@ -100,7 +100,9 @@
             unit: 'km/h',
             domain: [0, 80],
             ticks: [0, 10, 20, 30, 50, 80],
-            opacity: 0.9
+            // Particles blend into the wind-speed tile beneath them rather
+            // than sitting on top as a separate layer.
+            opacity: 0.55
         },
         humidity: {
             label: 'Humidity',

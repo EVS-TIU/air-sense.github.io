@@ -10,6 +10,9 @@
     const VIEWPORT_DEBOUNCE_MS = 450;
     const MODAL_OPEN_DELAY_MS = 350;
     const INITIAL_DELAY_MS = 300;
+    // Wind blend: the Open-Meteo speed field is colorized as a soft
+    // background beneath the moving particles (same palette as the legend).
+    const WIND_BACKGROUND_OPACITY = 0.45;
     const FORECAST_MODES = new Set(['wind', 'humidity', 'rainfall', 'clouds']);
 
     const palettes = window.AirSensePalettes;
@@ -451,6 +454,14 @@
         // The vector renderer normally creates this pane. The fallback can
         // run before any vector payload exists, so create it explicitly.
         scalarRenderer.ensureWeatherPane(controller.map);
+        // A dedicated pane sits below weatherPane so the blended tile stays
+        // under the moving particles no matter when each layer is added.
+        let tilePane = controller.map.getPane('windTilePane');
+        if (!tilePane) {
+            tilePane = controller.map.createPane('windTilePane');
+            tilePane.style.zIndex = '345';
+            tilePane.style.pointerEvents = 'none';
+        }
         if (!controller.openWeatherWindTile) {
             controller.openWeatherWindTile = window.L.tileLayer(
                 `${dataStore.apiBase()}/map/wind-tile/{z}/{x}/{y}.png`,
@@ -458,7 +469,7 @@
                     minZoom: 2,
                     maxZoom: 19,
                     opacity: 0.62,
-                    pane: 'weatherPane',
+                    pane: 'windTilePane',
                     attribution: 'Wind tiles by <a href="https://openweathermap.org/">OpenWeather</a>'
                 }
             );
@@ -508,7 +519,9 @@
         }
 
         if (mode === 'wind') {
-            removeOpenWeatherWindTile(controller);
+            // Blended look: the Open-Meteo speed field is rendered as a soft
+            // color background (same palette as the legend) and the light
+            // comet particles float on top of it.
             const field = windRenderer.buildField(payload);
             if (!field) {
                 updateLegend(controller, {
@@ -525,8 +538,10 @@
                 return;
             }
             removeScalar(controller);
-            // Wind is rendered by the bounded Canvas particle field. Keep the
-            // base map visible underneath it while the vector data loads.
+            // Soft colorized speed-field background (same palette as the
+            // legend) rendered beneath the particles: both layers read as one.
+            controller.overlay = scalarRenderer.render(controller.map, payload, mode, WIND_BACKGROUND_OPACITY);
+            controller.overlay.addTo(controller.map);
             if (!controller.wind) {
                 controller.wind = windRenderer.createLayer(controller.map);
             }
@@ -664,7 +679,7 @@
         const validTime = new Date();
         validTime.setUTCMinutes(0, 0, 0);
         const stamp = validTime.toISOString().replace(/[-:T]/g, '').slice(0, 10);
-        const opacity = controller.opacities[mode] ?? (mode === 'wind' ? 0.16 : palettes.MODES[mode].opacity);
+        const opacity = controller.opacities[mode] ?? (mode === 'wind' ? 0.5 : palettes.MODES[mode].opacity);
         if (controller.weatherApiTile && controller.weatherApiTileMode === mode && controller.weatherApiStamp === stamp) {
             controller.weatherApiTile.setOpacity(opacity);
             if (!controller.map.hasLayer(controller.weatherApiTile)) controller.weatherApiTile.addTo(controller.map);
