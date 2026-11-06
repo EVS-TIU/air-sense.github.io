@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 # Degree steps are a ladder rather than arbitrary values so adjacent viewports
 # produce identical grids and can share the backend cache.
-STEP_LADDER = (0.02, 0.05, 0.1, 0.2, 0.25, 0.4, 0.5, 0.8, 1.0, 2.0, 2.5, 5.0, 10.0, 15.0, 30.0)
+STEP_LADDER = (0.02, 0.05, 0.1, 0.2, 0.25, 0.4, 0.5, 0.8, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0)
 MIN_LATITUDE = -85.0
 MAX_LATITUDE = 85.0
 MAX_GRID_SIZE = 64
@@ -36,13 +36,16 @@ def _normalize_longitude(lon: float) -> float:
 
 
 def _target_columns(zoom: int) -> int:
+    # Denser world views: the point budget (map_max_points) is the real
+    # limiter, so use it to render a visibly smoother field instead of
+    # stopping at a handful of coarse blobs.
     if zoom <= 2:
-        return 12
-    if zoom <= 5:
-        return 16
-    if zoom <= 8:
         return 20
-    return 28
+    if zoom <= 5:
+        return 24
+    if zoom <= 8:
+        return 28
+    return 32
 
 
 def _normalize_bbox(

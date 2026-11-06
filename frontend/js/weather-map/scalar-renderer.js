@@ -22,7 +22,7 @@
 (function () {
     'use strict';
 
-    const MAX_CANVAS = 384;
+    const MAX_CANVAS = 512;
     const MERCATOR_LAT_MAX = 85.0511287798066;
 
     function ensureWeatherPane(map) {
@@ -160,10 +160,12 @@
 
         for (let row = 0; row < displayHeight; row += 1) {
             // Display row r is at constant mercator y; convert to latitude,
-            // then to the fractional south-up lattice row index.
+            // then to the fractional south-up lattice row index. Row 0 is the
+            // image top (north), so walk latitudes from north downward: the
+            // matrix rows ascend south -> north (row 0 is lat -85).
             const frac = (row + 0.5) / displayHeight;
             const lat = latitudeFromNormalizedMercatorY(
-                ySouthMerc + frac * (yNorthMerc - ySouthMerc)
+                yNorthMerc + frac * (ySouthMerc - yNorthMerc)
             );
             const latIndex = (lat - lat0) / latStep;
             for (let column = 0; column < columns; column += 1) {
@@ -195,36 +197,48 @@
         displayContext.imageSmoothingQuality = 'high';
         displayContext.drawImage(warped, 0, 0, displayWidth, displayHeight);
 
-        if (mode === 'aqi') {
-            // Feather only the outer coverage edges: worldview segments that
-            // wrap onto themselves or abut neighbouring segments keep clean
-            // seams; genuinely limited edges fade out over the half-cell
-            // margin the bbox extends past the last sample.
-            const halfX = displayWidth / columns / 2;
-            const halfY = displayHeight / rows / 2;
-            const featherWest = !longitudeEdgeIsInterior(west, -1, allSegments);
-            const featherEast = !longitudeEdgeIsInterior(east, 1, allSegments);
-            // Latitude does not wrap: a north edge is interior only when
-            // another segment starts exactly where this one ends.
-            const featherSouth = !allSegments.some((other) => other !== segment &&
-                Math.abs(Number(other.bbox?.[3]) - rawSouth) < 1e-3);
-            const featherNorth = !allSegments.some((other) => other !== segment &&
-                Math.abs(Number(other.bbox?.[1]) - rawNorth) < 1e-3);
-
-            displayContext.globalCompositeOperation = 'destination-out';
-            const fade = (x0, y0, x1, y1) => {
-                const gradient = displayContext.createLinearGradient(x0, y0, x1, y1);
-                gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                displayContext.fillStyle = gradient;
-                displayContext.fillRect(0, 0, displayWidth, displayHeight);
-            };
-            if (featherWest) fade(0, 0, halfX, 0);
-            if (featherEast) fade(displayWidth, 0, displayWidth - halfX, 0);
-            if (featherSouth) fade(0, displayHeight, 0, displayHeight - halfY);
-            if (featherNorth) fade(0, 0, 0, halfY);
-            displayContext.globalCompositeOperation = 'source-over';
+        // Premium polish: a soft second pass melts the remaining lattice
+        // texture whenever the coarse sample grid is stretched across many
+        // display pixels, so fields read like smooth gradients instead of
+        // visible blobs. Already denser grids skip the extra pass.
+        const nodePx = Math.max(displayWidth / columns, displayHeight / rows);
+        if (nodePx > 10) {
+            displayContext.globalAlpha = 0.5;
+            displayContext.filter = `blur(${Math.min(9, nodePx * 0.16).toFixed(1)}px)`;
+            displayContext.drawImage(warped, 0, 0, displayWidth, displayHeight);
+            displayContext.filter = 'none';
+            displayContext.globalAlpha = 1;
         }
+
+        // Feather the outer coverage edges on every mode: worldview segments
+        // that wrap onto themselves or abut neighbouring segments keep clean
+        // seams; genuinely limited edges fade out over the half-cell margin
+        // the bbox extends past the last sample, so overlays never end in a
+        // hard rectangle against the basemap.
+        const halfX = displayWidth / columns / 2;
+        const halfY = displayHeight / rows / 2;
+        const featherWest = !longitudeEdgeIsInterior(west, -1, allSegments);
+        const featherEast = !longitudeEdgeIsInterior(east, 1, allSegments);
+        // Latitude does not wrap: a north edge is interior only when
+        // another segment starts exactly where this one ends.
+        const featherSouth = !allSegments.some((other) => other !== segment &&
+            Math.abs(Number(other.bbox?.[3]) - rawSouth) < 1e-3);
+        const featherNorth = !allSegments.some((other) => other !== segment &&
+            Math.abs(Number(other.bbox?.[1]) - rawNorth) < 1e-3);
+
+        displayContext.globalCompositeOperation = 'destination-out';
+        const fade = (x0, y0, x1, y1) => {
+            const gradient = displayContext.createLinearGradient(x0, y0, x1, y1);
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            displayContext.fillStyle = gradient;
+            displayContext.fillRect(0, 0, displayWidth, displayHeight);
+        };
+        if (featherWest) fade(0, 0, halfX, 0);
+        if (featherEast) fade(displayWidth, 0, displayWidth - halfX, 0);
+        if (featherSouth) fade(0, displayHeight, 0, displayHeight - halfY);
+        if (featherNorth) fade(0, 0, 0, halfY);
+        displayContext.globalCompositeOperation = 'source-over';
 
         return { canvas: display, bbox: [west, south, east, north] };
     }

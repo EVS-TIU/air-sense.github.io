@@ -215,8 +215,10 @@
     function alphaFor(mode, value) {
         if (value === null || value === undefined || !Number.isFinite(Number(value))) return 0;
         if (mode === 'rainfall') {
-            if (Number(value) <= 0.05) return 0;
-            return clamp(0.28 + Number(value) / 12, 0.28, 0.9);
+            if (Number(value) <= 0.03) return 0;
+            // Low end near 0.4 so drizzle reads on the dark basemap; the
+            // ramp keeps climbing to peak opacity for heavy rain.
+            return clamp(0.42 + Number(value) / 9, 0.42, 0.9);
         }
         if (mode === 'clouds') {
             // Clear sky stays nearly transparent; dense cloud becomes a
