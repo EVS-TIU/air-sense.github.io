@@ -23,7 +23,11 @@
     // Length of each visible particle trail, in frame positions. A short,
     // faint tail plus a bright head dot keeps the direction of flow readable
     // without turning the layer into a wall of streaks.
-    const TAIL_PAIRS = 8;
+    const TAIL_PAIRS = 12;
+    // Standard pacing: a typical 40 km/h wind drifts ~1.6 px/frame at any
+    // zoom, while the strongest gusts are capped below jolt territory.
+    const TIME_LAPSE_BASE = 340;
+    const MAX_PARTICLE_JUMP_PX = 3.2;
     const KM_PER_DEGREE = 111.32;
 
     function ensureWeatherPane(map) {
@@ -319,7 +323,7 @@
                 // physical motion is invisible at overview zooms and frantic
                 // close up, so scale it toward a steady ~1 px/frame for a
                 // typical 40 km/h wind at every zoom level.
-                this._motionScale = Math.min(90, Math.max(0.02, 208 * Math.pow(0.526, zoom)));
+                this._motionScale = Math.min(90, Math.max(0.02, TIME_LAPSE_BASE * Math.pow(0.526, zoom)));
                 this._screenField = { columns, rows, width: size.x, height: size.y, east, down, speeds, valid };
             },
 
@@ -443,8 +447,18 @@
                     // per viewport in _rebuildScreenField) is the time-lapse
                     // turning km/h into readable on-screen drift.
                     const motionScale = (this._motionScale ?? 0.19) * delta;
-                    particle.x += sampleResult.east * motionScale;
-                    particle.y += sampleResult.down * motionScale;
+                    let dxPx = sampleResult.east * motionScale;
+                    let dyPx = sampleResult.down * motionScale;
+                    // Ease the very strongest winds: without the cap, fast
+                    // cells leap between frames and read as lag, not speed.
+                    const magnitude = Math.hypot(dxPx, dyPx);
+                    if (magnitude > MAX_PARTICLE_JUMP_PX) {
+                        const ratio = MAX_PARTICLE_JUMP_PX / magnitude;
+                        dxPx *= ratio;
+                        dyPx *= ratio;
+                    }
+                    particle.x += dxPx;
+                    particle.y += dyPx;
                     particle.speed = sampleResult.speed;
                     particle.age += delta * 60;
 

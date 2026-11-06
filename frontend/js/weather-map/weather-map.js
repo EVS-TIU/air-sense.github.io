@@ -7,6 +7,7 @@
     'use strict';
 
     const STORAGE_KEY = 'airsense:map-layer';
+    const VIEWPORT_DEBOUNCE_MS = 450;
     const MODAL_OPEN_DELAY_MS = 350;
     const INITIAL_DELAY_MS = 300;
     const FORECAST_MODES = new Set(['wind', 'humidity', 'rainfall', 'clouds']);
@@ -105,6 +106,29 @@
 
     function viewportKey(family, bbox, zoom, mode, forecastTime) {
         return `${family}:${mode || ''}:${zoom}:${dataStore.roundedBbox(bbox)}:${forecastTime || 'current'}`;
+    }
+
+    // Fetch a grid a little larger than the viewport so small pans and zooms
+    // stay inside already-fetched data instead of blanking the field edges.
+    const GRID_BBOX_PAD_FRACTION = 0.3;
+
+    function expandBbox(bbox, fraction) {
+        const [west, south, east, north] = bbox;
+        const padX = Math.max(0.5, (east - west) * fraction);
+        const padY = Math.max(0.5, (north - south) * fraction);
+        return [west - padX, south - padY, east + padX, north + padY];
+    }
+
+    function bboxCoversViewport(bbox, viewport) {
+        if (!Array.isArray(bbox) || !Array.isArray(viewport)) return false;
+        if (bbox.length !== 4 || viewport.length !== 4) return false;
+        return bbox[0] <= viewport[0] + 0.01 && bbox[1] <= viewport[1] + 0.01 &&
+            bbox[2] >= viewport[2] - 0.01 && bbox[3] >= viewport[3] - 0.01;
+    }
+
+    function payloadCoversViewport(payload, viewport) {
+        if (!payload || !Array.isArray(payload.segments)) return false;
+        return payload.segments.some((segment) => bboxCoversViewport(segment.bbox, viewport));
     }
 
     function isForecastMode(mode) {
@@ -564,9 +588,11 @@
         const zoom = viewportZoom(controller.map);
         const family = meta.family;
         const forecastTime = isForecastMode(mode) ? currentForecastTime : null;
-        const key = viewportKey(family, bbox, zoom, mode, forecastTime);
+        const fetchBbox = expandBbox(bbox, GRID_BBOX_PAD_FRACTION);
+        const key = viewportKey(family, fetchBbox, zoom, mode, forecastTime);
 
         if (controller.payload && controller.payloadKey === key) {
+            controller.payloadZoom = zoom;
             applyPayload(controller, controller.payload, mode, key);
             return;
         }
@@ -577,9 +603,10 @@
         const variables = mode === 'wind'
             ? ['wind_speed_10m', 'wind_direction_10m']
             : (family === 'weather' && meta.variable ? [meta.variable] : null);
-        dataStore.getGrid(family, bbox, zoom, variables, undefined, forecastTime)
+        dataStore.getGrid(family, fetchBbox, zoom, variables, undefined, forecastTime)
             .then((payload) => {
                 if (requestId !== controller.requestId || controller.mode !== mode) return;
+                controller.payloadZoom = zoom;
                 applyPayload(controller, payload, mode, key);
             })
             .catch((error) => {
@@ -784,6 +811,21 @@
         map.on('click', () => {
             if (controller.mode !== 'standard') {
                 scheduleUpdate(controller, 0);
+            }
+        });
+
+        // One exception: a lazy background refresh once the viewport has
+        // slid outside the area the fetched grid covers, or zoomed in past
+        // the resolution the grid was fetched at. Scrolling within covered
+        // data still fetches nothing, so the common case stays quiet.
+        map.on('moveend', () => {
+            if (controller.mode === 'standard') return;
+            const bbox = viewportBbox(controller.map);
+            const zoom = viewportZoom(controller.map);
+            const stale = !bbox || !payloadCoversViewport(controller.payload, bbox) ||
+                controller.payloadZoom == null || zoom > controller.payloadZoom + 0.3;
+            if (stale) {
+                scheduleUpdate(controller, VIEWPORT_DEBOUNCE_MS);
             }
         });
 
