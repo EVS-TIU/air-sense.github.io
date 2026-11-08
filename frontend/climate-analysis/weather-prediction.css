@@ -1,0 +1,184 @@
+/* ===== AirSense – Climate Analysis: Predicted Weather section ===== */
+#ca-weather-prediction { container-type: inline-size; }
+
+.cl-grid {
+  --cl-card-a: rgba(14, 38, 58, .78);
+  --cl-card-b: rgba(6, 22, 38, .86);
+  --cl-border: rgba(116, 174, 213, .16);
+  --cl-text: var(--text, #f2f7fc);
+  --cl-muted: #a8c3d8;
+  --cl-cyan: #21a9ff;
+  --cl-blue: #3ec1ff;
+  --cl-green: #2ee59d;
+  --cl-amber: #ffb547;
+  --cl-orange: #ff7a3d;
+  --cl-radius: 14px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+  grid-template-areas: "pred pred" "trend outlook" "insight insight";
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  color: var(--cl-text);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.cl-grid *, .cl-grid *::before, .cl-grid *::after { box-sizing: border-box; }
+
+.cl-card {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--cl-border);
+  border-radius: var(--cl-radius);
+  background: linear-gradient(150deg, var(--cl-card-a), var(--cl-card-b));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .22), inset 0 1px 1px rgba(255, 255, 255, .04);
+}
+.cl-pred { grid-area: pred; padding: 0; overflow: hidden; }
+.cl-trend { grid-area: trend; }
+.cl-outlook { grid-area: outlook; }
+.cl-insight { grid-area: insight; }
+
+.ic { width: 1em; height: 1em; flex: none; }
+.cl-title-ic { width: 22px; height: 22px; color: #dcefff; }
+
+/* ---------- Predicted Conditions ---------- */
+.cl-pred-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 16px 20px 12px;
+}
+.cl-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cl-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: .1px; }
+.cl-badge {
+  padding: 3px 11px; font-size: 12px; font-weight: 500; color: #dcefff;
+  border: 1px solid rgba(33, 169, 255, .4); border-radius: 999px;
+  background: rgba(33, 169, 255, .12);
+}
+.cl-sub { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; color: var(--cl-muted); font-size: 14px; }
+.cl-sub span { display: inline-flex; align-items: center; gap: 7px; }
+.cl-sub .ic { color: var(--cl-cyan); width: 17px; height: 17px; }
+
+.cl-confidence {
+  display: flex; align-items: center; gap: 12px; flex: none;
+  padding: 8px 18px 8px 12px; border: 1px solid var(--cl-border);
+  border-radius: 12px; background: rgba(8, 26, 42, .55);
+}
+.cl-ring { width: 38px; height: 38px; }
+.cl-ring .track { stroke: rgba(255, 255, 255, .12); }
+.cl-ring .bar { stroke: var(--cl-green); filter: drop-shadow(0 0 4px rgba(46, 229, 157, .45)); }
+.cl-conf-label { font-size: 12px; color: var(--cl-muted); }
+.cl-conf-value { font-size: 20px; font-weight: 700; color: var(--cl-green); line-height: 1.1; }
+
+.cl-pred-body {
+  display: grid; grid-template-columns: minmax(250px, .85fr) minmax(0, 1.6fr); align-items: center;
+  padding: 14px 20px 16px; background: rgba(5, 20, 34, .34);
+  border-top: 1px solid var(--cl-border);
+}
+.cl-hero { display: flex; align-items: center; gap: 18px; }
+.cl-hero-art { width: 130px; height: auto; flex: none; }
+.cl-temp { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -1px; }
+.cl-temp small { font-size: 40px; font-weight: 400; color: #bcd0ec; letter-spacing: 0; }
+.cl-cond { margin-top: 8px; font-size: 22px; font-weight: 500; }
+
+.cl-metrics {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 18px;
+  padding-left: 26px; border-left: 1px solid rgba(116, 174, 213, .2);
+}
+.cl-metric { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.cl-metric > .ic { width: 30px; height: 30px; filter: drop-shadow(0 0 6px currentColor); }
+.cl-metric .lbl { font-size: 12.5px; color: var(--cl-muted); }
+.cl-metric .val { margin-top: 3px; font-size: 17px; font-weight: 700; white-space: nowrap; }
+.is-cyan { color: var(--cl-cyan); } .is-blue { color: var(--cl-blue); }
+.is-green { color: var(--cl-green); } .is-yellow { color: #ffd23f; }
+.cl-metric .val.is-amber { color: var(--cl-amber); }
+.cl-metric .txt { min-width: 0; color: var(--cl-text); }
+
+/* ---------- Temperature Trend ---------- */
+.cl-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.cl-card-head h3 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; }
+.cl-select {
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+  padding: 7px 30px 7px 14px; font: inherit; font-size: 13px; color: var(--cl-text);
+  border: 1px solid var(--cl-border); border-radius: 10px; background-color: rgba(8, 26, 42, .72);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23dbe9ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 13px;
+}
+.cl-select option { background: #0a2236; color: #fff; }
+.cl-select:focus-visible, .cl-grid button:focus-visible { outline: 2px solid var(--cl-cyan); outline-offset: 2px; }
+
+.cl-chart { position: relative; width: 100%; }
+.cl-chart svg { display: block; width: 100%; height: auto; overflow: hidden; }
+.cl-chart text { font-family: inherit; fill: #c4d8e8; font-size: 12px; }
+.cl-chart .sel-label { fill: #fff; font-weight: 600; }
+.cl-chart .is-compact-hidden { display: none; }
+.cl-chart .cl-hit { fill: transparent; pointer-events: all; cursor: crosshair; }
+.cl-chart svg:focus-visible { outline: 2px solid var(--cl-cyan); outline-offset: 3px; }
+.cl-tip {
+  position: absolute; top: 4px; transform: translateX(-50%); pointer-events: none;
+  min-width: 104px; padding: 7px 12px; text-align: center; font-size: 12.5px; line-height: 1.45;
+  border: 1px solid rgba(116, 174, 213, .3); border-radius: 9px; background: rgba(5, 20, 34, .96);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .4);
+}
+.cl-tip b { display: block; font-weight: 500; color: #fff; }
+.cl-tip .mx { color: var(--cl-orange); } .cl-tip .mn { color: var(--cl-blue); }
+
+.cl-legend { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; margin-top: 6px; font-size: 13px; color: #dcefff; }
+.cl-legend span { display: inline-flex; align-items: center; gap: 8px; }
+.cl-legend i { width: 11px; height: 11px; border-radius: 50%; border: 2px solid; }
+.cl-legend .mx i { border-color: var(--cl-orange); } .cl-legend .mn i { border-color: var(--cl-blue); }
+
+/* ---------- Weather Outlook ---------- */
+.cl-rows { margin: 0; padding: 0; list-style: none; }
+.cl-row { display: flex; align-items: center; gap: 18px; padding: 11px 4px; border-top: 1px solid var(--cl-border); }
+.cl-row:first-child { border-top: 0; }
+.cl-row > .ic { width: 44px; height: 44px; filter: drop-shadow(0 0 8px currentColor); }
+.cl-row .lbl { font-size: 13px; color: var(--cl-muted); }
+.cl-row .val { margin-top: 3px; font-size: 16px; font-weight: 600; }
+
+/* ---------- AI Insight ---------- */
+.cl-insight { display: flex; align-items: center; gap: 18px; padding: 14px 22px; border-color: rgba(46, 229, 157, .3);
+  background: linear-gradient(150deg, rgba(14, 38, 58, .78), rgba(6, 22, 38, .86)); }
+.cl-insight .ic { width: 32px; height: 32px; color: var(--cl-green); filter: drop-shadow(0 0 6px rgba(46, 229, 157, .45)); }
+.cl-insight .head { display: flex; align-items: center; gap: 12px; }
+.cl-insight h3 { margin: 0; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.cl-insight .sep { align-self: stretch; width: 1px; background: rgba(116, 174, 213, .3); }
+.cl-insight p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--cl-text); }
+
+.cl-error { grid-column: 1 / -1; text-align: center; color: var(--cl-muted); }
+
+/* ---------- Responsive ---------- */
+@container (max-width: 760px) {
+  .cl-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "pred" "trend" "outlook" "insight"; }
+  .cl-pred-body { grid-template-columns: 1fr; gap: 18px; }
+  .cl-metrics { padding-left: 0; border-left: 0; padding-top: 18px; border-top: 1px solid rgba(116, 174, 213, .2); }
+  .cl-card { padding: 16px; }
+  .cl-pred-head { padding: 14px 16px 10px; }
+  .cl-pred-body { padding: 12px 16px 16px; }
+  .cl-chart { min-width: 0; }
+  .cl-chart svg { max-width: 100%; }
+}
+@container (max-width: 480px) {
+  .cl-pred-head { flex-direction: column; }
+  .cl-confidence { align-self: stretch; }
+  .cl-hero-art { width: 100px; }
+  .cl-temp { font-size: 50px; } .cl-temp small { font-size: 30px; }
+  .cl-cond { font-size: 18px; }
+  .cl-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  .cl-metric .val { white-space: normal; }
+  .cl-card-head { flex-wrap: wrap; }
+  .cl-select { max-width: 100%; margin-left: auto; }
+  .cl-insight { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .cl-insight .sep { display: none; }
+}
+@container (max-width: 360px) {
+  .cl-metrics { grid-template-columns: minmax(0, 1fr); }
+  .cl-hero { gap: 10px; }
+  .cl-hero-art { width: 84px; }
+  .cl-temp { font-size: 44px; }
+  .cl-temp small { font-size: 27px; }
+  .cl-insight { padding: 14px 16px; }
+}
+
+/* ---------- Demo shell only (not needed inside your app) ---------- */
+.cl-demo-body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 20% 0%, #0b2552 0%, #06142b 55%, #040d1e 100%); }
+.cl-demo-shell { max-width: 1120px; margin: 0 auto; padding: 24px; }

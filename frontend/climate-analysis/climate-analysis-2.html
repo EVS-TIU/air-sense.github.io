@@ -23,6 +23,8 @@
     <link rel="stylesheet" href="./climate-analysis.css?v=20261102-6">
     <!-- Climate Trend tab styles -->
     <link rel="stylesheet" href="./climate-trend.css">
+    <!-- Weather Prediction tab styles -->
+    <link rel="stylesheet" href="./weather-prediction.css">
 
     <!-- Page-specific overrides: make Climate Analysis always visible on this page -->
     <style>
@@ -371,7 +373,9 @@
                     <!-- Tab content panels -->
                     <div class="ca-content">
                         <div class="ca-tab-panel is-active" id="ca-weather-prediction"
-                            role="tabpanel" aria-hidden="false" aria-label="Weather Prediction"></div>
+                            role="tabpanel" aria-hidden="false" aria-label="Weather Prediction">
+                            <div class="cl-grid" id="climate-dashboard"></div>
+                        </div>
                         <div class="ca-tab-panel" id="ca-climate-trend"
                             role="tabpanel" aria-hidden="true" aria-label="Climate Trend"></div>
                         <div class="ca-tab-panel" id="ca-aqi-outlook"
@@ -419,5 +423,7 @@
     <script src="./climate-analysis.js?v=20261102-2" defer></script>
     <!-- Climate Trend tab -->
     <script src="./climate-trend.js" defer></script>
+    <!-- Weather Prediction tab -->
+    <script src="./weather-prediction.js" defer></script>
 </body>
 </html>
