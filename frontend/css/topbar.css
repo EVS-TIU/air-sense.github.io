@@ -233,6 +233,17 @@
     border-color: rgba(33, 169, 255, 0.45);
 }
 
+.topbar-login {
+    justify-content: center;
+    min-width: 76px;
+    font-weight: 600;
+}
+
+.topbar-login:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
 .dropdown__trigger svg {
     width: 17px;
     height: 17px;
@@ -713,6 +724,10 @@
     }
 
     .profile {
+        display: none;
+    }
+
+    .topbar-login--mobile-menu {
         display: none;
     }
 

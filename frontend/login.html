@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sign in to AirSense.">
+    <title>Login - AirSense</title>
+    <link rel="stylesheet" href="./css/login.css">
+</head>
+<body>
+    <main class="login-page">
+        <a class="login-brand" href="./index.html" aria-label="AirSense home">
+            <span class="login-brand__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+                </svg>
+            </span>
+            <span>AirSense</span>
+        </a>
+
+        <section class="login-card" aria-labelledby="login-title">
+            <div class="login-card__eyebrow">WELCOME BACK</div>
+            <h1 id="login-title">Sign in to AirSense</h1>
+            <p class="login-card__intro">Access your personalized weather dashboard.</p>
+
+            <form id="login-form">
+                <label for="email">Email address</label>
+                <input id="email" name="email" type="email" autocomplete="email"
+                    placeholder="you@example.com" required>
+
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password"
+                    autocomplete="current-password" placeholder="Enter your password" required>
+
+                <button type="submit">Login</button>
+                <p class="login-status" id="login-status" role="status" aria-live="polite"></p>
+            </form>
+
+            <div class="login-divider" aria-hidden="true"><span>OR CONTINUE WITH</span></div>
+            <div class="login-providers" aria-label="Other sign-in options">
+                <button class="login-provider" type="button" data-provider="Google">
+                    <svg viewBox="0 0 48 48" aria-hidden="true">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"/>
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94a11.05 11.05 0 0 1-4.8 7.24l7.73 6C44.38 38.1 46.98 31.9 46.98 24.55Z"/>
+                        <path fill="#FBBC05" d="M10.53 28.59a14.4 14.4 0 0 1 0-9.18l-7.98-6.19a23.9 23.9 0 0 0 0 21.56l7.98-6.19Z"/>
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.8l-7.73-6c-2.15 1.45-4.9 2.3-8.17 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z"/>
+                    </svg>
+                    <span>Google</span>
+                </button>
+                <button class="login-provider" type="button" data-provider="GitHub">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path fill="currentColor" d="M12 .9a11.1 11.1 0 0 0-3.51 21.63c.56.1.76-.24.76-.54v-2.1c-3.1.67-3.76-1.32-3.76-1.32-.5-1.3-1.24-1.65-1.24-1.65-1.01-.69.08-.68.08-.68 1.12.08 1.71 1.15 1.71 1.15 1 1.71 2.62 1.22 3.26.93.1-.72.39-1.22.71-1.5-2.48-.28-5.09-1.24-5.09-5.52 0-1.22.44-2.22 1.15-3-.12-.28-.5-1.42.11-2.96 0 0 .94-.3 3.05 1.14a10.6 10.6 0 0 1 5.55 0c2.11-1.44 3.05-1.14 3.05-1.14.61 1.54.23 2.68.11 2.96.72.78 1.15 1.78 1.15 3 0 4.29-2.61 5.23-5.1 5.51.4.35.76 1.03.76 2.08v3.1c0 .3.2.65.77.54A11.1 11.1 0 0 0 12 .9Z"/>
+                    </svg>
+                    <span>GitHub</span>
+                </button>
+            </div>
+
+            <a class="back-link" href="./index.html">← Back to dashboard</a>
+        </section>
+    </main>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', (event) => {
+            event.preventDefault();
+            document.getElementById('login-status').textContent =
+                'Sign-in is not available yet because authentication has not been configured.';
+        });
+        document.querySelectorAll('.login-provider').forEach((button) => {
+            button.addEventListener('click', () => {
+                document.getElementById('login-status').textContent =
+                    `${button.dataset.provider} sign-in is not configured yet.`;
+            });
+        });
+    </script>
+</body>
+</html>
