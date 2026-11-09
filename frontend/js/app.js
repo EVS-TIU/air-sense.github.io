@@ -133,22 +133,19 @@ let heroRefreshTimer = null;
 let currentDatetimeTimer = null;
 let temperatureUnit = "c"; // "c" or "f"
 
-function isLocationDaytime(weather, nowMilliseconds = Date.now()) {
-  const sunrise = weather?.sunrise;
-  const sunset = weather?.sunset;
-  const timezoneOffset = weather?.timezone_offset;
-  if (
-    typeof sunrise !== "number" ||
-    !Number.isFinite(sunrise) ||
-    typeof sunset !== "number" ||
-    !Number.isFinite(sunset) ||
-    typeof timezoneOffset !== "number" ||
-    !Number.isFinite(timezoneOffset)
-  ) {
+function isDaytimeAtTimestamp(timestamp, timezoneOffset) {
+  if (!Number.isFinite(timestamp) || !Number.isFinite(timezoneOffset)) {
     return null;
   }
-  const localNow = Math.floor(nowMilliseconds / 1000) + timezoneOffset;
-  return localNow >= sunrise + timezoneOffset && localNow < sunset + timezoneOffset;
+  const localSeconds =
+    (((Math.floor(timestamp) + timezoneOffset) % 86400) + 86400) % 86400;
+  const localHour = localSeconds / 3600;
+  return localHour >= 6 && localHour < 18;
+}
+
+function isLocationDaytime(weather, nowMilliseconds = Date.now()) {
+  const timezoneOffset = weather?.timezone_offset;
+  return isDaytimeAtTimestamp(nowMilliseconds / 1000, timezoneOffset);
 }
 
 function uvRiskCategory(value) {
@@ -330,6 +327,56 @@ async function updateUvIndexFromOpenMeteo(latitude, longitude) {
   } catch (error) {
     console.warn("UV index unavailable:", error.message);
     return null;
+  }
+}
+
+function updateCurrentConditionDisplay(weather) {
+  if (!weather) {
+    return;
+  }
+
+  const resolved = resolveCurrentCondition(weather);
+  const isClear = resolved.key === "sunny" || resolved.key === "clear-night";
+
+  if (currentConditionEl) {
+    currentConditionEl.textContent = isClear
+      ? resolved.label
+      : typeof weather.description === "string" && weather.description.trim()
+        ? weather.description.trim()
+        : typeof weather.condition === "string"
+          ? weather.condition.replace(/_/g, " ")
+          : "--";
+  }
+
+  updateConditionIcon(resolved);
+
+  if (currentStatusEl) {
+    const isDay = isLocationDaytime(weather);
+    currentStatusEl.textContent =
+      isDay === false || (isDay === null && weather.is_day === false)
+        ? "Night"
+        : "Live";
+    currentStatusEl.removeAttribute("title");
+  }
+
+  if (currentIllustrationEl) {
+    const illustration = resolveIllustration(weather);
+    const url = `${WEATHER_ILLUSTRATION_ROOT}${illustration}`;
+    currentIllustrationEl.alt =
+      currentConditionEl?.textContent || "Current weather illustration";
+    currentIllustrationEl.onerror = () => {
+      currentIllustrationEl.onerror = null;
+      currentIllustrationEl.src = `${WEATHER_ILLUSTRATION_ROOT}cloudy.png`;
+    };
+    try {
+      const fullUrl = new URL(url, window.location.href).href;
+      if (currentIllustrationEl.src !== fullUrl) {
+        loadIllustrationImage(illustration).catch(() => {});
+        currentIllustrationEl.src = url;
+      }
+    } catch {
+      currentIllustrationEl.src = url;
+    }
   }
 }
 
@@ -569,7 +616,7 @@ function resolveIllustration(weather) {
 /* Central forecast/current mapping: one key owns both label and icon. */
 const FORECAST_CONDITION_META = {
   sunny: { label: "Sunny", icon: "sunny.svg" },
-  "clear-night": { label: "Clear Night", icon: "clear-night.svg" },
+  "clear-night": { label: "Clear", icon: "clear-night.svg" },
   "partly-cloudy": { label: "Partly Cloudy", icon: "partly-cloudy.svg" },
   "partly-cloudy-night": { label: "Partly Cloudy", icon: "partly-cloudy-night.svg" },
   cloudy: { label: "Cloudy", icon: "cloudy.svg" },
@@ -595,12 +642,24 @@ function forecastPointCode(point) {
 
 /**
  * Day/night for THIS forecast item only.
- * Uses the item's own is_day / OpenWeather icon suffix, then its timestamp.
+ * Uses the item's local timestamp first, with API day/night metadata as fallback.
  * Never borrows current-weather is_day/icon.
  * Moon is applied later only for clear-sky codes — not for every night hour.
  */
 function resolveForecastIsDaytime(point, weather = null) {
   const source = point && typeof point === "object" ? point : {};
+  const timestamp = Number(source.timestamp ?? source.observed_at);
+  const context = weather && typeof weather === "object" ? weather : {};
+  const timezoneOffset =
+    typeof context.timezone_offset === "number" &&
+    Number.isFinite(context.timezone_offset)
+      ? context.timezone_offset
+      : NaN;
+
+  const daytimeAtTimestamp = isDaytimeAtTimestamp(timestamp, timezoneOffset);
+  if (daytimeAtTimestamp !== null) {
+    return daytimeAtTimestamp;
+  }
 
   if (source.is_day === true) {
     return true;
@@ -615,8 +674,6 @@ function resolveForecastIsDaytime(point, weather = null) {
     }
   }
 
-  const timestamp = Number(source.timestamp ?? source.observed_at);
-  const context = weather && typeof weather === "object" ? weather : {};
   const sunrise = Number(context.sunrise);
   const sunset = Number(context.sunset);
 
@@ -632,13 +689,6 @@ function resolveForecastIsDaytime(point, weather = null) {
       return pointTod >= sunriseTod && pointTod < sunsetTod;
     }
     return pointTod >= sunriseTod || pointTod < sunsetTod;
-  }
-
-  const timezoneOffset = Number(context.timezone_offset);
-  if (Number.isFinite(timestamp) && Number.isFinite(timezoneOffset)) {
-    const localHour =
-      ((((timestamp + timezoneOffset) % 86400) + 86400) % 86400) / 3600;
-    return localHour >= 6 && localHour < 18;
   }
 
   return true;
@@ -810,12 +860,12 @@ function resolveForecastCondition(point, context = {}) {
 }
 
 function resolveIsDaytime(weather) {
-  return resolveForecastIsDaytime(weather, weather);
+  return isLocationDaytime(weather) ?? resolveForecastIsDaytime(weather, weather);
 }
 
-function resolveConditionIcon(weather) {
+function resolveCurrentCondition(weather) {
   if (!weather || typeof weather !== "object") {
-    return DEFAULT_CONDITION_ICON;
+    return FORECAST_CONDITION_META.default;
   }
 
   const point = {
@@ -827,27 +877,23 @@ function resolveConditionIcon(weather) {
     timestamp: weather.observed_at,
     observed_at: weather.observed_at,
   };
+  const isDay =
+    isLocationDaytime(weather) ??
+    resolveForecastIsDaytime(point, weather);
   return resolveForecastCondition(point, {
     weather,
-    isDay: resolveForecastIsDaytime(point, weather),
-  }).icon;
+    isDay,
+  });
 }
 
-function updateConditionIcon(weather) {
+function updateConditionIcon(resolved) {
   if (!currentConditionIconEl) {
     return;
   }
 
-  const filename = resolveConditionIcon(weather);
+  const filename = resolved.icon || DEFAULT_CONDITION_ICON;
   const url = `${WEATHER_ICON_ROOT}${filename}`;
-  const label =
-    typeof weather?.description === "string" && weather.description.trim()
-      ? weather.description.trim()
-      : typeof weather?.condition === "string"
-        ? weather.condition.replace(/_/g, " ")
-        : "Current weather";
-
-  currentConditionIconEl.alt = label;
+  currentConditionIconEl.alt = resolved.label || "Current weather";
   currentConditionIconEl.onerror = () => {
     currentConditionIconEl.onerror = null;
     currentConditionIconEl.src = `${WEATHER_ICON_ROOT}${DEFAULT_CONDITION_ICON}`;
@@ -1489,11 +1535,6 @@ function renderCurrentWeather(weather) {
     updateCurrentDatetime();
   }
 
-  if (currentStatusEl) {
-    currentStatusEl.textContent = weather.is_day === false ? "Night" : "Live";
-    currentStatusEl.removeAttribute("title");
-  }
-
   if (currentTempEl) {
     setTemperatureDisplay(currentTempEl, weather.temperature);
   }
@@ -1506,16 +1547,7 @@ function renderCurrentWeather(weather) {
     setTemperatureDisplay(currentFeelsMetricEl, weather.apparent_temperature);
   }
 
-  if (currentConditionEl) {
-    currentConditionEl.textContent =
-      typeof weather.description === "string" && weather.description.trim()
-        ? weather.description.trim()
-        : typeof weather.condition === "string"
-          ? weather.condition.replace(/_/g, " ")
-          : "--";
-  }
-
-  updateConditionIcon(weather);
+  updateCurrentConditionDisplay(weather);
 
   if (currentHighEl) {
     setTemperatureDisplay(currentHighEl, weather.temperature_max);
@@ -1552,25 +1584,6 @@ function renderCurrentWeather(weather) {
   }
   if (currentVisibilityUnitEl) {
     currentVisibilityUnitEl.textContent = visibility.unit;
-  }
-
-  if (currentIllustrationEl) {
-    const illus = resolveIllustration(weather);
-    const url = `${WEATHER_ILLUSTRATION_ROOT}${illus}`;
-    currentIllustrationEl.alt = currentConditionEl?.textContent || "Current weather illustration";
-    currentIllustrationEl.onerror = () => {
-      currentIllustrationEl.onerror = null;
-      currentIllustrationEl.src = `${WEATHER_ILLUSTRATION_ROOT}cloudy.png`;
-    };
-    try {
-      const fullUrl = new URL(url, window.location.href).href;
-      if (currentIllustrationEl.src !== fullUrl) {
-        loadIllustrationImage(illus).catch(() => {});
-        currentIllustrationEl.src = url;
-      }
-    } catch {
-      currentIllustrationEl.src = url;
-    }
   }
 
   clearHeroState();
@@ -1928,6 +1941,7 @@ function scheduleCurrentDatetimeRefresh() {
   }
   currentDatetimeTimer = setInterval(() => {
     updateCurrentDatetime();
+    updateCurrentConditionDisplay(currentHeroWeather);
     renderUvIndex(currentHeroWeather);
   }, 30 * 1000);
 }
