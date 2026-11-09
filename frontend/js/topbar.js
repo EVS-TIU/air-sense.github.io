@@ -6,7 +6,7 @@
      weatherly:location-change  detail: { id, name, region, lat, lon }
      weatherly:unit-change      detail: { unit: 'C' | 'F' }
      weatherly:navigate         detail: { view: 'now' | 'today' | 'weekly' | 'history' }
-     weatherly:profile-action   detail: { action: 'login' | 'profile' | 'settings' | 'signout' }
+     weatherly:profile-action   detail: { action: 'profile' | 'settings' | 'signout' }
 
    Pull the current state at any time (e.g. when your module loads):
      WeatherlyTopbar.getLocation()      -> current location object
@@ -556,7 +556,12 @@
             if (action === 'C' || action === 'F') {
                 setUnit(action);
             } else if (action === 'login') {
-                emit('profile-action', { action: action });
+                const loginItem = mobileMenuRoot.querySelector('[data-value="login"]');
+                if (!loginItem?.dataset.href) {
+                    console.error('The mobile login link is missing its destination.');
+                    return;
+                }
+                window.location.assign(loginItem.dataset.href);
             } else if (action === 'climate-analysis') {
                 emit('navigate', { view: action });
                 window.location.assign('./climate-analysis/climate-analysis-2.html');
@@ -610,7 +615,9 @@
        Profile menu
        ---------------------------------------------------------------------- */
     const profileRoot = topbar.querySelector('.profile');
-    createDropdown(profileRoot, (action) => emit('profile-action', { action: action }));
+    if (profileRoot) {
+        createDropdown(profileRoot, (action) => emit('profile-action', { action: action }));
+    }
 
     /* ----------------------------------------------------------------------
        Init + public API
