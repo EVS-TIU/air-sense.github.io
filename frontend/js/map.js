@@ -589,6 +589,8 @@
     // Sidebar navigation active state handler
     document.querySelectorAll('.sidebar__nav a').forEach((link) => {
         link.addEventListener('click', (e) => {
+            if (link.getAttribute('href')?.startsWith('#') !== true) return;
+
             e.preventDefault();
             document.querySelectorAll('.sidebar__nav a').forEach((l) => l.classList.remove('is-active'));
             link.classList.add('is-active');
