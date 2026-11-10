@@ -6,7 +6,7 @@
 <meta name="description" content="AirSense - weather recommendations for your location.">
 <title>AirSense - AI Recommendation</title>
 <link rel="stylesheet" href="css/style.css?v=20261101-22">
-<link rel="stylesheet" href="css/AI-recommendation.css?v=20261110-2">
+<link rel="stylesheet" href="css/AI-recommendation.css?v=20261110-3">
 </head>
 <body class="ai-recommendation-page">
 <div class="weather-background" aria-hidden="true">
@@ -38,8 +38,13 @@
 
   <header class="topbar glass">
       <form id="searchForm" class="search">
-        <label class="field"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-          <input id="searchInput" type="search" placeholder="Search a city" aria-label="Search a city"></label>
+        <div class="city-search">
+          <label class="field"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input id="searchInput" type="search" placeholder="Search a city" aria-label="Search a city"
+              role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="citySuggestions"
+              aria-activedescendant=""></label>
+          <ul id="citySuggestions" class="city-suggestions" role="listbox" aria-label="City suggestions" hidden></ul>
+        </div>
         <button class="btn" type="submit">Search</button>
         <button class="btn" type="button" id="gpsBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Use my location</button>
         <button class="btn" type="button" id="refreshBtn">Refresh</button>
@@ -94,9 +99,9 @@
 </div>
 
 <script src="js/config.js"></script>
-<script src="js/weather.js"></script>
+<script src="js/weather.js?v=20261110-2"></script>
 <script src="js/engine.js?v=20261110-2"></script>
 <script src="js/llm.js"></script>
-<script src="js/ai-app.js?v=20261110-2"></script>
+<script src="js/ai-app.js?v=20261110-6"></script>
 </body>
 </html>

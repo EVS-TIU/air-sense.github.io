@@ -3,6 +3,8 @@
   const C = window.AIREC_CONFIG, Wx = window.AIREC_WEATHER, E = window.AIREC_ENGINE, L = window.AIREC_LLM;
   const $ = s => document.querySelector(s);
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const searchInput = $("#searchInput");
+  const suggestions = $("#citySuggestions");
 
   const PLABEL = { P0: "P0 Critical", P1: "P1 High", P2: "P2 Moderate", P3: "P3 Low", P4: "P4 Info" };
   const SLABEL = { SUITABLE: "Suitable", CAUTION: "Caution", NOT_RECOMMENDED: "Not recommended", INSUFFICIENT_DATA: "Insufficient data" };
@@ -13,7 +15,9 @@
     ["visibility_km", "Visibility", "km"], ["us_aqi", "US AQI", ""]
   ];
 
-  let current = null, busy = false;
+  let current = null, busy = false, pendingPlace = null;
+  let searchTimer = null, searchRequest = 0, activeSuggestion = -1;
+  let suggestedPlaces = [];
 
   const setStep = (name, state) => { const li = $(`#pipeline [data-step="${name}"]`); if (li) li.dataset.state = state; };
   const resetSteps = () => document.querySelectorAll("#pipeline li").forEach(li => (li.dataset.state = ""));
@@ -54,7 +58,10 @@
   }
 
   async function go(place, force) {
-    if (busy) return;
+    if (busy) {
+      pendingPlace = { place, force };
+      return;
+    }
     busy = true; resetSteps(); notice("");
     document.querySelectorAll(".search .btn").forEach(b => (b.disabled = true));
     const { lat, lon } = place;
@@ -101,6 +108,11 @@
     } finally {
       busy = false;
       document.querySelectorAll(".search .btn").forEach(b => (b.disabled = false));
+      if (pendingPlace) {
+        const next = pendingPlace;
+        pendingPlace = null;
+        go(next.place, next.force);
+      }
     }
   }
 
@@ -120,10 +132,101 @@
     );
   }
 
+  function closeSuggestions() {
+    suggestions.hidden = true;
+    searchInput.setAttribute("aria-expanded", "false");
+    searchInput.removeAttribute("aria-activedescendant");
+    activeSuggestion = -1;
+  }
+
+  function renderSuggestions(places) {
+    suggestedPlaces = places;
+    activeSuggestion = -1;
+    suggestions.innerHTML = places.map((place, index) =>
+      `<li role="presentation"><button id="city-suggestion-${index}" class="city-suggestion" type="button" role="option" aria-selected="false" data-index="${index}">${esc(place.name)}</button></li>`
+    ).join("");
+    suggestions.hidden = places.length === 0;
+    searchInput.setAttribute("aria-expanded", String(places.length > 0));
+  }
+
+  function setActiveSuggestion(index) {
+    const options = suggestions.querySelectorAll('[role="option"]');
+    if (!options.length) return;
+    activeSuggestion = (index + options.length) % options.length;
+    options.forEach((option, optionIndex) => {
+      const active = optionIndex === activeSuggestion;
+      option.setAttribute("aria-selected", String(active));
+      if (active) {
+        searchInput.setAttribute("aria-activedescendant", option.id);
+        option.scrollIntoView({ block: "nearest" });
+      }
+    });
+  }
+
+  function chooseSuggestion(index) {
+    const place = suggestedPlaces[index];
+    if (!place) return;
+    clearTimeout(searchTimer);
+    searchRequest++;
+    searchInput.value = place.name;
+    closeSuggestions();
+    go(place);
+  }
+
+  searchInput.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    const query = searchInput.value.trim();
+    suggestedPlaces = [];
+    closeSuggestions();
+    suggestions.replaceChildren();
+    if (query.length < 2) return;
+
+    const request = ++searchRequest;
+    searchTimer = setTimeout(async () => {
+      try {
+        const places = await Wx.suggest(query);
+        if (request !== searchRequest || searchInput.value.trim() !== query) return;
+        renderSuggestions(places);
+      } catch (error) {
+        if (request !== searchRequest) return;
+        closeSuggestions();
+        notice("City suggestions are unavailable. You can still submit your search.");
+      }
+    }, 250);
+  });
+
+  searchInput.addEventListener("keydown", event => {
+    if (event.key === "ArrowDown" && !suggestions.hidden) {
+      event.preventDefault();
+      setActiveSuggestion(activeSuggestion + 1);
+    } else if (event.key === "ArrowUp" && !suggestions.hidden) {
+      event.preventDefault();
+      setActiveSuggestion(activeSuggestion < 0 ? suggestedPlaces.length - 1 : activeSuggestion - 1);
+    } else if (event.key === "Enter" && activeSuggestion >= 0 && !suggestions.hidden) {
+      event.preventDefault();
+      chooseSuggestion(activeSuggestion);
+    } else if (event.key === "Escape" && !suggestions.hidden) {
+      closeSuggestions();
+    }
+  });
+
+  suggestions.addEventListener("click", event => {
+    const option = event.target.closest("[data-index]");
+    if (option) chooseSuggestion(Number(option.dataset.index));
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest(".city-search")) closeSuggestions();
+  });
+
   $("#searchForm").addEventListener("submit", async e => {
     e.preventDefault();
     const q = $("#searchInput").value.trim();
     if (!q) return;
+    if (activeSuggestion >= 0 && !suggestions.hidden) {
+      chooseSuggestion(activeSuggestion);
+      return;
+    }
+    closeSuggestions();
     try { const p = await Wx.geocode(q); go({ lat: p.lat, lon: p.lon, name: p.name }); }
     catch (err) { notice(err.message); }
   });

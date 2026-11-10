@@ -123,11 +123,20 @@
     };
   }
 
+  async function suggest(name) {
+    const d = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=5&language=en&format=json`);
+    return (d.results || []).map(r => ({
+      lat: r.latitude,
+      lon: r.longitude,
+      name: [r.name, r.admin1, r.country].filter(Boolean).join(", ")
+    }));
+  }
+
   async function geocode(name) {
-    const d = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`);
-    const r = d.results && d.results[0];
+    const results = await suggest(name);
+    const r = results[0];
     if (!r) throw new Error("No place found for \"" + name + "\"");
-    return { lat: r.latitude, lon: r.longitude, name: [r.name, r.admin1, r.country].filter(Boolean).join(", ") };
+    return r;
   }
 
   async function reverse(lat, lon) {
@@ -135,5 +144,5 @@
     return [d.city || d.locality, d.principalSubdivision, d.countryName].filter(Boolean).join(", ") || null;
   }
 
-  window.AIREC_WEATHER = { fetchWeather, geocode, reverse, iso, LABEL, UNIT };
+  window.AIREC_WEATHER = { fetchWeather, geocode, suggest, reverse, iso, LABEL, UNIT };
 })();
