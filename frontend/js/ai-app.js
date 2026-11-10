@@ -67,6 +67,17 @@
     const { lat, lon } = place;
     current = place;
     setPlace(place.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`, `${lat.toFixed(3)}, ${lon.toFixed(3)}`);
+    document.dispatchEvent(new CustomEvent("weatherly:location-change", {
+      detail: {
+        id: `${lat},${lon}`,
+        name: place.name || "Selected Location",
+        region: "",
+        country: "",
+        source: "ai-recommendation",
+        lat,
+        lon
+      }
+    }));
     const key = `airec-v2:${lat.toFixed(2)},${lon.toFixed(2)}`;
 
     try {
@@ -216,6 +227,12 @@
   });
   document.addEventListener("click", event => {
     if (!event.target.closest(".city-search")) closeSuggestions();
+  });
+  document.addEventListener("weatherly:location-change", event => {
+    const place = event.detail;
+    if (place?.source === "ai-recommendation") return;
+    if (!place || !Number.isFinite(Number(place.lat)) || !Number.isFinite(Number(place.lon))) return;
+    go({ lat: Number(place.lat), lon: Number(place.lon), name: place.name || null });
   });
 
   $("#searchForm").addEventListener("submit", async e => {

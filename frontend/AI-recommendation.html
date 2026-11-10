@@ -4,8 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="AirSense - weather recommendations for your location.">
+<meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
 <title>AirSense - AI Recommendation</title>
 <link rel="stylesheet" href="css/style.css?v=20261101-22">
+<link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/map.css?v=20261110-1">
+<link rel="stylesheet" href="css/popular-cities.css?v=20261102-1">
 <link rel="stylesheet" href="css/AI-recommendation.css?v=20261110-3">
 </head>
 <body class="ai-recommendation-page">
@@ -34,6 +38,56 @@
       <a href="index.html#history-analysis"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History Analysis</a>
       <a href="index.html#smart-alert"><svg class="ico" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 004 0"/></svg>Smart Alert</a>
     </nav>
+    <div class="sidebar__map-section is-minimized">
+      <div id="interactive-map" class="interactive-map" role="region" aria-label="Interactive world map"></div>
+    </div>
+    <section class="sidebar__popular" id="popular-cities" aria-labelledby="popular-cities-title">
+      <div class="sidebar__popular-header">
+        <h2 class="sidebar__popular-title" id="popular-cities-title">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span>POPULAR CITIES</span>
+        </h2>
+        <span class="sidebar__popular-count" id="popular-cities-count"></span>
+      </div>
+
+      <div class="sidebar__country" id="popular-country">
+        <button type="button" class="sidebar__country-trigger" id="popular-country-trigger"
+          aria-haspopup="listbox" aria-expanded="false" aria-controls="popular-country-list"
+          aria-label="Choose a country">
+          <span class="sidebar__country-flag" id="popular-country-flag" aria-hidden="true">🌍</span>
+          <span class="sidebar__country-name" id="popular-country-name">Select country</span>
+          <svg class="sidebar__country-chevron" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 9l6 6 6-6"/>
+          </svg>
+        </button>
+        <div class="sidebar__country-panel" id="popular-country-panel" hidden>
+          <div class="sidebar__country-search-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input class="sidebar__country-search" id="popular-country-search" type="search"
+              role="combobox" aria-autocomplete="list" aria-expanded="false"
+              aria-controls="popular-country-list" aria-label="Search countries"
+              placeholder="Search all countries..." autocomplete="off" spellcheck="false">
+          </div>
+          <ul class="sidebar__country-list" id="popular-country-list" role="listbox"
+            aria-label="Countries"></ul>
+          <p class="sidebar__country-empty" id="popular-country-empty" hidden>No countries found</p>
+        </div>
+      </div>
+
+      <div class="sidebar__cities-grid" id="popular-cities-grid" role="group"
+        aria-label="Popular cities"></div>
+      <p class="sidebar__popular-attribution">
+        City data © <a href="https://www.geonames.org/" target="_blank"
+          rel="noopener noreferrer">GeoNames</a> (CC BY 4.0)
+      </p>
+    </section>
   </aside>
 
   <header class="topbar glass">
@@ -98,10 +152,14 @@
     </main>
 </div>
 
+<script src="assets/vendor/leaflet/leaflet.js"></script>
+<script src="js/map.js?v=20261110-2"></script>
 <script src="js/config.js"></script>
 <script src="js/weather.js?v=20261110-2"></script>
 <script src="js/engine.js?v=20261110-2"></script>
 <script src="js/llm.js"></script>
-<script src="js/ai-app.js?v=20261110-6"></script>
+<script src="js/ai-app.js?v=20261110-7"></script>
+<script src="js/popular-cities-data.js?v=20261102-1"></script>
+<script src="js/popular-cities.js?v=20261110-1"></script>
 </body>
 </html>
