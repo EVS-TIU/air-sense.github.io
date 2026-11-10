@@ -41,7 +41,8 @@ h3 { font-size: 15px; }
   margin: 0 auto;
   padding: 44px 36px 43px 38px;
 }
-.sidebar { grid-area: sidebar; position: relative; align-self: stretch; min-width: 0; min-height: 0; height: calc(100vh - 87px); padding: 22px 18px; display: flex; flex-direction: column; gap: 22px; }
+.sidebar { grid-area: sidebar; position: relative; align-self: start; min-width: 0; min-height: 837px; height: max-content; max-height: none; padding: 22px 18px; display: flex; flex-direction: column; gap: 22px; overflow: visible !important; scrollbar-width: none; }
+.sidebar::-webkit-scrollbar { display: none; }
 .logo { display: flex; align-items: center; gap: 12px; font-size: 1.45rem; font-weight: 700; padding: 0 4px 18px; border-bottom: 1px solid var(--border); }
 .logo-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #34a6ff, #1b6fd1); }
 .logo-mark .ico { width: 22px; height: 22px; stroke: #fff; }
@@ -147,7 +148,6 @@ main { grid-area: main; display: grid; align-content: start; gap: var(--gap); mi
 
 @media (max-width: 1300px) and (min-width: 901px) {
   .app { padding: 16px; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; }
-  .sidebar { height: calc(100vh - 32px); }
   .topbar { gap: 10px; }
   .search { flex-wrap: nowrap; gap: 7px; min-width: 0; }
   .field { min-width: 0; height: 44px; padding: 0 12px; }
@@ -162,7 +162,7 @@ main { grid-area: main; display: grid; align-content: start; gap: var(--gap); mi
     gap: 14px;
     padding: 14px;
   }
-  .sidebar { position: static; height: auto; }
+  .sidebar { position: static; height: max-content; }
   .sidebar nav { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
   .topbar { min-height: 76px; padding: 14px; }
   .top-grid { grid-template-columns: 1fr; }
