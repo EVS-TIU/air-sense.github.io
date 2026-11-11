@@ -8,7 +8,7 @@
     <title>AirSense - Climate Analysis</title>
 
     <!-- Shared dashboard styles (design tokens, resets, panels, etc.) -->
-    <link rel="stylesheet" href="../css/style.css?v=20261101-22">
+    <link rel="stylesheet" href="../css/style.css?v=20261112-3">
     <!-- Top Navigation component styles -->
     <link rel="stylesheet" href="../css/topbar.css?v=20261109-1">
     <!-- Left Sidebar component styles -->
@@ -16,7 +16,7 @@
     <!-- Leaflet interactive map styles -->
     <link rel="stylesheet" href="../assets/vendor/leaflet/leaflet.css">
     <!-- Map component styles -->
-    <link rel="stylesheet" href="../css/map.css?v=20261102-4">
+    <link rel="stylesheet" href="../css/map.css?v=20261112-2">
     <!-- Popular cities sidebar section -->
     <link rel="stylesheet" href="../css/popular-cities.css?v=20261102-1">
     <!-- Climate Analysis module styles -->
@@ -56,7 +56,7 @@
         <div class="weather-background__scrim"></div>
     </div>
 
-    <div class="dashboard">
+    <div class="app dashboard">
 
         <!-- Top Navigation -->
         <header class="topbar panel" aria-label="Top navigation">
@@ -112,34 +112,27 @@
         <!-- Sidebar -->
         <button class="sidebar-backdrop" type="button" aria-label="Close navigation menu"
             tabindex="-1" aria-hidden="true"></button>
-        <aside class="sidebar panel" id="dashboard-sidebar" aria-label="Dashboard navigation">
+        <aside class="sidebar glass" id="dashboard-sidebar" aria-label="Dashboard navigation">
             <!-- 1. AirSense Logo -->
-            <div class="sidebar__brand">
-                <div class="brand-mark" aria-hidden="true"><img src="../assets/airsense-logo.png" alt=""></div>
+            <a class="logo sidebar__brand" href="../index.html">
+                <span class="logo-mark brand-mark"><img class="logo-image" src="../assets/airsense-logo.png" alt=""></span>
                 <span class="sidebar__brand-name">AirSense</span>
-                <button class="sidebar-close" type="button" aria-label="Close navigation menu">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M18 6 6 18M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
+            </a>
 
             <!-- 2. Current Location Card -->
-            <div class="sidebar__location-card">
+            <div class="loc-card sidebar__location-card">
                 <div class="sidebar__location-header">
-                        <span class="sidebar__location-flag" id="sidebar-flag" aria-hidden="true">📍</span>
                     <div class="sidebar__location-details">
                         <span class="sidebar__location-eyebrow">CURRENT LOCATION</span>
                         <strong id="sidebar-city">Finding your location</strong>
                         <span id="sidebar-region">Waiting for device location</span>
                     </div>
                 </div>
-                <div class="sidebar__coords-badge" id="sidebar-coords">Waiting for device location</div>
             </div>
 
             <!-- 3. Sidebar Navigation -->
             <nav class="sidebar__nav" aria-label="Main sidebar navigation">
-                <a href="../index.html">
+                <a href="#current-weather" class="is-active" data-nav="current-weather" data-view="current-weather">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="12" r="5"/>
                         <line x1="12" y1="1" x2="12" y2="3"/>
@@ -184,7 +177,7 @@
             </nav>
 
             <!-- 4. Interactive Map (at bottom of sidebar) -->
-            <div class="sidebar__map-section is-minimized">
+            <div class="sidebar__map-section is-minimized" id="sidebar-map-section">
                 <div class="sidebar__map-header">
                     <div class="sidebar__map-title">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -199,6 +192,20 @@
                             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
                         </svg>
                     </button>
+                </div>
+                <div class="sidebar__map-controls">
+                    <label class="map-layer-label" for="sidebar-map-layer">Weather layer</label>
+                    <select class="map-layer-select" id="sidebar-map-layer" aria-label="Weather layer">
+                        <option value="satellite">Satellite</option>
+                        <option value="temperature">Temperature</option>
+                        <option value="wind">Wind</option>
+                        <option value="humidity">Humidity</option>
+                        <option value="rainfall">Rainfall</option>
+                        <option value="clouds">Clouds</option>
+                        <option value="pressure">Atmospheric Pressure</option>
+                        <option value="radar">Weather Radar</option>
+                        <option value="aqi">AQI</option>
+                    </select>
                 </div>
                 <div id="interactive-map" class="interactive-map" role="region" aria-label="Interactive world map"></div>
                 <div class="sidebar__map-hint">
@@ -398,6 +405,7 @@
     <!-- Popular cities sidebar section -->
     <script src="../js/popular-cities-data.js?v=20261102-1" defer></script>
     <script src="../js/popular-cities.js?v=20261102-1" defer></script>
+    <script src="../js/sidebar-active.js?v=20261112-1" defer></script>
     <!-- Climate Analysis module -->
     <script src="./climate-analysis.js?v=20261102-2" defer></script>
     <!-- Climate Trend tab -->

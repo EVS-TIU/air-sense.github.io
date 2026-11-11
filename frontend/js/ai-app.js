@@ -22,7 +22,7 @@
   const setStep = (name, state) => { const li = $(`#pipeline [data-step="${name}"]`); if (li) li.dataset.state = state; };
   const resetSteps = () => document.querySelectorAll("#pipeline li").forEach(li => (li.dataset.state = ""));
   const notice = msg => { const n = $("#notice"); if (!n) return; n.hidden = !msg; n.textContent = msg || ""; };
-  const setPlace = (name, sub) => { $("#locName").textContent = name; $("#locSub").textContent = sub; };
+  const setPlace = (name, sub) => { const city = $("#locName") || $("#sidebar-city"), region = $("#locSub") || $("#sidebar-region"); if (city) city.textContent = name; if (region) region.textContent = sub; };
   const fmtTime = iso => (iso ? iso.slice(0, 10) + " " + iso.slice(11, 16) + " (UTC" + iso.slice(19) + ")" : "n/a");
 
   function render(res, ai) {
