@@ -413,6 +413,7 @@ button {
     border-radius: 11px;
     box-shadow: 0 0 16px rgba(33, 169, 255, 0.28);
 }
+.brand-mark img { width: 62px; height: 42px; max-width: none; object-fit: cover; object-position: center; mix-blend-mode: screen; }
 
 .brand-mark svg {
     width: 19px;
