@@ -11,7 +11,8 @@ const isLocalFrontend =
   window.location.hostname === "127.0.0.1";
 const API_BASE_URL = (
   window.AIRSENSE_API_BASE_URL ||
-  (isLocalFrontend ? LOCAL_API_BASE_URL : apiBaseMeta?.content || DEFAULT_API_BASE_URL)
+  apiBaseMeta?.content ||
+  (isLocalFrontend ? LOCAL_API_BASE_URL : DEFAULT_API_BASE_URL)
 ).replace(/\/+$/, "");
 
 const WEATHER_ASSET_ROOT = "./assets/images/weather/";
@@ -450,21 +451,6 @@ async function updateAirQualityIndex(latitude, longitude) {
       .filter(Boolean);
     const sourceAttributions = (waqi?.attributions || []).map((source) => source.name).filter(Boolean);
     sourceAttributions.push(...(nearestStation?.attributions || []).map((source) => source.name).filter(Boolean));
-    // Health recommendation keeps its original single-purpose element, fed by
-    // renderAirQualityStatus(classifyAirQuality(aqi)) above. WAQI/OpenAQ
-    // station status is informational only and renders on its own line below
-    // so provider problems never replace the health guidance.
-    if (airQualityProvidersEl) {
-      const providerTooltip = [
-        `${modelled.provider || "Open-Meteo/CAMS"} ${modelled.data_type || "modelled"} ${modelled.aqi.scale || "US AQI"} as of ${modelTimestamp}`,
-        `AQI category: ${classification?.category || modelled.aqi.category || "unavailable"}`,
-        ...stationRows,
-        stationTimestamps.length ? `Station timestamps: ${stationTimestamps.join(", ")}` : "",
-        sourceAttributions.length ? `Provider/source attribution: ${sourceAttributions.join(", ")}` : "",
-        "Attributions: Open-Meteo/CAMS ENSEMBLE, WAQI and OpenAQ."
-      ].filter(Boolean).join("\n");
-      renderAirQualityProviderStatus(`As of ${modelTimestamp} · ${stationRows.join(" · ")}`, providerTooltip);
-    }
     if (currentHeroWeather) currentHeroWeather.air_quality = payload;
   } catch (error) {
     if (requestRevision !== airQualityRequestRevision) return;
@@ -475,13 +461,11 @@ async function updateAirQualityIndex(latitude, longitude) {
     if (airQualityPm25El) airQualityPm25El.textContent = "-- μg/m³";
     if (airQualityPm10El) airQualityPm10El.textContent = "-- μg/m³";
     if (airQualityScaleEl) airQualityScaleEl.textContent = "US AQI · Open-Meteo/CAMS";
-    // Keep the health recommendation slot empty when nothing can be computed
-    // and explain the outage on the separate provider-status line instead.
+    // Keep the health recommendation slot empty when nothing can be computed.
     if (airQualityRecommendationEl) {
       airQualityRecommendationEl.textContent = "";
       airQualityRecommendationEl.hidden = true;
     }
-    renderAirQualityProviderStatus("Modelled AQI unavailable — health recommendations cannot be computed", "");
   }
 }
 
