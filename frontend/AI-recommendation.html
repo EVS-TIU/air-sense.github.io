@@ -10,7 +10,8 @@
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/map.css?v=20261110-1">
 <link rel="stylesheet" href="css/popular-cities.css?v=20261102-1">
-<link rel="stylesheet" href="css/AI-recommendation.css?v=20261110-3">
+<link rel="stylesheet" href="css/topbar.css?v=20261109-1">
+<link rel="stylesheet" href="css/AI-recommendation.css?v=20261111-9">
 </head>
 <body class="ai-recommendation-page">
 <div class="weather-background" aria-hidden="true">
@@ -90,65 +91,139 @@
     </section>
   </aside>
 
-  <header class="topbar glass">
-      <form id="searchForm" class="search">
-        <div class="city-search">
-          <label class="field"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-            <input id="searchInput" type="search" placeholder="Search a city" aria-label="Search a city"
-              role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="citySuggestions"
-              aria-activedescendant=""></label>
-          <ul id="citySuggestions" class="city-suggestions" role="listbox" aria-label="City suggestions" hidden></ul>
-        </div>
-        <button class="btn" type="submit">Search</button>
-        <button class="btn" type="button" id="gpsBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Use my location</button>
-        <button class="btn" type="button" id="refreshBtn">Refresh</button>
-      </form>
-      <div class="top-actions">
-        <a class="link" href="climate-analysis/climate-analysis-2.html">Climate Analysis</a>
-        <a class="btn strong" href="login.html">Login</a>
-      </div>
-  </header>
+  <header class="topbar panel" aria-label="Top navigation">
+            <div class="dropdown mobile-nav-menu">
+                <button class="dropdown__trigger mobile-nav-menu__trigger" type="button"
+                    aria-label="Open navigation menu" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="mobile-nav-menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu mobile-nav-menu__panel" id="mobile-nav-menu"
+                    role="menu" aria-label="Navigation and account options" hidden>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitemradio" aria-checked="true" tabindex="-1" data-value="C">
+                            Celsius (°C)
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitemradio" aria-checked="false" tabindex="-1" data-value="F">
+                            Fahrenheit (°F)
+                        </button>
+                    </li>
+                    <li class="mobile-nav-menu__separator" role="separator"></li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="login"
+                            data-href="./login.html">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+                            </svg>
+                            Login
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button data-href="./climate-analysis/climate-analysis-2.html" class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="climate-analysis">
+                            Climate Analysis
+                        </button>
+                    </li>
+                    <li class="mobile-nav-menu__separator" role="separator"></li>
+                    <li role="none">
+                        <button data-href="AI-recommendation.html" class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="ai-recommendation"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                            </svg>
+                            AI Recommendation
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="hotspot-map"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 1 6"/>
+                                <line x1="8" y1="2" x2="8" y2="18"/>
+                                <line x1="16" y1="6" x2="16" y2="22"/>
+                            </svg>
+                            Hotspot Map
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="history-analysis"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            History Analysis
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="smart-alert"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                            </svg>
+                            Smart Alert
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="search-box" role="search">
+                <svg class="search-box__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-3.5-3.5"/>
+                </svg>
+                <input id="location-search" type="text" placeholder="Search your location"
+                    role="combobox" aria-label="Search your location" aria-autocomplete="list"
+                    aria-expanded="false" aria-controls="search-results"
+                    autocomplete="off" spellcheck="false">
+                <span class="search-box__spinner" id="search-spinner" aria-hidden="true" hidden></span>
+                <kbd aria-hidden="true">/</kbd>
+                <ul id="search-results" class="search-box__results" role="listbox"
+                    aria-label="Location suggestions" hidden></ul>
+            </div>
+            <button class="location-btn" id="current-location-btn" type="button"
+                aria-label="Fetch current device location weather"
+                title="Fetch current device location weather">
+                <svg class="location-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/>
+                    <circle cx="12" cy="10" r="2.3"/>
+                </svg>
+                <span class="location-btn__label" id="location-label">Current Location</span>
+            </button>
+            <nav class="topbar-nav" aria-label="Dashboard sections">
+                <a href="./climate-analysis/climate-analysis-2.html" data-view="climate-analysis">Climate Analysis</a>
+            </nav>
+            <div class="dropdown dropdown--end unit-select">
+                <button class="dropdown__trigger" type="button" aria-label="Temperature unit"
+                    aria-haspopup="listbox" aria-expanded="false" aria-controls="unit-menu">
+                    <span class="dropdown__label" id="unit-label">°C</span>
+                    <svg class="dropdown__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu" id="unit-menu" role="listbox" aria-label="Temperature unit" hidden>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="C" aria-selected="true">Celsius (°C)</li>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="F" aria-selected="false">Fahrenheit (°F)</li>
+                </ul>
+            </div>
+            <a class="dropdown__trigger topbar-login topbar-login--mobile-menu" href="./login.html">Login</a>
+        </header>
 
     <main>
-      <p id="notice" class="notice" role="status" hidden></p>
-
-      <ol class="glass pipeline" id="pipeline" aria-label="Processing steps">
-        <li data-step="fetch">Weather API</li>
-        <li data-step="validate">Validation</li>
-        <li data-step="rules">Rule engine</li>
-        <li data-step="ai">AI explanation</li>
-        <li data-step="ui">Recommendations</li>
-      </ol>
-
-      <section class="top-grid">
-        <div class="glass card">
-          <div class="card-head"><h2>Conditions now</h2><span class="muted" id="condition">--</span></div>
-          <div class="tiles" id="tiles"></div>
-          <p class="muted small" id="updated"></p>
-        </div>
-        <div class="glass card">
-          <div class="card-head"><h2>Overall risk</h2><span class="risk" id="riskBadge" data-risk="unknown">--</span></div>
-          <p id="summaryText" class="summary">Fetching weather...</p>
-          <p class="muted small" id="summaryNote"></p>
-        </div>
-      </section>
-
-      <section class="glass card">
-        <div class="card-head"><h2>Recommendations</h2></div>
-        <div id="recList" class="rec-list"></div>
-      </section>
-
-      <section class="glass card">
-        <div class="card-head"><h2>Activity suitability</h2></div>
-        <div id="actGrid" class="act-grid"></div>
-      </section>
-
-      <section class="glass card">
-        <div class="card-head"><h2>Data limitations</h2></div>
-        <ul id="limList" class="lim-list"></ul>
-      </section>
-
-      <p class="disclaimer">Thresholds are app-level starting points, not official warning levels. Follow official alerts from your local meteorological authority. Air quality uses the US EPA AQI.</p>
+      <!-- Single blank content block: height follows the sidebar, width follows the topbar. -->
+      <div id="ai-content" class="content-placeholder"></div>
     </main>
 </div>
 
@@ -158,7 +233,8 @@
 <script src="js/weather.js?v=20261110-2"></script>
 <script src="js/engine.js?v=20261110-2"></script>
 <script src="js/llm.js"></script>
-<script src="js/ai-app.js?v=20261110-7"></script>
+<script src="js/topbar.js?v=20261102-4" defer></script>
+<script src="js/ai-app.js?v=20261111-2"></script>
 <script src="js/popular-cities-data.js?v=20261102-1"></script>
 <script src="js/popular-cities.js?v=20261110-1"></script>
 </body>

@@ -7,6 +7,15 @@
   --border: rgba(130, 190, 230, .25);
   --accent: #29b6ff;
   --accent-soft: rgba(33, 169, 255, .13);
+  --panel-border: rgba(130, 190, 230, 0.25); /* topbar.css expects this var */
+  /* Dynamic layout metrics for the main content container. These mirror the
+     real .app grid (padding + column + gap) so the container computes its
+     position from the actual sidebar/topbar dimensions, not hardcoded pixels
+     in the selector. */
+  --app-pad-top: 44px;
+  --app-pad-left: 38px;
+  --topbar-h: 89px;
+  --sidebar-w: 242px;
   --radius: 21px;
   --radius-sm: 12px;
   --blur: 12px;
@@ -33,29 +42,59 @@ h3 { font-size: 15px; }
   z-index: 1;
   display: grid;
   grid-template-columns: 242px minmax(0, 1fr);
-  grid-template-rows: 89px minmax(0, 1fr);
+  grid-template-rows: 89px auto; /* content row height is driven by the sidebar, not the viewport */
   grid-template-areas: "sidebar topbar" "sidebar main";
   gap: 20px 15px;
   width: min(1648px, 100%);
   min-height: 100vh;
+  align-content: start; /* stop the auto content row from absorbing leftover viewport space — the div must never grow past the sidebar */
   margin: 0 auto;
   padding: 44px 36px 43px 38px;
 }
-.sidebar { grid-area: sidebar; position: relative; align-self: start; min-width: 0; min-height: 837px; height: max-content; max-height: none; padding: 22px 18px; display: flex; flex-direction: column; gap: 22px; overflow: visible !important; scrollbar-width: none; }
+.sidebar { grid-area: sidebar; position: relative; align-self: start; min-width: 0; min-height: 837px; height: max-content; max-height: none; padding: 20px 18px; display: flex; flex-direction: column; gap: 22px; overflow: visible !important; scrollbar-width: none; }
 .sidebar::-webkit-scrollbar { display: none; }
-.logo { display: flex; align-items: center; gap: 12px; font-size: 1.45rem; font-weight: 700; padding: 0 4px 18px; border-bottom: 1px solid var(--border); }
-.logo-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #34a6ff, #1b6fd1); }
-.logo-mark .ico { width: 22px; height: 22px; stroke: #fff; }
-.loc-card { padding: 16px; border-radius: var(--radius-sm); background: var(--panel-inner); border: 1px solid var(--border); }
-.loc-card h1 { font-size: 1.25rem; margin: 2px 0; overflow-wrap: anywhere; }
-.loc-card .muted { font-size: .85rem; }
-.sidebar nav { display: grid; gap: 8px; }
-.sidebar nav a { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px; border: 1px solid transparent; color: #c6d8ec; font-size: 12.5px; }
-.sidebar nav a:hover { background: rgba(255, 255, 255, .06); }
-.sidebar nav a[aria-current="page"] { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
+/* Sidebar visual tokens mirror css/style.css so the sidebar looks the same
+   as on the dashboard pages (brand, location card, nav). */
+.logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: -0.4px; padding: 0 4px 18px; border-bottom: 1px solid rgba(116, 174, 213, 0.12); }
+.logo-mark { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: linear-gradient(135deg, #21a9ff, #0b5f9e); box-shadow: 0 0 16px rgba(33, 169, 255, 0.28); }
+.logo-mark .ico { width: 19px; height: 19px; stroke: #fff; }
+.loc-card { padding: 11px 10px; border-radius: 13px; background: rgba(8, 26, 42, 0.55); border: 1px solid rgba(116, 174, 213, 0.14); }
+.loc-card .eyebrow { font-size: 9.5px; letter-spacing: .4px; }
+.loc-card h1 { font-size: 13px; font-weight: 600; margin: 2px 0; overflow-wrap: anywhere; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.loc-card .muted { font-size: 10px; }
+.sidebar nav { display: grid; gap: 4px; margin-top: 20px; }
+.sidebar nav a { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 11px; border-radius: 10px; border: 1px solid transparent; color: #a8c3d8; font-size: 12.5px; transition: color .2s ease, background .2s ease, border-color .2s ease; }
+.sidebar nav a .ico { width: 17px; height: 17px; }
+.sidebar nav a:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.sidebar nav a[aria-current="page"] { color: #fff; background: var(--accent-soft); border-color: rgba(33, 169, 255, 0.35); box-shadow: inset 0 0 14px rgba(33, 169, 255, 0.06); }
 
-.topbar { position: relative; z-index: 10; grid-area: topbar; display: flex; justify-content: space-between; align-items: center; gap: 14px; min-width: 0; padding: 0 22px; }
-main { grid-area: main; display: grid; align-content: start; gap: var(--gap); min-width: 0; }
+/* The original dashboard topbar (css/topbar.css) owns its internal layout;
+   this rule only places it in the page grid. */
+.topbar { grid-area: topbar; position: relative; z-index: 30; min-width: 0; }
+main { grid-area: main; display: grid; align-content: start; gap: var(--gap); min-width: 0; position: relative; }
+/* Main content container: lives in the grid flow, so its height is bound to
+   the same row track the sidebar ends at — the bottom edge always aligns
+   exactly with the sidebar's bottom edge, dynamically, at any viewport size.
+   Width follows the topbar's column; visuals mirror the sidebar (.glass). */
+.content-placeholder {
+  position: absolute;
+  inset: 0; /* fills main's box exactly — no percentage-height resolution involved */
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden; /* no unwanted horizontal or vertical overflow */
+  /* Same dark navy glassmorphism as the sidebar (.glass recipe in this file):
+     gradient, border, radius and blur all reuse the identical variables, so
+     the panel reads as part of the same design language. */
+  background: var(--panel); /* linear-gradient(135deg, rgba(16,43,66,.82), rgba(7,24,39,.88)) */
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .25);
+}
 .search { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .city-search { position: relative; flex: 1 1 260px; min-width: 0; }
 .city-search .field { width: 100%; }
@@ -148,6 +187,8 @@ main { grid-area: main; display: grid; align-content: start; gap: var(--gap); mi
 
 @media (max-width: 1300px) and (min-width: 901px) {
   .app { padding: 16px; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; }
+  /* main container follows the tighter grid: 16px padding + 200px sidebar */
+  :root { --app-pad-top: 16px; --app-pad-left: 16px; --sidebar-w: 200px; }
   .topbar { gap: 10px; }
   .search { flex-wrap: nowrap; gap: 7px; min-width: 0; }
   .field { min-width: 0; height: 44px; padding: 0 12px; }
@@ -161,6 +202,13 @@ main { grid-area: main; display: grid; align-content: start; gap: var(--gap); mi
     grid-template-areas: "sidebar" "topbar" "main";
     gap: 14px;
     padding: 14px;
+  }
+  /* Stacked layout: fixed positioning no longer applies; the container flows
+     normally under the sidebar and fills the remaining viewport height. */
+  .content-placeholder {
+    position: static;
+    width: 100%;
+    height: calc(100vh - var(--app-pad-top) - var(--topbar-h));
   }
   .sidebar { position: static; height: max-content; }
   .sidebar nav { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
