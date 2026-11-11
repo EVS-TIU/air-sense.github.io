@@ -222,8 +222,50 @@
         </header>
 
     <main>
-      <!-- Single blank content block: height follows the sidebar, width follows the topbar. -->
-      <div id="ai-content" class="content-placeholder"></div>
+      <section id="ai-content" class="content-placeholder ai-chat" aria-label="AI Recommendation">
+        <header class="ai-chat__header">
+          <div class="ai-chat__brand">
+            <span class="ai-chat__bot" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M8 12h.01M16 12h.01M9 16h6M12 7V4M9 4h6"/></svg></span>
+            <div>
+              <h1>AI Recommendation <span class="ai-chat__live"><i></i> Live Expert</span></h1>
+              <p>Real-time intelligent recommendations based on active sensor stream in <strong id="ai-chat-city">Kolkata</strong></p>
+            </div>
+          </div>
+          <button class="ai-chat__reset" id="ai-chat-reset" type="button"><span aria-hidden="true">↻</span> Reset Chat</button>
+        </header>
+
+        <div class="ai-chat__body" id="ai-chat-messages">
+          <article class="ai-chat__message ai-chat__message--assistant">
+            <span class="ai-chat__avatar ai-chat__avatar--spark" aria-hidden="true">✣</span>
+            <div>
+              <div class="ai-chat__bubble">Hello! I'm your AirSense AI Climate Assistant. Current air quality index in <b>Kolkata</b> is <strong>142 (Moderate)</strong> with PM2.5 levels elevated. How can I assist you with health safety, outdoor planning, or comparative analysis today?</div>
+              <small>Just now • AirSense Neural Engine v4.2</small>
+            </div>
+          </article>
+
+          <div class="ai-chat__suggested-title"><span aria-hidden="true">💡</span> Suggested AI Queries &amp; Insights <em>(Tap any block to send)</em>:</div>
+          <div class="ai-chat__suggestions">
+            <button type="button" class="ai-chat__suggestion" data-query="Analyze current AQI trends">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--blue" aria-hidden="true">▥</span><span><b>Analyze current AQI trends</b><small>Review particulate matter breakdown &amp; 24h forecast.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+            <button type="button" class="ai-chat__suggestion" data-query="Compare weather with Mumbai">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--cyan" aria-hidden="true">⚖</span><span><b>Compare weather with Mumbai</b><small>Cross-city atmospheric pollution comparison.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+            <button type="button" class="ai-chat__suggestion" data-query="Safe outdoor activity hours">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--green" aria-hidden="true">♟</span><span><b>Safe outdoor activity hours</b><small>Best windows for jogging and cycling today.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+            <button type="button" class="ai-chat__suggestion" data-query="Health risk assessment">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--purple" aria-hidden="true">♥</span><span><b>Health risk assessment</b><small>Precautions for sensitive groups &amp; children.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+
+        <form class="ai-chat__composer" id="ai-chat-form">
+          <span aria-hidden="true">⌕</span>
+          <input id="ai-chat-input" type="text" placeholder="Ask AI about AQI, weather safety, or city comparison..." autocomplete="off">
+          <button class="ai-chat__send" type="submit" aria-label="Send message">➤</button>
+        </form>
+      </section>
     </main>
 </div>
 

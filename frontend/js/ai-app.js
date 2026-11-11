@@ -58,6 +58,20 @@
     $("#limList").innerHTML = res.data_limitations.map(l => `<li>${esc(l)}</li>`).join("");
   }
 
+  function initChat() {
+    const form = $("#ai-chat-form"), input = $("#ai-chat-input"), messages = $("#ai-chat-messages");
+    if (!form || !input || !messages) return;
+    const addMessage = (text, reply) => {
+      const user = document.createElement("div"); user.className = "ai-chat__user-message"; user.textContent = text;
+      messages.appendChild(user);
+      if (reply) { const bot = document.createElement("div"); bot.className = "ai-chat__reply"; bot.textContent = reply; messages.appendChild(bot); }
+      messages.scrollTop = messages.scrollHeight;
+    };
+    document.querySelectorAll(".ai-chat__suggestion").forEach(button => button.addEventListener("click", () => { input.value = button.dataset.query; form.requestSubmit(); }));
+    form.addEventListener("submit", event => { event.preventDefault(); const text = input.value.trim(); if (!text) return; addMessage(text, "I’m analyzing the latest AirSense readings and will provide a climate-aware recommendation shortly."); input.value = ""; });
+    $("#ai-chat-reset")?.addEventListener("click", () => { messages.querySelectorAll(".ai-chat__user-message, .ai-chat__reply").forEach(node => node.remove()); input.value = ""; });
+  }
+
   async function go(place, force) {
     if (busy) {
       pendingPlace = { place, force };
@@ -267,6 +281,8 @@
       });
     });
   });
+
+  initChat();
 
   // Optional: the main page can link here with ?lat=..&lon=..&name=..
   const q = new URLSearchParams(location.search);
