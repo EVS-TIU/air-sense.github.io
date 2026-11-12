@@ -1,7 +1,7 @@
 (function () {
-  const page = document.body.classList.contains("ai-recommendation-page") ? "ai-recommendation" :
-    document.body.classList.contains("smart-alert-page") ? "smart-alert" :
+  const page = document.body.classList.contains("smart-alert-page") ? "smart-alert" :
     document.body.classList.contains("history-page") ? "history-analysis" :
+    document.body.classList.contains("ai-recommendation-page") ? "ai-recommendation" :
     document.body.classList.contains("climate-analysis-page") ? "climate-analysis" : "current-weather";
   const links = document.querySelectorAll(".sidebar__nav a[data-nav]");
   const setActive = activeLink => links.forEach(link => {
