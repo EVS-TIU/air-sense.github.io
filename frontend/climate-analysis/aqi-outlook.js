@@ -29,7 +29,6 @@
                 '<svg class="ao__head-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h8a3 3 0 1 0-3-3"/><path d="M3 14h13a4 4 0 1 0-4-4"/><path d="M3 19h7a3 3 0 1 1-3 3"/></svg>' +
                 '<div class="ao__head-text"><h3 class="ao__title">AQI Outlook</h3><p class="ao__subtitle" data-ao-subtitle></p></div>' +
                 '<span class="ao__demo-badge">DEMO DATA</span>' +
-                '<label class="sr-only" for="ao-range">Historical range</label>' +
                 '<select class="ao__range" id="ao-range" aria-label="Historical range">' +
                     ranges.map(function (range) { return '<option value="' + range.id + '">' + range.label + '</option>'; }).join('') +
                 '</select>' +
@@ -116,7 +115,7 @@
             pm25: pm25,
             pm10: pm10,
             aqiChange: profile.avgAqiChange * (range.years - 1) / 10,
-            pm25Change: ((pm25[pm25.length - 1] / pm25[0]) - 1) * 100,
+            pm25Change: profile.pm25Change * (range.years - 1) / 10,
             no2Change: ((no2End / no2Start) - 1) * 100 * (range.years - 1) / 10,
             cleanDaysChange: Math.round(profile.cleanDaysChange * (range.years - 1) / 10)
         };
