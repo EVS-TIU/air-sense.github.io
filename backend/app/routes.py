@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from .climate_predict import ClimatePredictService, ClimatePredictError
 from .map_service import MapService, parse_bbox
 from .services import WeatherClient, WeatherServiceError, build_recommendations
 
@@ -38,6 +39,19 @@ def service(request: Request) -> WeatherClient:
 
 def map_service(request: Request) -> MapService:
     return request.app.state.map_service
+
+
+def climate_predictor(request: Request) -> ClimatePredictService:
+    return request.app.state.climate_predict
+
+
+def prediction_date(value: str | None) -> date_type | None:
+    if value is None:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(400, "date must use YYYY-MM-DD") from None
 
 
 def map_variables(value: str | None) -> tuple[str, ...] | None:
@@ -110,6 +124,21 @@ async def forecast(request: Request, location: Annotated[Coordinates, Depends(co
 @router.get("/weather/air-quality")
 async def air_quality(request: Request, location: Annotated[Coordinates, Depends(coordinates)]) -> dict:
     return await provider_call(service(request).air_quality(location.latitude, location.longitude))
+
+
+@router.get("/climate/predict")
+async def climate_predict(
+    predictor: Annotated[ClimatePredictService, Depends(climate_predictor)],
+    location: Annotated[Coordinates, Depends(coordinates)],
+    city: Annotated[str | None, Query(max_length=120)] = None,
+    country: Annotated[str | None, Query(max_length=120)] = None,
+    date: Annotated[str | None, Query(description="Target date, YYYY-MM-DD; defaults to today")] = None,
+) -> dict:
+    target = prediction_date(date) or date_type.today()
+    try:
+        return await predictor.predict(location.latitude, location.longitude, target, city=city, country=country)
+    except ClimatePredictError as exc:
+        raise HTTPException(502, str(exc)) from None
 
 
 def bounds(value: str) -> tuple[float, float, float, float]:

@@ -21,11 +21,12 @@
 
   const setStep = (name, state) => { const li = $(`#pipeline [data-step="${name}"]`); if (li) li.dataset.state = state; };
   const resetSteps = () => document.querySelectorAll("#pipeline li").forEach(li => (li.dataset.state = ""));
-  const notice = msg => { const n = $("#notice"); n.hidden = !msg; n.textContent = msg || ""; };
-  const setPlace = (name, sub) => { $("#locName").textContent = name; $("#locSub").textContent = sub; };
+  const notice = msg => { const n = $("#notice"); if (!n) return; n.hidden = !msg; n.textContent = msg || ""; };
+  const setPlace = (name, sub) => { const city = $("#locName") || $("#sidebar-city"), region = $("#locSub") || $("#sidebar-region"); if (city) city.textContent = name; if (region) region.textContent = sub; };
   const fmtTime = iso => (iso ? iso.slice(0, 10) + " " + iso.slice(11, 16) + " (UTC" + iso.slice(19) + ")" : "n/a");
 
   function render(res, ai) {
+    if (!$("#pipeline")) return; // content area is blanked on this page; nothing to render into
     const s = res.weather_summary;
     $("#condition").textContent = s.condition;
     $("#updated").textContent = "Observed " + fmtTime(res.observed_at) + " · rules v" + res.rule_version;
@@ -55,6 +56,20 @@
 
     $("#actGrid").innerHTML = res.activities.map(a => `<div class="glass act"><h3>${esc(a.activity)}</h3><span class="status" data-s="${a.status}">${SLABEL[a.status]}</span><p>${esc(a.note)}</p></div>`).join("");
     $("#limList").innerHTML = res.data_limitations.map(l => `<li>${esc(l)}</li>`).join("");
+  }
+
+  function initChat() {
+    const form = $("#ai-chat-form"), input = $("#ai-chat-input"), messages = $("#ai-chat-messages");
+    if (!form || !input || !messages) return;
+    const addMessage = (text, reply) => {
+      const user = document.createElement("div"); user.className = "ai-chat__user-message"; user.textContent = text;
+      messages.appendChild(user);
+      if (reply) { const bot = document.createElement("div"); bot.className = "ai-chat__reply"; bot.textContent = reply; messages.appendChild(bot); }
+      messages.scrollTop = messages.scrollHeight;
+    };
+    document.querySelectorAll(".ai-chat__suggestion").forEach(button => button.addEventListener("click", () => { input.value = button.dataset.query; form.requestSubmit(); }));
+    form.addEventListener("submit", event => { event.preventDefault(); const text = input.value.trim(); if (!text) return; addMessage(text, "I’m analyzing the latest AirSense readings and will provide a climate-aware recommendation shortly."); input.value = ""; });
+    $("#ai-chat-reset")?.addEventListener("click", () => { messages.querySelectorAll(".ai-chat__user-message, .ai-chat__reply").forEach(node => node.remove()); input.value = ""; });
   }
 
   async function go(place, force) {
@@ -144,6 +159,7 @@
   }
 
   function closeSuggestions() {
+    if (!suggestions || !searchInput) return; // original topbar owns search on this page
     suggestions.hidden = true;
     searchInput.setAttribute("aria-expanded", "false");
     searchInput.removeAttribute("aria-activedescendant");
@@ -184,7 +200,7 @@
     go(place);
   }
 
-  searchInput.addEventListener("input", () => {
+  if (searchInput) searchInput.addEventListener("input", () => {
     clearTimeout(searchTimer);
     const query = searchInput.value.trim();
     suggestedPlaces = [];
@@ -206,7 +222,7 @@
     }, 250);
   });
 
-  searchInput.addEventListener("keydown", event => {
+  if (searchInput) searchInput.addEventListener("keydown", event => {
     if (event.key === "ArrowDown" && !suggestions.hidden) {
       event.preventDefault();
       setActiveSuggestion(activeSuggestion + 1);
@@ -221,7 +237,7 @@
     }
   });
 
-  suggestions.addEventListener("click", event => {
+  if (suggestions) suggestions.addEventListener("click", event => {
     const option = event.target.closest("[data-index]");
     if (option) chooseSuggestion(Number(option.dataset.index));
   });
@@ -235,7 +251,7 @@
     go({ lat: Number(place.lat), lon: Number(place.lon), name: place.name || null });
   });
 
-  $("#searchForm").addEventListener("submit", async e => {
+  if ($("#searchForm")) $("#searchForm").addEventListener("submit", async e => {
     e.preventDefault();
     const q = $("#searchInput").value.trim();
     if (!q) return;
@@ -247,8 +263,26 @@
     try { const p = await Wx.geocode(q); go({ lat: p.lat, lon: p.lon, name: p.name }); }
     catch (err) { notice(err.message); }
   });
-  $("#gpsBtn").addEventListener("click", useGPS);
-  $("#refreshBtn").addEventListener("click", () => current ? go(current, true) : useGPS());
+  if ($("#gpsBtn")) $("#gpsBtn").addEventListener("click", useGPS);
+  if ($("#refreshBtn")) $("#refreshBtn").addEventListener("click", () => current ? go(current, true) : useGPS());
+
+  // Climate-analysis-style tabs (same pattern as climate-analysis.js)
+  document.querySelectorAll(".ca-tabs__btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".ca-tabs__btn").forEach(b => {
+        const active = b === btn;
+        b.classList.toggle("is-active", active);
+        b.setAttribute("aria-selected", String(active));
+      });
+      document.querySelectorAll(".ca-tab-panel").forEach(p => {
+        const show = p.id === btn.dataset.tab;
+        p.classList.toggle("is-active", show);
+        p.setAttribute("aria-hidden", String(!show));
+      });
+    });
+  });
+
+  initChat();
 
   // Optional: the main page can link here with ?lat=..&lon=..&name=..
   const q = new URLSearchParams(location.search);

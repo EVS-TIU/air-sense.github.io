@@ -79,10 +79,17 @@ window.MOCK_CLIMATE_DATA = {
  * Nothing else in the UI needs to change, as long as the response matches climateTypes.js.
  */
 (function () {
+  // Same local-detection rule as js/app.js: serve from localhost/127.0.0.1 (or the
+  // filesystem) and we hit the local backend; anything else uses the deployed one.
+  var isLocalFrontend = window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.protocol === "file:";
   var CONFIG = {
-    USE_MOCK: true,          // <-- flip to false when the backend is connected
-    BASE_URL: "",            // TODO: your backend origin, e.g. "https://api.example.com"
-    ENDPOINT: "",            // TODO: your existing forecast route (not invented here)
+    USE_MOCK: false,         // live prediction from the backend /climate/predict
+    BASE_URL: isLocalFrontend
+      ? "http://127.0.0.1:8000/api/v1"
+      : "https://airsense-backend-docker.getvoroa.com/api/v1",
+    ENDPOINT: "/climate/predict",
     HEADERS: { Accept: "application/json" }
   };
 
@@ -100,14 +107,39 @@ window.MOCK_CLIMATE_DATA = {
   }
 
   /**
-   * @param {{city?: string, date?: string}} [params]
+   * Resolve a city name to coordinates through the existing /location/search
+   * endpoint, so /climate/predict can be called with lat/lon like every
+   * other weather route.
+   * @param {{city?: string, lat?: number, lon?: number}} params
+   * @returns {Promise<typeof params>}
+   */
+  function resolveLocation(params) {
+    if (params.lat != null && params.lon != null) return Promise.resolve(params);
+    var url = CONFIG.BASE_URL + "/location/search?q=" + encodeURIComponent(params.city || "");
+    return fetch(url, { headers: CONFIG.HEADERS }).then(function (res) {
+      if (!res.ok) throw new Error("ClimateApi: location lookup failed (" + res.status + ")");
+      return res.json();
+    }).then(function (out) {
+      var hit = out && out.results && out.results[0];
+      if (!hit) throw new Error("ClimateApi: no coordinates found for " + params.city);
+      params.lat = hit.latitude;
+      params.lon = hit.longitude;
+      if (!params.country && hit.country) params.country = hit.country;
+      return params;
+    });
+  }
+  /**
+   * @param {{city?: string, lat?: number, lon?: number, date?: string}} [params]
    * @returns {Promise<ClimateData>}
    */
   function getClimateForecast(params) {
     if (CONFIG.USE_MOCK) {
       return Promise.resolve(JSON.parse(JSON.stringify(window.MOCK_CLIMATE_DATA)));
     }
-    return fetchFromBackend(params);
+    params = params || {};
+    return resolveLocation(params).then(function (resolved) {
+      return fetchFromBackend(resolved);
+    });
   }
 
   window.ClimateApi = { CONFIG: CONFIG, getClimateForecast: getClimateForecast };
@@ -388,7 +420,10 @@ window.MOCK_CLIMATE_DATA = {
 (function () {
   var root = document.getElementById("climate-dashboard");
   if (!root) return;
-  ClimateApi.getClimateForecast({ city: "Delhi", date: "2026-11-15" })
+  ClimateApi.getClimateForecast({
+      city: "Delhi",
+      date: new Date(Date.now() + 864e5).toISOString().slice(0, 10) // default: tomorrow
+    })
     .then(function (data) { ClimateDashboard.mount(root, data); })
     .catch(function (err) {
       console.error(err);

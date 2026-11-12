@@ -42,6 +42,7 @@ body {
 
     color: var(--text);
     font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -389,6 +390,7 @@ button {
     padding: 20px 18px;
     overflow: hidden;
 }
+.sidebar.glass { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); }
 
 .sidebar__brand {
     flex: 0 0 auto;
@@ -413,6 +415,9 @@ button {
     border-radius: 11px;
     box-shadow: 0 0 16px rgba(33, 169, 255, 0.28);
 }
+.brand-mark img { width: 62px; height: 42px; max-width: none; object-fit: cover; object-position: center; mix-blend-mode: screen; }
+.current-weather-page .brand-mark { overflow: hidden; }
+.current-weather-page .brand-mark img { transform: translate(-12px, -4.5px); }
 
 .brand-mark svg {
     width: 19px;
@@ -1903,6 +1908,149 @@ button {
 
     .weather-background__video {
         display: none;
+    }
+}
+
+/* Current Weather uses the same fixed shell as the other dashboard pages.
+   The weather sections remain unchanged; only their shared content grid is
+   placed inside the global sidebar/topbar shell. */
+.current-weather-page .app {
+    position: relative;
+    z-index: 1;
+    width: min(1648px, 100%);
+    height: auto;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 44px 36px 43px 38px;
+    display: grid;
+    grid-template-columns: 242px minmax(0, 1fr);
+    grid-template-rows: 89px auto;
+    grid-template-areas: "sidebar topbar" "sidebar main";
+    gap: 20px 15px;
+    align-content: start;
+}
+
+.current-weather-page .app > .sidebar {
+    grid-area: sidebar;
+    width: auto;
+    height: max-content;
+    min-height: 837px;
+    max-height: none;
+    padding: 20px 18px;
+    gap: 22px;
+    overflow: visible;
+    align-self: start;
+}
+
+.current-weather-page .app > .topbar {
+    grid-area: topbar;
+    width: auto;
+    height: 89px;
+}
+
+.current-weather-page .weather-main {
+    grid-area: main;
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+    grid-template-rows: 272px 196px minmax(230px, 1fr) auto;
+    gap: 15px;
+    min-width: 0;
+    align-content: start;
+}
+
+.current-weather-page .weather-main > .current-weather {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    width: auto;
+    height: 482px;
+}
+
+.current-weather-page .weather-main > .hourly-forecast {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    height: 272px;
+    overflow: hidden;
+}
+
+.current-weather-page .hourly-cards {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.current-weather-page .hour-card {
+    min-height: 0;
+    overflow: hidden;
+    padding: 8px 4px 6px;
+}
+
+.current-weather-page .hour-card .hour {
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.current-weather-page .hour-card h3 {
+    margin-bottom: 6px;
+    font-size: 20px;
+}
+
+.current-weather-page .hour-card .weather-icon {
+    width: 45px;
+    height: 40px;
+    margin-bottom: 3px;
+}
+
+.current-weather-page .hour-card .humidity {
+    font-size: 11px;
+    line-height: 1.2;
+    text-align: center;
+}
+
+.current-weather-page .weather-main > .weather-details {
+    grid-column: 2;
+    grid-row: 2;
+    width: auto;
+    height: 196px;
+    margin: 0;
+    justify-self: stretch;
+}
+
+.current-weather-page .weather-main > .week-forecast {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: auto;
+    height: auto;
+    min-height: 230px;
+    margin-bottom: -15px;
+}
+
+.current-weather-page .weather-main > .climate-analysis {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    width: auto;
+}
+
+@media (max-width: 900px) {
+    .current-weather-page .app {
+        display: flex;
+        padding: 14px;
+    }
+
+    .current-weather-page .weather-main {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .current-weather-page .weather-main > .current-weather,
+    .current-weather-page .weather-main > .hourly-forecast,
+    .current-weather-page .weather-main > .weather-details,
+    .current-weather-page .weather-main > .week-forecast,
+    .current-weather-page .weather-main > .climate-analysis {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        margin: 0;
     }
 }
 

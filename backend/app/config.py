@@ -40,6 +40,12 @@ class Settings(BaseSettings):
         default="https://archive-api.open-meteo.com/v1/archive",
         validation_alias="OPENMETEO_ARCHIVE_URL",
     )
+    # ERA5-based historical model forecasts; fallback when the archive host is
+    # overloaded (it has been seen answering 503 "service is overloaded").
+    openmeteo_historical_forecast_url: str = Field(
+        default="https://historical-forecast-api.open-meteo.com/v1/forecast",
+        validation_alias="OPENMETEO_HISTORICAL_FORECAST_URL",
+    )
     openmeteo_air_quality_url: str = Field(
         default="https://air-quality-api.open-meteo.com/v1/air-quality",
         validation_alias="OPENMETEO_AIR_QUALITY_URL",

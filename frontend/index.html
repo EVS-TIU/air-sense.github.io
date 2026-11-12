@@ -6,12 +6,12 @@
     <meta name="description" content="AirSense - live weather dashboard with a location-aware background.">
     <meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
     <title>AirSense - Weather Dashboard</title>
-    <link rel="stylesheet" href="./css/style.css?v=20261101-22">
+    <link rel="stylesheet" href="./css/style.css?v=20261112-3">
 
     <!-- Leaflet interactive map styles -->
     <link rel="stylesheet" href="./assets/vendor/leaflet/leaflet.css">
     <!-- Map component styles -->
-    <link rel="stylesheet" href="./css/map.css?v=20261102-7">
+    <link rel="stylesheet" href="./css/map.css?v=20261112-2">
     <!-- Weather visualization layers -->
     <link rel="stylesheet" href="./css/weather-layers.css?v=20261106-11">
     <!-- Popular cities sidebar section -->
@@ -27,9 +27,9 @@
     <!-- Climate Trend tab styles -->
     <link rel="stylesheet" href="./climate-analysis/climate-trend.css?v=20261103-1">
     <!-- Weather Prediction tab -->
-    <link rel="stylesheet" href="./climate-analysis/weather-prediction.css?v=20261108-1">
+    <link rel="stylesheet" href="./climate-analysis/weather-prediction.css?v=20261111-1">
 </head>
-<body>
+<body class="current-weather-page">
 
     <!-- Location-aware weather background -->
     <div class="weather-background" id="weather-background" aria-hidden="true">
@@ -48,7 +48,7 @@
         <div class="weather-background__scrim"></div>
     </div>
 
-    <div class="dashboard">
+    <div class="app">
 
         <!-- Top Navigation -->
         <header class="topbar panel" aria-label="Top navigation">
@@ -184,19 +184,15 @@
         <!-- Sidebar -->
         <button class="sidebar-backdrop" type="button" aria-label="Close navigation menu"
             tabindex="-1" aria-hidden="true"></button>
-        <aside class="sidebar panel" id="dashboard-sidebar" aria-label="Dashboard navigation">
+        <aside class="sidebar glass" id="dashboard-sidebar" aria-label="Dashboard navigation">
             <!-- 1. AirSense Logo -->
-            <div class="sidebar__brand">
-                <div class="brand-mark" aria-hidden="true">
-                    <svg viewBox="0 0 24 24">
-                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-                    </svg>
-                </div>
+            <a class="logo sidebar__brand" href="./index.html">
+                <span class="logo-mark brand-mark"><img class="logo-image" src="./assets/airsense-logo.png" alt=""></span>
                 <span class="sidebar__brand-name">AirSense</span>
-            </div>
+            </a>
 
             <!-- 2. Current Location Card -->
-            <div class="sidebar__location-card">
+            <div class="loc-card sidebar__location-card">
                 <div class="sidebar__location-header">
                     <div class="sidebar__location-details">
                         <span class="sidebar__location-eyebrow">CURRENT LOCATION</span>
@@ -236,14 +232,14 @@
                     </svg>
                     <span>Hotspot Map</span>
                 </a>
-                <a href="#history-analysis" data-nav="history-analysis">
+                <a href="./history-analysis.html" data-nav="history-analysis">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="12" r="10"/>
                         <polyline points="12 6 12 12 16 14"/>
                     </svg>
                     <span>History Analysis</span>
                 </a>
-                <a href="#smart-alert" data-nav="smart-alert">
+                <a href="./smart-alert.html" data-nav="smart-alert">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
                         <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -340,6 +336,7 @@
             </section>
         </aside>
 
+        <main class="weather-main" aria-label="Weather dashboard content">
         <!-- Current Weather -->
         <section class="current-weather panel" aria-label="Current Weather">
             <div class="current-weather__header">
@@ -548,7 +545,6 @@
                     </div>
                 </div>
                 <p class="air-quality-panel__recommendation" data-air-quality-recommendation hidden></p>
-                <p class="air-quality-panel__provider-status" data-air-quality-providers hidden></p>
             </div>
             <div class="sun-panel" aria-label="UV and air quality scales">
                 <div class="index-scale" data-uv-scale>
@@ -720,6 +716,7 @@
             </div>
         </section>
 
+        </main>
     </div>
 
     <!-- Expanded World Map Modal -->
@@ -760,7 +757,7 @@
     <!-- Leaflet Map library -->
     <script src="./assets/vendor/leaflet/leaflet.js"></script>
     <!-- Map synchronization & interaction component -->
-    <script src="./js/map.js?v=20261110-1"></script>
+    <script src="./js/map.js?v=20261112-3"></script>
     <!-- Weather visualization layers -->
     <script src="./js/weather-map/palettes.js?v=20261106-12"></script>
     <script src="./js/weather-map/data-store.js?v=20261104-2"></script>
@@ -769,16 +766,17 @@
     <script src="./js/weather-map/legends.js?v=20261104-6"></script>
     <script src="./js/weather-map/popup.js?v=20261104-1"></script>
     <script src="./js/weather-map/weather-map.js?v=20261106-9"></script>
-    <script src="./js/app.js?v=20261109-1" defer></script>
-    <script src="./js/topbar.js?v=20261109-1" defer></script>
+    <script src="./js/app.js?v=20261112-2" defer></script>
+    <script src="./js/topbar.js?v=20261112-1" defer></script>
     <!-- Popular cities sidebar section -->
     <script src="./js/popular-cities-data.js?v=20261102-1" defer></script>
     <script src="./js/popular-cities.js?v=20261102-1" defer></script>
+    <script src="./js/sidebar-active.js?v=20261112-1" defer></script>
     <!-- Climate Analysis module -->
     <script src="./climate-analysis/climate-analysis.js?v=20261102-1" defer></script>
     <!-- Climate Trend tab -->
     <script src="./climate-analysis/climate-trend.js?v=20261103-1" defer></script>
     <!-- Weather Prediction tab -->
-    <script src="./climate-analysis/weather-prediction.js?v=20261108-1" defer></script>
+    <script src="./climate-analysis/weather-prediction.js?v=20261111-1" defer></script>
 </body>
 </html>

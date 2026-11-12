@@ -1,0 +1,16 @@
+(function () {
+  const start = document.getElementById("history-start"), end = document.getElementById("history-end"), ward = document.getElementById("history-ward"), metric = document.getElementById("history-metric"), chart = document.getElementById("history-chart");
+  if (!start || !end || !ward || !chart) return;
+  const today = new Date(), iso = d => d.toISOString().slice(0, 10), offsets = { "Central Ward": 0, "Lake Ward": 12, "North Ward": -8, "East Ward": 18 }, metrics = { aqi: { name: "AQI", max: 200, base: 112, unit: "" }, temperature: { name: "Temperature", max: 45, base: 29, unit: "°C" }, humidity: { name: "Humidity", max: 100, base: 62, unit: "%" }, rainfall: { name: "Rainfall", max: 80, base: 18, unit: " mm" } };
+  const first = new Date(today); first.setDate(today.getDate() - 6); start.value = iso(first); end.value = iso(today);
+  function draw() {
+    const from = new Date(start.value), to = new Date(end.value); if (!start.value || !end.value || from > to) return;
+    const selected = metrics[metric.value], days = Math.max(2, Math.min(14, Math.round((to - from) / 86400000) + 1)), base = selected.base + (metric.value === "aqi" ? offsets[ward.value] : offsets[ward.value] / 5), data = Array.from({ length: days }, (_, i) => Math.max(0, Math.round(base + Math.sin(i * 1.35) * (selected.max * .12) + i * (metric.value === "rainfall" ? 1 : .2) + (i % 3) * (selected.max * .04))));
+    const left = 48, top = 20, width = 824, height = 220, max = selected.max, points = data.map((v, i) => `${left + (i / (days - 1)) * width},${top + height - (Math.min(v, max) / max) * height}`).join(" ");
+    const grid = [0, 50, 100, 150, 200].map(v => { const y = top + height - (v / max) * height; return `<line x1="${left}" y1="${y}" x2="${left + width}" y2="${y}"/><text x="8" y="${y + 4}">${v}</text>`; }).join("");
+    const dots = data.map((v, i) => { const x = left + (i / (days - 1)) * width, y = top + height - (v / max) * height; return `<circle cx="${x}" cy="${y}" r="4"/><text x="${x}" y="266" text-anchor="middle">${i === 0 || i === days - 1 ? new Date(from.getTime() + i * 86400000).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : ""}</text>`; }).join("");
+    chart.innerHTML = `<g class="history__grid">${grid}</g><polyline points="${points}"/><g class="history__points">${dots}</g>`;
+    document.getElementById("history-average").textContent = Math.round(data.reduce((a, b) => a + b, 0) / data.length) + selected.unit; document.getElementById("history-peak").textContent = Math.max(...data) + selected.unit; document.getElementById("history-average-label").textContent = `Average ${selected.name}`; document.getElementById("history-peak-label").textContent = `Peak ${selected.name}`; document.getElementById("history-chart-title").textContent = `${selected.name} history trend`; document.getElementById("history-legend-label").textContent = selected.name; document.getElementById("history-ward-label").textContent = ward.value.replace(" Ward", ""); document.getElementById("history-range").textContent = `${days} day${days === 1 ? "" : "s"}`;
+  }
+  document.getElementById("history-apply").addEventListener("click", draw); ward.addEventListener("change", draw); metric.addEventListener("change", draw); start.addEventListener("change", draw); end.addEventListener("change", draw); draw();
+})();

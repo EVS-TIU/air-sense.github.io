@@ -7,6 +7,15 @@
   --border: rgba(130, 190, 230, .25);
   --accent: #29b6ff;
   --accent-soft: rgba(33, 169, 255, .13);
+  --panel-border: rgba(130, 190, 230, 0.25); /* topbar.css expects this var */
+  /* Dynamic layout metrics for the main content container. These mirror the
+     real .app grid (padding + column + gap) so the container computes its
+     position from the actual sidebar/topbar dimensions, not hardcoded pixels
+     in the selector. */
+  --app-pad-top: 44px;
+  --app-pad-left: 38px;
+  --topbar-h: 89px;
+  --sidebar-w: 242px;
   --radius: 21px;
   --radius-sm: 12px;
   --blur: 12px;
@@ -33,29 +42,109 @@ h3 { font-size: 15px; }
   z-index: 1;
   display: grid;
   grid-template-columns: 242px minmax(0, 1fr);
-  grid-template-rows: 89px minmax(0, 1fr);
+  grid-template-rows: 89px auto; /* content row height is driven by the sidebar, not the viewport */
   grid-template-areas: "sidebar topbar" "sidebar main";
   gap: 20px 15px;
   width: min(1648px, 100%);
   min-height: 100vh;
+  align-content: start; /* stop the auto content row from absorbing leftover viewport space — the div must never grow past the sidebar */
   margin: 0 auto;
   padding: 44px 36px 43px 38px;
 }
-.sidebar { grid-area: sidebar; position: relative; align-self: start; min-width: 0; min-height: 837px; height: max-content; max-height: none; padding: 22px 18px; display: flex; flex-direction: column; gap: 22px; overflow: visible !important; scrollbar-width: none; }
+.sidebar { grid-area: sidebar; position: relative; align-self: start; min-width: 0; min-height: 837px; height: max-content; max-height: none; padding: 20px 18px; display: flex; flex-direction: column; gap: 22px; overflow: visible !important; scrollbar-width: none; }
 .sidebar::-webkit-scrollbar { display: none; }
-.logo { display: flex; align-items: center; gap: 12px; font-size: 1.45rem; font-weight: 700; padding: 0 4px 18px; border-bottom: 1px solid var(--border); }
-.logo-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(135deg, #34a6ff, #1b6fd1); }
-.logo-mark .ico { width: 22px; height: 22px; stroke: #fff; }
-.loc-card { padding: 16px; border-radius: var(--radius-sm); background: var(--panel-inner); border: 1px solid var(--border); }
-.loc-card h1 { font-size: 1.25rem; margin: 2px 0; overflow-wrap: anywhere; }
-.loc-card .muted { font-size: .85rem; }
-.sidebar nav { display: grid; gap: 8px; }
-.sidebar nav a { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px; border: 1px solid transparent; color: #c6d8ec; font-size: 12.5px; }
-.sidebar nav a:hover { background: rgba(255, 255, 255, .06); }
-.sidebar nav a[aria-current="page"] { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
+/* Sidebar visual tokens mirror css/style.css so the sidebar looks the same
+   as on the dashboard pages (brand, location card, nav). */
+.logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: -0.4px; padding: 0 4px 18px; border-bottom: 1px solid rgba(116, 174, 213, 0.12); }
+.logo-mark { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: linear-gradient(135deg, #21a9ff, #0b5f9e); box-shadow: 0 0 16px rgba(33, 169, 255, 0.28); }
+.logo-mark .logo-art { width: 24px; height: 24px; fill: none; stroke-linecap: round; stroke-linejoin: round; }.logo-mark .logo-sun { fill: #ffb21c; stroke: #ffcf4d; stroke-width: 1; }.logo-mark .logo-ray { stroke: #ffd34d; stroke-width: 1.4; }.logo-mark .logo-cloud { fill: #eef8ff; stroke: #9bdcff; stroke-width: 1.2; }
+.logo-mark { overflow: hidden; }.logo-mark .logo-image { width: 62px; height: 42px; max-width: none; object-fit: cover; object-position: center; mix-blend-mode: screen; transform: translate(-12px, -4.5px); }
+.logo-mark .ico { width: 19px; height: 19px; stroke: #fff; }
+.loc-card { padding: 11px 10px; border-radius: 13px; background: rgba(8, 26, 42, 0.55); border: 1px solid rgba(116, 174, 213, 0.14); }
+.loc-card .eyebrow { font-size: 9.5px; letter-spacing: .4px; }
+.loc-card h1 { font-size: 13px; font-weight: 600; margin: 2px 0; overflow-wrap: anywhere; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.loc-card .muted { font-size: 10px; }
+.sidebar nav { display: grid; gap: 4px; margin-top: 20px; }
+.sidebar nav a { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 11px; border-radius: 10px; border: 1px solid transparent; color: #a8c3d8; font-size: 12.5px; transition: color .2s ease, background .2s ease, border-color .2s ease; }
+.sidebar nav a .ico { width: 17px; height: 17px; }
+.sidebar nav a:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.sidebar nav a[aria-current="page"] { color: #fff; background: var(--accent-soft); border-color: rgba(33, 169, 255, 0.35); box-shadow: inset 0 0 14px rgba(33, 169, 255, 0.06); }
 
-.topbar { position: relative; z-index: 10; grid-area: topbar; display: flex; justify-content: space-between; align-items: center; gap: 14px; min-width: 0; padding: 0 22px; }
-main { grid-area: main; display: grid; align-content: start; gap: var(--gap); min-width: 0; }
+/* The original dashboard topbar (css/topbar.css) owns its internal layout;
+   this rule only places it in the page grid. */
+.topbar { grid-area: topbar; position: relative; z-index: 30; min-width: 0; }
+main { grid-area: main; display: grid; align-content: start; gap: var(--gap); min-width: 0; position: relative; }
+/* Main content container: lives in the grid flow, so its height is bound to
+   the same row track the sidebar ends at — the bottom edge always aligns
+   exactly with the sidebar's bottom edge, dynamically, at any viewport size.
+   Width follows the topbar's column; visuals mirror the sidebar (.glass). */
+.content-placeholder {
+  position: absolute;
+  inset: 0; /* fills main's box exactly — no percentage-height resolution involved */
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden; /* no unwanted horizontal or vertical overflow */
+  /* Same dark navy glassmorphism as the sidebar (.glass recipe in this file):
+     gradient, border, radius and blur all reuse the identical variables, so
+     the panel reads as part of the same design language. */
+  background: var(--panel); /* linear-gradient(135deg, rgba(16,43,66,.82), rgba(7,24,39,.88)) */
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  box-shadow: 0 10px 40px rgba(0, 0, 0, .25);
+}
+
+/* AI climate advisor chat surface */
+.ai-chat { display: flex; flex-direction: column; overflow: hidden; background: var(--panel); border-color: var(--border); }
+.ai-chat__header { display: flex; align-items: center; justify-content: space-between; min-height: 72px; padding: 12px 22px; border-bottom: 1px solid rgba(116, 148, 201, .14); }
+.ai-chat__brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ai-chat__bot { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: #68aaff; background: rgba(33, 107, 210, .23); border: 1px solid rgba(83, 152, 255, .35); font-size: 20px; }.ai-chat__bot svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ai-chat__header h1 { font-size: 16px; letter-spacing: 0; }
+.ai-chat__header p { color: #8e9bb4; font-size: 12px; }
+.ai-chat__header p strong { color: #66a9ff; font-weight: 500; }
+.ai-chat__live { display: inline-flex; align-items: center; gap: 5px; margin-left: 7px; padding: 3px 8px; border-radius: 999px; color: #50e8b2; background: rgba(17, 183, 126, .17); border: 1px solid rgba(18, 200, 143, .35); font-size: 11px; font-weight: 500; vertical-align: 2px; }
+.ai-chat__live i { width: 7px; height: 7px; border-radius: 50%; background: #20bf8e; }
+.ai-chat__reset { border: 0; color: #98a7bf; background: none; font-size: 12px; cursor: pointer; }
+.ai-chat__reset:hover { color: #e7efff; }
+.ai-chat__body { flex: 1; padding: 24px 20px; overflow: auto; }
+.ai-chat__message { display: flex; gap: 12px; max-width: 700px; }
+.ai-chat__avatar { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; color: #fff; font-size: 20px; }
+.ai-chat__avatar--spark { background: linear-gradient(145deg, #5368ff, #2746df); box-shadow: 0 7px 16px rgba(50, 78, 226, .3); }
+.ai-chat__bubble { padding: 15px 16px; color: var(--text); background: var(--panel-inner); border: 1px solid var(--border); border-radius: 0 16px 16px 16px; font-size: 14px; line-height: 1.65; }
+.ai-chat__bubble strong { color: #ffba17; }
+.ai-chat__message small { display: block; margin: 8px 0 0 4px; color: #687792; font-size: 10px; }
+.ai-chat__suggested-title { margin: 25px 4px 10px; color: #99a8bf; font-size: 12px; font-weight: 600; }
+.ai-chat__suggested-title span { color: #ffc31b; }.ai-chat__suggested-title em { font-style: normal; font-weight: 400; }
+.ai-chat__suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ai-chat__suggestion { display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 14px; text-align: left; color: var(--text); background: var(--panel-inner); border: 1px solid var(--border); border-radius: 15px; cursor: pointer; transition: border-color .2s, background .2s, transform .2s; }
+.ai-chat__suggestion:hover { background: var(--accent-soft); border-color: var(--accent); transform: translateY(-1px); }
+.ai-chat__suggestion > span:nth-child(2) { min-width: 0; }.ai-chat__suggestion b { display: block; font-size: 14px; }.ai-chat__suggestion small { display: block; margin-top: 2px; color: #8e9bb4; font-size: 11px; }
+.ai-chat__suggestion-icon { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 11px; font-size: 18px; }.ai-chat__suggestion-icon--blue { color: #65a9ff; background: rgba(54, 126, 240, .16); }.ai-chat__suggestion-icon--cyan { color: #21d9ee; background: rgba(13, 170, 193, .16); }.ai-chat__suggestion-icon--green { color: #3be2a0; background: rgba(19, 180, 137, .16); }.ai-chat__suggestion-icon--purple { color: #c580ff; background: rgba(139, 76, 202, .2); }
+.ai-chat__arrow { margin-left: auto; color: #65748f; font-size: 22px; }
+.ai-chat__composer { display: flex; align-items: center; gap: 10px; margin: 0 22px 16px; min-height: 50px; padding: 0 14px; background: var(--panel-inner); border: 1px solid var(--border); border-radius: 14px; color: var(--muted); }.ai-chat__composer > span { font-size: 21px; }.ai-chat__composer input { flex: 1; min-width: 0; color: var(--text); background: none; border: 0; outline: 0; font-size: 14px; }.ai-chat__composer input::placeholder { color: var(--muted); }.ai-chat__mic { color: var(--muted); background: none; border: 0; font-size: 18px; }.ai-chat__send { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #21a9ff, #0b5f9e); box-shadow: 0 6px 16px rgba(33, 169, 255, .3); font-size: 17px; transform: translateX(6px); }
+ .ai-chat__user-message { width: fit-content; max-width: 78%; margin: 14px 0 0 auto; padding: 10px 14px; color: var(--text); background: var(--accent-soft); border: 1px solid rgba(33, 169, 255, .35); border-radius: 14px 14px 2px 14px; font-size: 13px; }
+.ai-chat__reply { width: fit-content; max-width: 78%; margin: 8px auto 0 48px; padding: 10px 14px; color: var(--muted); background: var(--panel-inner); border: 1px solid var(--border); border-radius: 2px 14px 14px 14px; font-size: 13px; }
+.smart-alert__body { flex: 1; overflow: hidden; padding: 22px 24px; }
+.smart-alert__columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }.smart-alert__settings { min-width: 0; }
+.smart-alert__columns .smart-alert__examples { margin-top: 120px; padding-bottom: 180px; }
+.smart-alert__intro { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }.smart-alert__intro > span { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: var(--accent-soft); font-size: 21px; }.smart-alert__intro h2 { font-size: 20px; }.smart-alert__intro p { color: var(--muted); font-size: 14px; }
+.smart-alert__form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; width: 100%; }.smart-alert__form label, .smart-alert__form legend { color: var(--muted); font-size: 14px; }.smart-alert__form input:not([type="checkbox"]), .smart-alert__form select { display: block; width: 100%; height: 44px; margin-top: 7px; padding: 0 12px; color: var(--text); background: var(--panel-inner); border: 1px solid var(--border); border-radius: 10px; outline: none; font-size: 14px; }.smart-alert__form input:focus, .smart-alert__form select:focus { border-color: var(--accent); }.smart-alert__form fieldset { grid-column: 1 / -1; padding: 0; border: 0; }.smart-alert__days { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }.smart-alert__days label { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: var(--panel-inner); font-size: 13px; }.smart-alert__days input { accent-color: var(--accent); }.smart-alert__save { align-self: end; height: 44px; margin-top: 18px; border: 0; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #21a9ff, #0b5f9e); font-weight: 600; font-size: 14px; cursor: pointer; }.smart-alert__status { min-height: 20px; margin-top: 12px; color: #54dfa8; font-size: 13px; }.smart-alert__examples { display: grid; gap: 8px; width: 100%; margin-top: 18px; padding: 14px; color: var(--muted); background: var(--panel-inner); border: 1px solid var(--border); border-radius: 12px; font-size: 13px; }.smart-alert__examples b { color: var(--text); }.smart-alert__examples span { padding-left: 4px; }
+@media (max-width: 650px) { .smart-alert__form { grid-template-columns: 1fr; }.smart-alert__form fieldset { grid-column: auto; } }
+@media (max-width: 800px) { .smart-alert__columns { grid-template-columns: 1fr; gap: 18px; }.smart-alert__examples { margin-top: 0; } }
+.history__body { flex: 1; overflow: hidden; padding: 26px 24px; }.history__controls { display: grid; grid-template-columns: 1.3fr 1fr 1fr auto; align-items: end; gap: 14px; }.history__controls label { color: var(--muted); font-size: 13px; }.history__controls select, .history__controls input { display: block; width: 100%; height: 42px; margin-top: 6px; padding: 0 12px; color: var(--text); background: var(--panel-inner); border: 1px solid var(--border); border-radius: 10px; outline: none; }.history__controls button { height: 42px; padding: 0 18px; border: 0; border-radius: 10px; color: #fff; background: linear-gradient(135deg, #21a9ff, #0b5f9e); font-weight: 600; cursor: pointer; }.history__summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }.history__summary article { display: grid; gap: 5px; padding: 14px 16px; background: var(--panel-inner); border: 1px solid var(--border); border-radius: 12px; }.history__summary small, .history__summary span { color: var(--muted); font-size: 12px; }.history__summary strong { color: var(--text); font-size: 25px; }.history__chart-card { margin-top: 20px; padding: 18px; background: var(--panel-inner); border: 1px solid var(--border); border-radius: 14px; }.history__chart-head { display: flex; justify-content: space-between; align-items: start; }.history__chart-head h2 { font-size: 17px; }.history__chart-head p { margin-top: 3px; color: var(--muted); font-size: 12px; }.history__legend { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }.history__legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }.history__chart { display: block; width: 100%; height: 300px; margin-top: 12px; overflow: visible; }.history__grid line { stroke: rgba(130, 190, 230, .14); stroke-width: 1; }.history__grid text, .history__points text { fill: var(--muted); font: 11px Arial, sans-serif; }.history__chart polyline { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }.history__points circle { fill: var(--accent); stroke: #dff4ff; stroke-width: 2; }
+@media (max-width: 800px) { .history__controls { grid-template-columns: 1fr 1fr; }.history__controls button { grid-column: 1 / -1; }.history__summary { grid-template-columns: 1fr; }.history__body { overflow: auto; } }
+.history__controls { grid-template-columns: 1.15fr 1.15fr 1fr 1fr auto; }
+.history__controls select { appearance: none; -webkit-appearance: none; padding-right: 38px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a9c6df' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 16px; cursor: pointer; }
+.smart-alert__form select { appearance: none; -webkit-appearance: none; padding-right: 38px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a9c6df' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 16px; cursor: pointer; }
+.smart-alert__save { border: 1px solid rgba(112, 209, 255, .55); background: linear-gradient(180deg, #42c5ff 0%, #168fda 48%, #0b5f9e 100%); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .35), 0 6px 16px rgba(33, 169, 255, .28); text-shadow: 0 1px 2px rgba(0, 38, 70, .55); }.smart-alert__save:hover { background: linear-gradient(180deg, #65d2ff 0%, #21a9ff 48%, #0d6fb4 100%); box-shadow: inset 0 1px 1px rgba(255, 255, 255, .42), 0 8px 20px rgba(33, 169, 255, .38); }
+@media (max-width: 800px) { .history__controls { grid-template-columns: 1fr 1fr; } }
+.smart-alert__forecast { margin-top: 4px; }.smart-alert__forecast h2 { margin-bottom: 8px; font-size: 16px; }.smart-alert__forecast-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }.smart-alert__forecast-grid article { display: grid; justify-items: center; gap: 4px; padding: 10px 8px; color: var(--muted); background: var(--panel-inner); border: 1px solid var(--border); border-radius: 13px; }.smart-alert__forecast-grid b { color: var(--text); font-size: 13px; }.smart-alert__forecast-grid span { font-size: 21px; line-height: 1.2; }.smart-alert__forecast-grid small { font-size: 11px; }.smart-alert__forecast-grid strong { color: var(--text); font-size: 15px; }
+@media (max-width: 650px) { .smart-alert__forecast-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .ai-chat__suggestions { grid-template-columns: 1fr; } .ai-chat__header { padding: 12px 14px; }.ai-chat__reset { font-size: 0; }.ai-chat__reset span { font-size: 18px; } }
 .search { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .city-search { position: relative; flex: 1 1 260px; min-width: 0; }
 .city-search .field { width: 100%; }
@@ -148,6 +237,8 @@ main { grid-area: main; display: grid; align-content: start; gap: var(--gap); mi
 
 @media (max-width: 1300px) and (min-width: 901px) {
   .app { padding: 16px; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; }
+  /* main container follows the tighter grid: 16px padding + 200px sidebar */
+  :root { --app-pad-top: 16px; --app-pad-left: 16px; --sidebar-w: 200px; }
   .topbar { gap: 10px; }
   .search { flex-wrap: nowrap; gap: 7px; min-width: 0; }
   .field { min-width: 0; height: 44px; padding: 0 12px; }
@@ -161,6 +252,13 @@ main { grid-area: main; display: grid; align-content: start; gap: var(--gap); mi
     grid-template-areas: "sidebar" "topbar" "main";
     gap: 14px;
     padding: 14px;
+  }
+  /* Stacked layout: fixed positioning no longer applies; the container flows
+     normally under the sidebar and fills the remaining viewport height. */
+  .content-placeholder {
+    position: static;
+    width: 100%;
+    height: calc(100vh - var(--app-pad-top) - var(--topbar-h));
   }
   .sidebar { position: static; height: max-content; }
   .sidebar nav { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }

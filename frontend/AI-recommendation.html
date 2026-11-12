@@ -8,9 +8,10 @@
 <title>AirSense - AI Recommendation</title>
 <link rel="stylesheet" href="css/style.css?v=20261101-22">
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="css/map.css?v=20261110-1">
+<link rel="stylesheet" href="css/map.css?v=20261112-2">
 <link rel="stylesheet" href="css/popular-cities.css?v=20261102-1">
-<link rel="stylesheet" href="css/AI-recommendation.css?v=20261110-3">
+<link rel="stylesheet" href="css/topbar.css?v=20261109-1">
+<link rel="stylesheet" href="css/AI-recommendation.css?v=20261111-9">
 </head>
 <body class="ai-recommendation-page">
 <div class="weather-background" aria-hidden="true">
@@ -21,134 +22,333 @@
 </div>
 
 <div class="app">
-  <aside class="sidebar glass">
-    <a class="logo" href="index.html">
-      <span class="logo-mark"><svg class="ico" viewBox="0 0 24 24"><path d="M7 18a4 4 0 01-.5-7.97A5.5 5.5 0 0117 9.5a4.25 4.25 0 01.5 8.5H7z"/></svg></span>
-      <span>AirSense</span>
-    </a>
-    <div class="loc-card">
-      <p class="eyebrow">Current Location</p>
-      <h1 id="locName">Finding your location</h1>
-      <p class="muted" id="locSub">Waiting for device location</p>
-    </div>
-    <nav aria-label="Sections">
-      <a href="index.html#current-weather"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Current Weather</a>
-      <a href="AI-recommendation.html" aria-current="page"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>AI Recommendation</a>
-      <a href="index.html#hotspot-map"><svg class="ico" viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>Hotspot Map</a>
-      <a href="index.html#history-analysis"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>History Analysis</a>
-      <a href="index.html#smart-alert"><svg class="ico" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 004 0"/></svg>Smart Alert</a>
-    </nav>
-    <div class="sidebar__map-section is-minimized">
-      <div id="interactive-map" class="interactive-map" role="region" aria-label="Interactive world map"></div>
-    </div>
-    <section class="sidebar__popular" id="popular-cities" aria-labelledby="popular-cities-title">
-      <div class="sidebar__popular-header">
-        <h2 class="sidebar__popular-title" id="popular-cities-title">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="2" y1="12" x2="22" y2="12"/>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-          <span>POPULAR CITIES</span>
-        </h2>
-        <span class="sidebar__popular-count" id="popular-cities-count"></span>
-      </div>
+  <aside class="sidebar glass" id="dashboard-sidebar" aria-label="Dashboard navigation">
+            <!-- 1. AirSense Logo -->
+            <a class="logo sidebar__brand" href="./index.html">
+                <span class="logo-mark brand-mark"><img class="logo-image" src="./assets/airsense-logo.png" alt=""></span>
+                <span class="sidebar__brand-name">AirSense</span>
+            </a>
 
-      <div class="sidebar__country" id="popular-country">
-        <button type="button" class="sidebar__country-trigger" id="popular-country-trigger"
-          aria-haspopup="listbox" aria-expanded="false" aria-controls="popular-country-list"
-          aria-label="Choose a country">
-          <span class="sidebar__country-flag" id="popular-country-flag" aria-hidden="true">🌍</span>
-          <span class="sidebar__country-name" id="popular-country-name">Select country</span>
-          <svg class="sidebar__country-chevron" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 9l6 6 6-6"/>
-          </svg>
-        </button>
-        <div class="sidebar__country-panel" id="popular-country-panel" hidden>
-          <div class="sidebar__country-search-wrap">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="7"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input class="sidebar__country-search" id="popular-country-search" type="search"
-              role="combobox" aria-autocomplete="list" aria-expanded="false"
-              aria-controls="popular-country-list" aria-label="Search countries"
-              placeholder="Search all countries..." autocomplete="off" spellcheck="false">
-          </div>
-          <ul class="sidebar__country-list" id="popular-country-list" role="listbox"
-            aria-label="Countries"></ul>
-          <p class="sidebar__country-empty" id="popular-country-empty" hidden>No countries found</p>
-        </div>
-      </div>
+            <!-- 2. Current Location Card -->
+            <div class="loc-card sidebar__location-card">
+                <div class="sidebar__location-header">
+                    <div class="sidebar__location-details">
+                        <span class="sidebar__location-eyebrow">CURRENT LOCATION</span>
+                        <strong id="sidebar-city">Finding your location</strong>
+                        <span id="sidebar-region">Waiting for device location</span>
+                    </div>
+                </div>
+            </div>
 
-      <div class="sidebar__cities-grid" id="popular-cities-grid" role="group"
-        aria-label="Popular cities"></div>
-      <p class="sidebar__popular-attribution">
-        City data © <a href="https://www.geonames.org/" target="_blank"
-          rel="noopener noreferrer">GeoNames</a> (CC BY 4.0)
-      </p>
-    </section>
-  </aside>
+            <!-- 3. Sidebar Navigation -->
+            <nav class="sidebar__nav" aria-label="Main sidebar navigation">
+                <a href="#current-weather" class="is-active" data-nav="current-weather" data-view="current-weather">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <span>Current Weather</span>
+                </a>
+                <a href="./AI-recommendation.html" data-nav="ai-recommendation">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                    </svg>
+                    <span>AI Recommendation</span>
+                </a>
+                <a href="#hotspot-map" data-nav="hotspot-map">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 1 6"/>
+                        <line x1="8" y1="2" x2="8" y2="18"/>
+                        <line x1="16" y1="6" x2="16" y2="22"/>
+                    </svg>
+                    <span>Hotspot Map</span>
+                </a>
+                <a href="./history-analysis.html" data-nav="history-analysis">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span>History Analysis</span>
+                </a>
+                <a href="./smart-alert.html" data-nav="smart-alert">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <span>Smart Alert</span>
+                </a>
+            </nav>
 
-  <header class="topbar glass">
-      <form id="searchForm" class="search">
-        <div class="city-search">
-          <label class="field"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-            <input id="searchInput" type="search" placeholder="Search a city" aria-label="Search a city"
-              role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="citySuggestions"
-              aria-activedescendant=""></label>
-          <ul id="citySuggestions" class="city-suggestions" role="listbox" aria-label="City suggestions" hidden></ul>
-        </div>
-        <button class="btn" type="submit">Search</button>
-        <button class="btn" type="button" id="gpsBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Use my location</button>
-        <button class="btn" type="button" id="refreshBtn">Refresh</button>
-      </form>
-      <div class="top-actions">
-        <a class="link" href="climate-analysis/climate-analysis-2.html">Climate Analysis</a>
-        <a class="btn strong" href="login.html">Login</a>
-      </div>
-  </header>
+            <!-- 4. Interactive Map (at bottom of sidebar) -->
+            <div class="sidebar__map-section is-minimized" id="sidebar-map-section">
+                <div class="sidebar__map-header">
+                    <div class="sidebar__map-title">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 1 6"/>
+                            <line x1="8" y1="2" x2="8" y2="18"/>
+                            <line x1="16" y1="6" x2="16" y2="22"/>
+                        </svg>
+                        <span>Interactive Map</span>
+                    </div>
+                    <button type="button" class="sidebar__map-expand-btn" id="map-expand-btn" title="Expand world map" aria-label="Expand world map">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="sidebar__map-controls">
+                    <label class="map-layer-label" for="sidebar-map-layer">Weather layer</label>
+                    <select class="map-layer-select" id="sidebar-map-layer" aria-label="Weather layer">
+                        <option value="satellite">Satellite</option>
+                        <option value="temperature">Temperature</option>
+                        <option value="wind">Wind</option>
+                        <option value="humidity">Humidity</option>
+                        <option value="rainfall">Rainfall</option>
+                        <option value="clouds">Clouds</option>
+                        <option value="pressure">Atmospheric Pressure</option>
+                        <option value="radar">Weather Radar</option>
+                        <option value="aqi">AQI</option>
+                    </select>
+                </div>
+                <div id="interactive-map" class="interactive-map" role="region" aria-label="Interactive world map"></div>
+                <div class="sidebar__map-hint">
+                    <svg viewBox="0 0 24 24" aria-hidden="true" width="12" height="12"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                    <span>Click anywhere on map to select</span>
+                </div>
+            </div>
+
+            <!-- 5. Popular Cities -->
+            <section class="sidebar__popular" id="popular-cities" aria-labelledby="popular-cities-title">
+                <div class="sidebar__popular-header">
+                    <h3 class="sidebar__popular-title" id="popular-cities-title">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                        </svg>
+                        <span>POPULAR CITIES</span>
+                    </h3>
+                    <span class="sidebar__popular-count" id="popular-cities-count"></span>
+                </div>
+
+                <div class="sidebar__country" id="popular-country">
+                    <button type="button" class="sidebar__country-trigger" id="popular-country-trigger"
+                        aria-haspopup="listbox" aria-expanded="false" aria-controls="popular-country-list"
+                        aria-label="Choose a country">
+                        <span class="sidebar__country-flag" id="popular-country-flag" aria-hidden="true">🌍</span>
+                        <span class="sidebar__country-name" id="popular-country-name">Select country</span>
+                        <svg class="sidebar__country-chevron" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="sidebar__country-panel" id="popular-country-panel" hidden>
+                        <div class="sidebar__country-search-wrap">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"/>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            </svg>
+                            <input class="sidebar__country-search" id="popular-country-search" type="search"
+                                role="combobox" aria-autocomplete="list" aria-expanded="false"
+                                aria-controls="popular-country-list" aria-label="Search countries"
+                                placeholder="Search all countries..." autocomplete="off" spellcheck="false">
+                        </div>
+                        <ul class="sidebar__country-list" id="popular-country-list" role="listbox"
+                            aria-label="Countries"></ul>
+                        <p class="sidebar__country-empty" id="popular-country-empty" hidden>No countries found</p>
+                    </div>
+                </div>
+
+                <div class="sidebar__cities-grid" id="popular-cities-grid" role="group"
+                    aria-label="Popular cities"></div>
+                <p class="sidebar__popular-attribution">
+                    City data © <a href="https://www.geonames.org/" target="_blank"
+                        rel="noopener noreferrer">GeoNames</a> (CC BY 4.0)
+                </p>
+            </section>
+        </aside>
+
+  <header class="topbar panel" aria-label="Top navigation">
+            <div class="dropdown mobile-nav-menu">
+                <button class="dropdown__trigger mobile-nav-menu__trigger" type="button"
+                    aria-label="Open navigation menu" aria-haspopup="menu" aria-expanded="false"
+                    aria-controls="mobile-nav-menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu mobile-nav-menu__panel" id="mobile-nav-menu"
+                    role="menu" aria-label="Navigation and account options" hidden>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitemradio" aria-checked="true" tabindex="-1" data-value="C">
+                            Celsius (°C)
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitemradio" aria-checked="false" tabindex="-1" data-value="F">
+                            Fahrenheit (°F)
+                        </button>
+                    </li>
+                    <li class="mobile-nav-menu__separator" role="separator"></li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="login"
+                            data-href="./login.html">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>
+                            </svg>
+                            Login
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button data-href="./climate-analysis/climate-analysis-2.html" class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="climate-analysis">
+                            Climate Analysis
+                        </button>
+                    </li>
+                    <li class="mobile-nav-menu__separator" role="separator"></li>
+                    <li role="none">
+                        <button data-href="AI-recommendation.html" class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="ai-recommendation"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                            </svg>
+                            AI Recommendation
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="hotspot-map"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 1 6"/>
+                                <line x1="8" y1="2" x2="8" y2="18"/>
+                                <line x1="16" y1="6" x2="16" y2="22"/>
+                            </svg>
+                            Hotspot Map
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="history-analysis"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            History Analysis
+                        </button>
+                    </li>
+                    <li role="none">
+                        <button class="dropdown__item mobile-nav-menu__item" type="button"
+                            role="menuitem" tabindex="-1" data-value="smart-alert"
+                            data-nav="true">
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                            </svg>
+                            Smart Alert
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="search-box" role="search">
+                <svg class="search-box__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M20 20l-3.5-3.5"/>
+                </svg>
+                <input id="location-search" type="text" placeholder="Search your location"
+                    role="combobox" aria-label="Search your location" aria-autocomplete="list"
+                    aria-expanded="false" aria-controls="search-results"
+                    autocomplete="off" spellcheck="false">
+                <span class="search-box__spinner" id="search-spinner" aria-hidden="true" hidden></span>
+                <kbd aria-hidden="true">/</kbd>
+                <ul id="search-results" class="search-box__results" role="listbox"
+                    aria-label="Location suggestions" hidden></ul>
+            </div>
+            <button class="location-btn" id="current-location-btn" type="button"
+                aria-label="Fetch current device location weather"
+                title="Fetch current device location weather">
+                <svg class="location-btn__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/>
+                    <circle cx="12" cy="10" r="2.3"/>
+                </svg>
+                <span class="location-btn__label" id="location-label">Current Location</span>
+            </button>
+            <nav class="topbar-nav" aria-label="Dashboard sections">
+                <a href="./climate-analysis/climate-analysis-2.html" data-view="climate-analysis">Climate Analysis</a>
+            </nav>
+            <div class="dropdown dropdown--end unit-select">
+                <button class="dropdown__trigger" type="button" aria-label="Temperature unit"
+                    aria-haspopup="listbox" aria-expanded="false" aria-controls="unit-menu">
+                    <span class="dropdown__label" id="unit-label">°C</span>
+                    <svg class="dropdown__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
+                    </svg>
+                </button>
+                <ul class="dropdown__menu" id="unit-menu" role="listbox" aria-label="Temperature unit" hidden>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="C" aria-selected="true">Celsius (°C)</li>
+                    <li class="dropdown__item" role="option" tabindex="-1" data-value="F" aria-selected="false">Fahrenheit (°F)</li>
+                </ul>
+            </div>
+            <a class="dropdown__trigger topbar-login topbar-login--mobile-menu" href="./login.html">Login</a>
+        </header>
 
     <main>
-      <p id="notice" class="notice" role="status" hidden></p>
+      <section id="ai-content" class="content-placeholder ai-chat" aria-label="AI Recommendation">
+        <header class="ai-chat__header">
+          <div class="ai-chat__brand">
+            <span class="ai-chat__bot" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M8 12h.01M16 12h.01M9 16h6M12 7V4M9 4h6"/></svg></span>
+            <div>
+              <h1>AI Recommendation <span class="ai-chat__live"><i></i> Live Expert</span></h1>
+              <p>Real-time intelligent recommendations based on active sensor stream in <strong id="ai-chat-city">Kolkata</strong></p>
+            </div>
+          </div>
+          <button class="ai-chat__reset" id="ai-chat-reset" type="button"><span aria-hidden="true">↻</span> Reset Chat</button>
+        </header>
 
-      <ol class="glass pipeline" id="pipeline" aria-label="Processing steps">
-        <li data-step="fetch">Weather API</li>
-        <li data-step="validate">Validation</li>
-        <li data-step="rules">Rule engine</li>
-        <li data-step="ai">AI explanation</li>
-        <li data-step="ui">Recommendations</li>
-      </ol>
+        <div class="ai-chat__body" id="ai-chat-messages">
+          <article class="ai-chat__message ai-chat__message--assistant">
+            <span class="ai-chat__avatar ai-chat__avatar--spark" aria-hidden="true">✣</span>
+            <div>
+              <div class="ai-chat__bubble">Hello! I'm your AirSense AI Climate Assistant. Current air quality index in <b>Kolkata</b> is <strong>142 (Moderate)</strong> with PM2.5 levels elevated. How can I assist you with health safety, outdoor planning, or comparative analysis today?</div>
+              <small>Just now • AirSense Neural Engine v4.2</small>
+            </div>
+          </article>
 
-      <section class="top-grid">
-        <div class="glass card">
-          <div class="card-head"><h2>Conditions now</h2><span class="muted" id="condition">--</span></div>
-          <div class="tiles" id="tiles"></div>
-          <p class="muted small" id="updated"></p>
+          <div class="ai-chat__suggested-title"><span aria-hidden="true">💡</span> Suggested AI Queries &amp; Insights <em>(Tap any block to send)</em>:</div>
+          <div class="ai-chat__suggestions">
+            <button type="button" class="ai-chat__suggestion" data-query="Analyze current AQI trends">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--blue" aria-hidden="true">▥</span><span><b>Analyze current AQI trends</b><small>Review particulate matter breakdown &amp; 24h forecast.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+            <button type="button" class="ai-chat__suggestion" data-query="Compare weather with Mumbai">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--cyan" aria-hidden="true">⚖</span><span><b>Compare weather with Mumbai</b><small>Cross-city atmospheric pollution comparison.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+            <button type="button" class="ai-chat__suggestion" data-query="Safe outdoor activity hours">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--green" aria-hidden="true">♟</span><span><b>Safe outdoor activity hours</b><small>Best windows for jogging and cycling today.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+            <button type="button" class="ai-chat__suggestion" data-query="Health risk assessment">
+              <span class="ai-chat__suggestion-icon ai-chat__suggestion-icon--purple" aria-hidden="true">♥</span><span><b>Health risk assessment</b><small>Precautions for sensitive groups &amp; children.</small></span><span class="ai-chat__arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
         </div>
-        <div class="glass card">
-          <div class="card-head"><h2>Overall risk</h2><span class="risk" id="riskBadge" data-risk="unknown">--</span></div>
-          <p id="summaryText" class="summary">Fetching weather...</p>
-          <p class="muted small" id="summaryNote"></p>
-        </div>
-      </section>
 
-      <section class="glass card">
-        <div class="card-head"><h2>Recommendations</h2></div>
-        <div id="recList" class="rec-list"></div>
+        <form class="ai-chat__composer" id="ai-chat-form">
+          <span aria-hidden="true">⌕</span>
+          <input id="ai-chat-input" type="text" placeholder="Ask AI about AQI, weather safety, or city comparison..." autocomplete="off">
+          <button class="ai-chat__send" type="submit" aria-label="Send message">➤</button>
+        </form>
       </section>
-
-      <section class="glass card">
-        <div class="card-head"><h2>Activity suitability</h2></div>
-        <div id="actGrid" class="act-grid"></div>
-      </section>
-
-      <section class="glass card">
-        <div class="card-head"><h2>Data limitations</h2></div>
-        <ul id="limList" class="lim-list"></ul>
-      </section>
-
-      <p class="disclaimer">Thresholds are app-level starting points, not official warning levels. Follow official alerts from your local meteorological authority. Air quality uses the US EPA AQI.</p>
     </main>
 </div>
 
@@ -158,8 +358,10 @@
 <script src="js/weather.js?v=20261110-2"></script>
 <script src="js/engine.js?v=20261110-2"></script>
 <script src="js/llm.js"></script>
-<script src="js/ai-app.js?v=20261110-7"></script>
+<script src="js/topbar.js?v=20261102-4" defer></script>
+<script src="js/ai-app.js?v=20261112-1"></script>
 <script src="js/popular-cities-data.js?v=20261102-1"></script>
 <script src="js/popular-cities.js?v=20261110-1"></script>
+<script src="js/sidebar-active.js?v=20261112-1"></script>
 </body>
 </html>

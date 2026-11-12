@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .climate_predict import ClimatePredictService
 from .config import get_settings
 from .map_service import MapService
 from .routes import router
@@ -22,9 +23,12 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.weather = WeatherClient(settings)
     app.state.map_service = MapService(settings)
+    app.state.climate_predict = ClimatePredictService(settings)
     await app.state.weather.startup()
     await app.state.map_service.startup()
+    await app.state.climate_predict.startup()
     yield
+    await app.state.climate_predict.shutdown()
     await app.state.map_service.shutdown()
     await app.state.weather.shutdown()
 
