@@ -1,0 +1,349 @@
+#ca-aqi-outlook {
+    --ao-cyan: #21b8f5;
+    --ao-muted: #a8c3d8;
+    --ao-line: rgba(116, 174, 213, 0.16);
+    --ao-card: linear-gradient(150deg, rgba(14, 38, 58, 0.8), rgba(6, 22, 38, 0.88));
+    overflow: auto;
+}
+
+.ao {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 100%;
+    padding: 16px;
+    color: #eef6ff;
+}
+
+.ao__head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+}
+
+.ao__head-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--ao-cyan);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ao__head-text {
+    min-width: 0;
+    flex: 1;
+}
+
+.ao__title {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.ao__subtitle {
+    margin: 3px 0 0;
+    color: var(--ao-muted);
+    font-size: 12px;
+}
+
+.ao__demo-badge {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    color: #c8ecff;
+    background: rgba(33, 169, 255, 0.1);
+    border: 1px solid rgba(33, 169, 255, 0.24);
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.7px;
+}
+
+.ao__range {
+    flex: 0 0 auto;
+    min-width: 0;
+    height: 38px;
+    padding: 0 30px 0 11px;
+    color: #eef6ff;
+    background: rgba(8, 26, 42, 0.78);
+    border: 1px solid var(--ao-line);
+    border-radius: 10px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ao__range:focus-visible {
+    outline: 2px solid var(--ao-cyan);
+    outline-offset: 2px;
+}
+
+.ao__range option {
+    color: #eef6ff;
+    background: #0a2236;
+}
+
+.ao__stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.ao-stat {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 11px 12px;
+    background: var(--ao-card);
+    border: 1px solid var(--ao-line);
+    border-radius: 13px;
+}
+
+.ao-stat__icon {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--ao-tone);
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ao-stat--aqi { --ao-tone: #ffb547; }
+.ao-stat--pm25 { --ao-tone: #74df55; }
+.ao-stat--no2 { --ao-tone: #21c5ee; }
+.ao-stat--clean { --ao-tone: #21c5ee; }
+
+.ao-stat__body {
+    min-width: 0;
+    flex: 1;
+}
+
+.ao-stat__label {
+    display: block;
+    color: var(--ao-muted);
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.ao-stat__value {
+    display: block;
+    margin-top: 3px;
+    color: var(--ao-tone);
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.ao-stat__note {
+    display: block;
+    margin-top: 3px;
+    color: #c6d9e8;
+    font-size: 9px;
+}
+
+.ao__charts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    flex: 1 1 230px;
+    min-height: 210px;
+}
+
+.ao-chart {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px;
+    background: var(--ao-card);
+    border: 1px solid var(--ao-line);
+    border-radius: 13px;
+}
+
+.ao-chart__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.ao-chart__title svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--ao-cyan);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ao-chart__plot {
+    position: relative;
+    flex: 1;
+    min-height: 150px;
+    margin-top: 5px;
+}
+
+.ao-chart__plot svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.ao-chart__legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    padding-top: 7px;
+    color: #dcefff;
+    font-size: 10px;
+}
+
+.ao-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ao-legend-item__swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.ao-legend-item__swatch--aqi { background: #ff814b; }
+.ao-legend-item__swatch--pm25 { background: #a878ef; border-radius: 2px; }
+.ao-legend-item__swatch--pm10 { background: #20b6f2; border-radius: 2px; }
+
+.ao-chart__grid {
+    stroke: rgba(116, 174, 213, 0.13);
+    stroke-width: 1;
+}
+
+.ao-chart__axis-label {
+    fill: #b7cbdc;
+    font-family: inherit;
+    font-size: 10px;
+}
+
+.ao-chart__point {
+    fill: #ff814b;
+    stroke: #fff0e8;
+    stroke-width: 1.5;
+}
+
+.ao-chart__bar--pm25 { fill: #a878ef; }
+.ao-chart__bar--pm10 { fill: #20b6f2; }
+
+.ao__insight {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    flex: 0 0 auto;
+    padding: 11px 14px;
+    background: var(--ao-card);
+    border: 1px solid var(--ao-line);
+    border-radius: 13px;
+}
+
+.ao__insight-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    padding-right: 13px;
+    border-right: 1px solid var(--ao-line);
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ao__insight-title svg {
+    width: 23px;
+    height: 23px;
+    fill: none;
+    stroke: #74df55;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ao__insight-text {
+    margin: 0;
+    color: #dcefff;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+@media (max-width: 1200px) {
+    .ao__stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ao__charts {
+        flex-basis: 400px;
+    }
+}
+
+@media (max-width: 700px) {
+    .ao {
+        padding: 12px;
+    }
+
+    .ao__head {
+        flex-wrap: wrap;
+    }
+
+    .ao__head-text {
+        flex-basis: calc(100% - 50px);
+    }
+
+    .ao__range {
+        width: 100%;
+        margin-left: 46px;
+    }
+
+    .ao__charts {
+        grid-template-columns: minmax(0, 1fr);
+        flex-basis: auto;
+    }
+
+    .ao-chart {
+        min-height: 240px;
+    }
+
+    .ao__insight {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .ao__insight-title {
+        padding: 0;
+        border: 0;
+    }
+}
+
+@media (max-width: 420px) {
+    .ao__stats {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ao-stat {
+        min-height: 68px;
+    }
+}
