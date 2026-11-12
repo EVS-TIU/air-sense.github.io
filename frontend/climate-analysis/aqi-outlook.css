@@ -314,7 +314,7 @@
 
     .ao__range {
         width: 100%;
-        margin-left: 46px;
+        margin-left: 0;
     }
 
     .ao__charts {
