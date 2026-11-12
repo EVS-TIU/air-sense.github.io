@@ -117,7 +117,7 @@
             pm10: pm10,
             aqiChange: profile.avgAqiChange * (range.years - 1) / 10,
             pm25Change: ((pm25[pm25.length - 1] / pm25[0]) - 1) * 100,
-            no2Change: ((no2End / no2Start) - 1) * 100,
+            no2Change: ((no2End / no2Start) - 1) * 100 * (range.years - 1) / 10,
             cleanDaysChange: Math.round(profile.cleanDaysChange * (range.years - 1) / 10)
         };
     }
