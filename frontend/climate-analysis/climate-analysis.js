@@ -56,10 +56,12 @@
     function showClimateAnalysis() {
         weatherSections.forEach(function (el) { el.style.display = 'none'; });
         section.classList.add('is-visible');
+        document.body.classList.add('is-climate-analysis-visible');
     }
 
     function hideClimateAnalysis() {
         section.classList.remove('is-visible');
+        document.body.classList.remove('is-climate-analysis-visible');
         weatherSections.forEach(function (el) { el.style.display = ''; });
     }
 

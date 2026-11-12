@@ -123,6 +123,21 @@
     }
 }
 
+@media (min-width: 901px) {
+    .current-weather-page.is-climate-analysis-visible .weather-main {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(650px, 1fr);
+    }
+
+    .current-weather-page.is-climate-analysis-visible .weather-main > .climate-analysis {
+        grid-column: 1;
+        grid-row: 1;
+        align-self: stretch;
+        height: auto;
+        min-height: 650px;
+    }
+}
+
 /* The shared dashboard intentionally stacks on narrow screens. Keep that
    behavior here, while allowing the analysis workspace itself to fit. */
 @media (max-width: 900px) {
@@ -478,7 +493,6 @@
 
 .ca-tabs__btn {
     flex: 1;
-    transform: translateY(-5px);
 
     display: flex;
     align-items: center;
@@ -499,7 +513,7 @@
     border-radius: 10px;
     cursor: pointer;
 
-    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .ca-tabs__btn:hover {
