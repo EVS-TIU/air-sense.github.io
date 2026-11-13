@@ -407,10 +407,24 @@ window.MOCK_CLIMATE_DATA = {
       '<span class="sep" aria-hidden="true"></span><p>' + esc(d.aiInsight) + "</p></article>";
   }
 
+  var lastData = null;
   window.ClimateDashboard = {
     mount: function (root, data) {
+      lastData = data;
       root.innerHTML = predictedConditions(data) + temperatureTrendShell() + weatherOutlook(data) + aiInsight(data);
       mountTrend(root.querySelector(".cl-trend"), data);
+    },
+    /* Overview feed for the Generate Analysis pipeline. */
+    getSeries: function () {
+      if (!lastData) return { tab: "Weather Prediction", ready: false, location: "" };
+      var l = lastData.location || {};
+      return {
+        tab: "Weather Prediction",
+        ready: true,
+        location: l.city + (l.country ? ", " + l.country : ""),
+        forecast: lastData.forecast,
+        temperatureTrend: lastData.temperatureTrend
+      };
     }
   };
 })();

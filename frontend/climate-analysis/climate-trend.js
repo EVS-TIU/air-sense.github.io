@@ -541,6 +541,26 @@
        ------------------------------------------------------------------ */
     window.ClimateTrend = {
         setLocation: setLocation,
+        // Overview feed for the Generate Analysis pipeline.
+        getSeries: function () {
+            if (!data) return { tab: 'Climate Trend', ready: false, location: locationName };
+            var range = data.ranges.filter(function (r) { return r.id === activeRange; })[0] || data.ranges[0];
+            var n = Math.min(range.years, data.years.length);
+            var from = data.years.length - n;
+            var slice = function (arr) { return arr.slice(from); };
+            return {
+                tab: 'Climate Trend',
+                ready: true,
+                location: locationName,
+                range: range.label,
+                years: slice(data.years),
+                temps: slice(data.temps),
+                rain: slice(data.rain),
+                hotDays: slice(data.hotDays),
+                seasonal: slice(data.seasonal),
+                summary: range.summary
+            };
+        },
         setData: function (next) {
             if (!next || !next.years || !next.temps || !next.rain || !next.ranges || !next.ranges.length) { return; }
             data = next;

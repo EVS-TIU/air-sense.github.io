@@ -586,3 +586,66 @@
         animation: none !important;
     }
 }
+
+/* --------------------------------------------------------------------------
+   AI Summary card (Generate Analysis output under the calendar)
+   -------------------------------------------------------------------------- */
+.ca-summary {
+    margin-top: 12px;
+    padding: 14px 16px;
+    background: var(--panel-bg, rgba(20, 40, 68, 0.65));
+    border: 1px solid rgba(116, 174, 213, 0.18);
+    border-radius: 14px;
+    box-shadow: 0 4px 18px rgba(10, 25, 47, 0.35);
+}
+.ca-summary__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #7fc4ff;
+}
+.ca-summary__header svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: #7fc4ff;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.ca-summary__text {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #dbeaf5;
+}
+.ca-summary__text.is-loading {
+    color: #8fb0c9;
+    animation: ca-summary-pulse 1.2s ease-in-out infinite;
+}
+@keyframes ca-summary-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+.ca-summary__meta {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: #7d9ab3;
+}
+.ca-summary.is-error .ca-summary__text {
+    color: #ff9a6b;
+}
+.ca-generate-btn.is-busy {
+    opacity: 0.65;
+    cursor: progress;
+}
+@media (prefers-reduced-motion: reduce) {
+    .ca-summary__text.is-loading {
+        animation: none;
+    }
+}

@@ -344,6 +344,25 @@
         }
         fetchAqi();
     }
+    /* Overview feed for the Generate Analysis pipeline. */
+    window.AqiOutlook = {
+        getSeries: function () {
+            if (!records || !ranges.length) return { tab: 'AQI Outlook', ready: false, location: location.city };
+            var range = ranges.find(function (r) { return r.id === activeRange; }) || ranges[0];
+            return {
+                tab: 'AQI Outlook',
+                ready: true,
+                location: location.city,
+                range: range.label,
+                years: range.data.years,
+                aqi: range.data.aqi,
+                pm25: range.data.pm25,
+                pm10: range.data.pm10,
+                no2: range.data.no2,
+                clean: range.data.clean
+            };
+        }
+    };
     els.range.addEventListener('change', function () {
         activeRange = els.range.value;
         render();
