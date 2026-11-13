@@ -7,10 +7,12 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 10px 14px 16px;
+    /* Inner gap between the panel edge and its cards; the panel itself
+       still spans the full topbar width */
+    padding: 10px var(--gap, 15px) 16px;
     width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
+    /* Match the topbar width at every viewport — no max-width cap */
+    margin: 0;
     /* The app shell (.content-placeholder / .ai-chat) clips overflow; keep a
        scroll fallback for very small screens only — at normal sizes the
        compacted layout fits without scrolling. */
@@ -44,7 +46,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 10px;
+    gap: var(--gap, 15px);
     padding: 10px 14px;
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
@@ -168,7 +170,7 @@
 .history__stats {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    gap: var(--gap, 15px);
 }
 
 .history__stat {
