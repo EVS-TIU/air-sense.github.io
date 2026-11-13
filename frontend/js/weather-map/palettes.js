@@ -24,21 +24,6 @@
             [80, [44, 184, 224]],
             [100, [31, 91, 190]]
         ],
-        rainfall: [
-            [0, [198, 231, 255]],
-            [0.1, [198, 231, 255]],
-            [0.5, [110, 198, 255]],
-            [1, [30, 136, 229]],
-            [2.5, [21, 101, 192]],
-            [5, [106, 27, 154]],
-            [10, [56, 0, 107]]
-        ],
-        clouds: [
-            [0, [214, 228, 240]],
-            [50, [238, 246, 250]],
-            [75, [248, 251, 253]],
-            [100, [255, 255, 255]]
-        ],
         aqi: [
             [0, [0, 228, 0]],
             [25, [0, 228, 0]],
@@ -112,24 +97,6 @@
             // Strong enough to read dry vs humid regions against the map.
             opacity: 0.78
         },
-        rainfall: {
-            label: 'Rainfall',
-            family: 'weather',
-            variable: 'precipitation',
-            unit: 'mm',
-            domain: [0, 10],
-            ticks: [0, 0.5, 1, 2.5, 5, 10],
-            opacity: 0.82
-        },
-        clouds: {
-            label: 'Clouds',
-            family: 'weather',
-            variable: 'cloud_cover',
-            unit: '%',
-            domain: [0, 100],
-            ticks: [0, 25, 50, 75, 100],
-            opacity: 0.8
-        },
         pressure: {
             // MSL pressure is not in the backend's supported list; surface
             // pressure (hPa) comes from the same Open-Meteo grid instead of
@@ -138,7 +105,7 @@
             unit: 'hPa', domain: [940, 1060], ticks: [940, 970, 990, 1010, 1030, 1060], opacity: 0.62
         },
         radar: {
-            label: 'Weather Radar', family: 'radar', variable: null,
+            label: 'Rainfall', family: 'radar', variable: null,
             unit: 'Reflectivity', domain: [0, 1], ticks: [], opacity: 0.72
         },
         aqi: {
@@ -179,8 +146,6 @@
             return null;
         }
         const numeric = Number(value);
-        if (mode === 'rainfall' && numeric <= 0.05) return null;
-
         const stops = STOPS[mode];
         if (!stops) return null;
         if (numeric <= stops[0][0]) return stops[0][1];
@@ -214,17 +179,6 @@
 
     function alphaFor(mode, value) {
         if (value === null || value === undefined || !Number.isFinite(Number(value))) return 0;
-        if (mode === 'rainfall') {
-            if (Number(value) <= 0.03) return 0;
-            // Low end near 0.4 so drizzle reads on the dark basemap; the
-            // ramp keeps climbing to peak opacity for heavy rain.
-            return clamp(0.42 + Number(value) / 9, 0.42, 0.9);
-        }
-        if (mode === 'clouds') {
-            // Clear sky stays nearly transparent; dense cloud becomes a
-            // solid white veil. (Layer opacity multiplies this further.)
-            return clamp(0.06 + Number(value) / 100 * 0.89, 0.06, 0.95);
-        }
         if (mode === 'aqi') {
             // Low readings stay translucent so the basemap and city shapes
             // remain readable; higher (worse) AQI values gain contrast.
@@ -249,7 +203,6 @@
         if (value === null || value === undefined || !Number.isFinite(Number(value))) return '--';
         const numeric = Number(value);
         if (mode === 'aqi') return String(Math.round(numeric));
-        if (mode === 'rainfall') return numeric < 1 ? numeric.toFixed(2) : numeric.toFixed(1);
         if (mode === 'temperature') return numeric.toFixed(1);
         return String(Math.round(numeric));
     }

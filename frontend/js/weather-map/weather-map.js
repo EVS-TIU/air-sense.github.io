@@ -12,7 +12,7 @@
     // Wind blend: the Open-Meteo speed field is colorized as a soft
     // background beneath the moving particles (same palette as the legend).
     const WIND_BACKGROUND_OPACITY = 0.45;
-    const FORECAST_MODES = new Set(['wind', 'humidity', 'rainfall', 'clouds']);
+    const FORECAST_MODES = new Set(['wind', 'humidity']);
 
     const palettes = window.AirSensePalettes;
     const dataStore = window.AirSenseMapData;

@@ -110,10 +110,8 @@
                         <option value="temperature">Temperature</option>
                         <option value="wind">Wind</option>
                         <option value="humidity">Humidity</option>
-                        <option value="rainfall">Rainfall</option>
-                        <option value="clouds">Clouds</option>
                         <option value="pressure">Atmospheric Pressure</option>
-                        <option value="radar">Weather Radar</option>
+                        <option value="radar">Rainfall</option>
                         <option value="aqi">AQI</option>
                     </select>
                 </div>
@@ -307,7 +305,6 @@
     <main>
       <section id="history-content" class="content-placeholder ai-chat history" aria-label="History Analysis">
         <header class="ai-chat__header"><div class="ai-chat__brand"><span class="ai-chat__bot" aria-hidden="true">⌁</span><div><h1>History Analysis</h1><p>Explore ward-level weather and air quality trends across a custom date range.</p></div></div></header>
-        <div class="history__body"><div class="history__controls"><label>Ward<select id="history-ward"><option>Central Ward</option><option>Lake Ward</option><option>North Ward</option><option>East Ward</option></select></label><label>Weather data<select id="history-metric"><option value="aqi">AQI</option><option value="temperature">Temperature</option><option value="humidity">Humidity</option><option value="rainfall">Rainfall</option></select></label><label>Start date<input id="history-start" type="date"></label><label>End date<input id="history-end" type="date"></label><button id="history-apply" type="button">Update graph</button></div><div class="history__summary"><article><small id="history-average-label">Average AQI</small><strong id="history-average">118</strong><span>Selected period</span></article><article><small id="history-peak-label">Peak reading</small><strong id="history-peak">164</strong><span>Highest recorded value</span></article><article><small>Selected ward</small><strong id="history-ward-label">Central</strong><span id="history-range">Last 7 days</span></article></div><section class="history__chart-card"><div class="history__chart-head"><div><h2 id="history-chart-title">AQI history trend</h2><p>Use the controls to compare historical weather conditions.</p></div><span class="history__legend"><i></i><span id="history-legend-label">AQI</span></span></div><svg id="history-chart" class="history__chart" viewBox="0 0 900 300" role="img" aria-label="Historical weather trend chart"></svg></section></div>
       </section>
     </main>
 </div>

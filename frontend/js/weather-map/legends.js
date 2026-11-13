@@ -43,18 +43,12 @@
         humidity: {
             about: 'Relative humidity — how close the air is to saturation at its current temperature. High values (>80%) mean fog or heavy dew is likely when air cools; very low values (<30%) raise dry-skin, static and fire risk.'
         },
-        rainfall: {
-            about: 'Precipitation rate reaching the ground, in millimetres per hour. 1 mm/h is a steady drizzle; 2.5 mm/h fills a gauge in an hour; 5+ mm/h in a short burst means heavy rain and possible local ponding.'
-        },
-        clouds: {
-            about: 'Total cloud coverage of the sky column in percent: what fraction of sunlight is blocked. Low values mean clear skies (frost risk at night), high values mean overcast (muted daytime warming).'
-        },
         pressure: {
             about: 'Air pressure reduced to sea level, in hectopascals (hPa). Lows ≈ rising air, clouds, unsettled weather; highs ≈ sinking air, clearance and calmer conditions. Tight spacing of extremes marks windy frontal zones.',
             boundaryNote: 'colours come from WeatherAPI\'s fixed pressure map tile (hPa); L/H areas matter more than exact hues.'
         },
         radar: {
-            about: 'Precipitation echoes from ground radar stations. Stronger echoes (higher reflectivity, dBZ) mean heavier precipitation: light showers read pale, intense storm cells read dark/red. Frames are past observations, in 10-minute steps — no forecast sweep.'
+            about: 'Rainfall echoes from ground radar stations. Stronger echoes (higher reflectivity, dBZ) mean heavier rainfall: light showers read pale, intense storm cells read dark/red. Frames are past observations, in 10-minute steps — no forecast sweep.'
         },
         satellite: {
             about: 'True-colour satellite imagery of the ground surface: what the sky-free surface physically looks like. It shows terrain, cities and vegetation but carries no weather value ranges; overlay a weather layer to map atmospheric data.',
@@ -86,20 +80,6 @@
             ['60–80', 'Humid', null],
             ['80–100%', 'Near saturation', null]
         ],
-        rainfall: [
-            ['0–0.5', 'Drizzle / trace', null],
-            ['0.5–1', 'Light rain', null],
-            ['1–2.5', 'Moderate rain', null],
-            ['2.5–5', 'Heavy rain', null],
-            ['5–10', 'Very heavy rain', null],
-            ['10+', 'Extreme / flooding', null]
-        ],
-        clouds: [
-            ['0–25%', 'Clear sky', null],
-            ['25–50%', 'Partly cloudy', null],
-            ['50–75%', 'Mostly cloudy', null],
-            ['75–100%', 'Overcast', null]
-        ]
     };
 
     /* Official US-AQI categories with EPA-style health guidance. */
@@ -212,7 +192,7 @@
                         ? null // rendered as error row below
                         : time ? { label: `Live radar frame · ${timeLabel} · 10-minute past frames only, no nowcast`, className: 'live' } : null;
                 html = `
-                    <div class="airsense-legend__title"><span>Weather Radar</span><span class="airsense-legend__unit">dBZ reflectivity</span></div>
+                    <div class="airsense-legend__title"><span>Rainfall</span><span class="airsense-legend__unit">dBZ reflectivity</span></div>
                     <div class="airsense-legend__bar" style="background:linear-gradient(90deg,#8ee9ff,#43b8ff,#3057e8,#a43ac4,#e63e6a,#ffd44a)"></div>
                     <div class="airsense-legend__ticks"><span>Light</span><span>Moderate</span><span>Heavy</span></div>
                     <div class="airsense-legend__about">${LAYER_INFO.radar.about}</div>
