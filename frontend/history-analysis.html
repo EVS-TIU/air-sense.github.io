@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="css/popular-cities.css?v=20261102-1">
 <link rel="stylesheet" href="css/topbar.css?v=20261109-1">
 <link rel="stylesheet" href="css/AI-recommendation.css?v=20261111-9">
+<link rel="stylesheet" href="css/history-analysis.css?v=20261113-1">
 </head>
 <body class="ai-recommendation-page history-page">
 <div class="weather-background" aria-hidden="true">
@@ -315,7 +316,106 @@
 
     <main>
       <section id="history-content" class="content-placeholder ai-chat history" aria-label="History Analysis">
-        <header class="ai-chat__header"><div class="ai-chat__brand"><span class="ai-chat__bot" aria-hidden="true">⌁</span><div><h1>History Analysis</h1><p>Explore ward-level weather and air quality trends across a custom date range.</p></div></div></header>
+        <header class="ai-chat__header"><div class="ai-chat__brand"><span class="ai-chat__bot" aria-hidden="true">⌁</span><div><h1>History Analysis</h1><p>Real weather and air-quality history for your selected location, powered by Open-Meteo. Pick a variable, set a custom date range and explore the trend.</p></div></div></header>
+
+        <!-- Controls: variable dropdown + date range + quick ranges -->
+        <section class="history__controls" aria-label="History filters">
+          <div class="history__control history__control--metric">
+            <label class="history__label" for="history-metric">Variable</label>
+            <select id="history-metric" aria-label="History variable">
+              <optgroup label="Weather — Open-Meteo Archive (from 1940)">
+                <option value="temp_mean">Temperature (mean) · °C</option>
+                <option value="temp_max">Temperature (max) · °C</option>
+                <option value="temp_min">Temperature (min) · °C</option>
+                <option value="humidity">Relative Humidity · %</option>
+                <option value="wind">Wind Speed (max) · km/h</option>
+                <option value="precip">Precipitation · mm</option>
+                <option value="pressure">Surface Pressure · hPa</option>
+                <option value="cloud">Cloud Cover · %</option>
+                <option value="uv_archive">UV Index (max)</option>
+              </optgroup>
+              <optgroup label="Air Quality — CAMS model (from Jul 2022)">
+                <option value="us_aqi">US AQI</option>
+                <option value="eu_aqi">European AQI</option>
+                <option value="pm25">PM2.5 · µg/m³</option>
+                <option value="pm10">PM10 · µg/m³</option>
+                <option value="ozone">Ozone (O₃) · µg/m³</option>
+                <option value="no2">Nitrogen Dioxide (NO₂) · µg/m³</option>
+                <option value="so2">Sulphur Dioxide (SO₂) · µg/m³</option>
+                <option value="co">Carbon Monoxide (CO) · µg/m³</option>
+                <option value="dust">Dust · µg/m³</option>
+                <option value="uv_air">UV Index (hourly mean)</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="history__control">
+            <label class="history__label" for="history-start">Start date</label>
+            <input type="date" id="history-start" aria-label="Start date">
+          </div>
+          <div class="history__control">
+            <label class="history__label" for="history-end">End date</label>
+            <input type="date" id="history-end" aria-label="End date">
+          </div>
+          <div class="history__ranges" role="group" aria-label="Quick ranges">
+            <button type="button" class="history__range-chip" data-range="30">1M</button>
+            <button type="button" class="history__range-chip" data-range="90">3M</button>
+            <button type="button" class="history__range-chip" data-range="182">6M</button>
+            <button type="button" class="history__range-chip is-active" data-range="365">1Y</button>
+            <button type="button" class="history__range-chip" data-range="max">Max</button>
+          </div>
+          <button type="button" class="history__apply" id="history-apply">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+              <polyline points="17 6 23 6 23 12"/>
+            </svg>
+            <span id="history-apply-label">Show trend</span>
+          </button>
+          <div class="history__location" id="history-location" title="Selected location">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/>
+              <circle cx="12" cy="10" r="2.3"/>
+            </svg>
+            <strong id="history-location-name">—</strong>
+          </div>
+        </section>
+
+        <!-- Stat cards -->
+        <section class="history__stats" aria-label="Trend statistics">
+          <div class="history__stat">
+            <div class="history__stat-label" id="history-average-label">Average</div>
+            <div class="history__stat-value" id="history-average">—</div>
+            <div class="history__stat-sub">whole selected range</div>
+          </div>
+          <div class="history__stat">
+            <div class="history__stat-label" id="history-peak-label">Peak</div>
+            <div class="history__stat-value" id="history-peak">—</div>
+            <div class="history__stat-sub" id="history-peak-date">&nbsp;</div>
+          </div>
+          <div class="history__stat">
+            <div class="history__stat-label" id="history-low-label">Lowest</div>
+            <div class="history__stat-value" id="history-low">—</div>
+            <div class="history__stat-sub" id="history-low-date">&nbsp;</div>
+          </div>
+          <div class="history__stat">
+            <div class="history__stat-label">Trend</div>
+            <div class="history__stat-value" id="history-trend">—</div>
+            <div class="history__stat-sub">recent vs earlier half</div>
+          </div>
+        </section>
+
+        <!-- Dynamic chart -->
+        <section class="history__chart-panel" aria-label="History chart">
+          <div class="history__chart-head">
+            <div class="history__chart-title" id="history-chart-title">History trend</div>
+            <div class="history__chart-meta" id="history-range-meta">—</div>
+          </div>
+          <div class="history__chart-wrap" id="history-chart-wrap">
+            <svg id="history-chart" viewBox="0 0 900 320" preserveAspectRatio="none" role="img" aria-label="History trend chart"></svg>
+            <div class="history__tooltip" id="history-tooltip" role="status" aria-hidden="true"></div>
+          </div>
+          <div class="history__status" id="history-status" aria-live="polite"></div>
+          <p class="history__source" id="history-source">Data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> — weather archive (ERA5, ~5 days delay) and CAMS air quality (from Jul 2022). Daily aggregation by local calendar day.</p>
+        </section>
       </section>
     </main>
 </div>
@@ -327,7 +427,7 @@
 <script src="js/engine.js?v=20261110-2"></script>
 <script src="js/llm.js"></script>
 <script src="js/topbar.js?v=20261113-2" defer></script>
-<script src="js/history-analysis.js"></script>
+<script src="js/history-analysis.js?v=20261113-1"></script>
 <script src="js/popular-cities-data.js?v=20261102-1"></script>
 <script src="js/popular-cities.js?v=20261110-1"></script>
 <script src="js/sidebar-active.js?v=20261112-2"></script>

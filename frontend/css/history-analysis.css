@@ -1,0 +1,324 @@
+/* ==========================================================================
+   AirSense - History Analysis page
+   Real Open-Meteo archive & air-quality history with dynamic chart.
+   ========================================================================== */
+
+.history {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 18px;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Controls row: variable dropdown, dates, quick ranges, apply         */
+/* ------------------------------------------------------------------ */
+
+.history__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--panel-shadow);
+}
+
+.history__control {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 150px;
+}
+
+.history__control--metric {
+    flex: 1 1 260px;
+}
+
+.history__label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.history__control select,
+.history__control input[type="date"] {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--text);
+    outline: none;
+}
+
+.history__control select:focus-visible,
+.history__control input[type="date"]:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.history__control select option {
+    background: #0b2136;
+    color: var(--text);
+}
+
+.history__ranges {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.history__range-chip {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.history__range-chip:hover {
+    color: var(--text);
+    border-color: var(--panel-border);
+}
+
+.history__range-chip.is-active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.history__apply {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 12px;
+    border: 1px solid var(--accent);
+    background: linear-gradient(135deg, rgba(41, 182, 255, 0.25), rgba(41, 182, 255, 0.08));
+    color: var(--text);
+    font-size: 13px;
+    letter-spacing: 0.03em;
+}
+
+.history__apply:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.history__location {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    color: var(--muted);
+    font-size: 13px;
+    max-width: 320px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history__location strong {
+    color: var(--text);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stat cards                                                          */
+/* ------------------------------------------------------------------ */
+
+.history__stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.history__stat {
+    padding: 14px 18px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--panel-shadow);
+}
+
+.history__stat-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.history__stat-value {
+    margin-top: 4px;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.history__stat-value.is-up { color: #4cd47c; }
+.history__stat-value.is-down { color: #ff7a6b; }
+
+.history__stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Chart panel                                                         */
+/* ------------------------------------------------------------------ */
+
+.history__chart-panel {
+    padding: 16px 18px 10px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--panel-radius);
+    box-shadow: var(--panel-shadow);
+    position: relative;
+}
+
+.history__chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.history__chart-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.history__chart-meta {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.history__chart-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.history__chart-wrap svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    touch-action: pan-y;
+}
+
+.history__grid line {
+    stroke: rgba(130, 190, 230, 0.14);
+    stroke-width: 1;
+}
+
+.history__grid text {
+    fill: var(--muted);
+    font-size: 10px;
+}
+
+.history__axis text {
+    fill: var(--muted);
+    font-size: 10px;
+}
+
+.history__series-area {
+    opacity: 0.9;
+}
+
+.history__series-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.history__hover-line {
+    stroke: rgba(130, 190, 230, 0.45);
+    stroke-width: 1;
+    stroke-dasharray: 4 3;
+}
+
+.history__hover-dot {
+    fill: var(--accent);
+    stroke: #061523;
+    stroke-width: 2;
+}
+
+.history__tooltip {
+    position: absolute;
+    pointer-events: none;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    background: rgba(7, 24, 39, 0.94);
+    color: var(--text);
+    font-size: 12px;
+    white-space: nowrap;
+    transform: translate(-50%, calc(-100% - 14px));
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    z-index: 3;
+}
+
+.history__tooltip strong {
+    font-size: 13px;
+}
+
+.history__tooltip .history__tooltip-date {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Status / notices                                                    */
+/* ------------------------------------------------------------------ */
+
+.history__status {
+    min-height: 20px;
+    padding: 6px 2px 8px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.history__status.is-error { color: #ff9a8d; }
+.history__status.is-loading { color: var(--accent); }
+
+.history__source {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 2px 2px 6px;
+}
+
+.history__source a {
+    color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+    .history__stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .history__location {
+        margin-left: 0;
+        width: 100%;
+    }
+}
