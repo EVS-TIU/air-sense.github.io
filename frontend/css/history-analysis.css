@@ -6,14 +6,14 @@
 .history {
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    padding: 18px;
+    gap: 10px;
+    padding: 10px 14px;
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
-    /* The app shell (.content-placeholder / .ai-chat) clips overflow, which
-       used to cut the chart panel's bottom edge off. Scroll the section
-       internally instead so the full panel and source note are reachable. */
+    /* The app shell (.content-placeholder / .ai-chat) clips overflow; keep a
+       scroll fallback for very small screens only — at normal sizes the
+       compacted layout fits without scrolling. */
     overflow-y: auto;
     scrollbar-color: #2a4a70 transparent;
     scrollbar-width: thin;
@@ -27,6 +27,15 @@
     flex-shrink: 0;
 }
 
+/* Compact page header so more room stays for the chart */
+.history .ai-chat__header {
+    min-height: 48px;
+    padding: 6px 18px;
+}
+.history .ai-chat__header p {
+    font-size: 11px;
+}
+
 /* ------------------------------------------------------------------ */
 /* Controls row: variable dropdown, dates, quick ranges, apply         */
 /* ------------------------------------------------------------------ */
@@ -35,8 +44,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: 14px;
-    padding: 16px 18px;
+    gap: 10px;
+    padding: 10px 14px;
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
     border-radius: var(--panel-radius);
@@ -46,25 +55,25 @@
 .history__control {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-width: 150px;
+    gap: 3px;
+    min-width: 120px;
 }
 
 .history__control--metric {
-    flex: 1 1 260px;
+    flex: 1 1 230px;
 }
 
 .history__label {
-    font-size: 11px;
-    letter-spacing: 0.08em;
+    font-size: 10px;
+    letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--muted);
 }
 
 .history__control select,
 .history__control input[type="date"] {
-    padding: 10px 12px;
-    border-radius: 12px;
+    padding: 6px 10px;
+    border-radius: 10px;
     border: 1px solid var(--card-border);
     background: var(--card-bg);
     color: var(--text);
@@ -89,12 +98,12 @@
 }
 
 .history__range-chip {
-    padding: 8px 14px;
+    padding: 6px 11px;
     border-radius: 999px;
     border: 1px solid var(--card-border);
     background: var(--card-bg);
     color: var(--muted);
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: 0.04em;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
@@ -113,13 +122,13 @@
 .history__apply {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 22px;
-    border-radius: 12px;
+    gap: 7px;
+    padding: 7px 16px;
+    border-radius: 10px;
     border: 1px solid var(--accent);
     background: linear-gradient(135deg, rgba(41, 182, 255, 0.25), rgba(41, 182, 255, 0.08));
     color: var(--text);
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: 0.03em;
 }
 
@@ -131,15 +140,15 @@
 .history__location {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     margin-left: auto;
-    padding: 10px 14px;
-    border-radius: 12px;
+    padding: 6px 12px;
+    border-radius: 10px;
     border: 1px solid var(--card-border);
     background: var(--card-bg);
     color: var(--muted);
-    font-size: 13px;
-    max-width: 320px;
+    font-size: 12px;
+    max-width: 280px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -159,11 +168,11 @@
 .history__stats {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 14px;
+    gap: 10px;
 }
 
 .history__stat {
-    padding: 14px 18px;
+    padding: 7px 14px 9px;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: var(--panel-radius);
@@ -171,15 +180,15 @@
 }
 
 .history__stat-label {
-    font-size: 11px;
-    letter-spacing: 0.08em;
+    font-size: 10px;
+    letter-spacing: 0.07em;
     text-transform: uppercase;
     color: var(--muted);
 }
 
 .history__stat-value {
-    margin-top: 4px;
-    font-size: 26px;
+    margin-top: 1px;
+    font-size: 19px;
     font-weight: 700;
     color: var(--text);
 }
@@ -188,7 +197,7 @@
 .history__stat-value.is-down { color: #ff7a6b; }
 
 .history__stat-sub {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--muted);
 }
 
@@ -197,7 +206,7 @@
 /* ------------------------------------------------------------------ */
 
 .history__chart-panel {
-    padding: 16px 18px 24px;
+    padding: 10px 14px 12px;
     background: var(--panel-bg);
     border: 1px solid var(--panel-border);
     border-radius: var(--panel-radius);
@@ -211,11 +220,11 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .history__chart-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--text);
 }
@@ -306,9 +315,9 @@
 /* ------------------------------------------------------------------ */
 
 .history__status {
-    min-height: 20px;
-    padding: 6px 2px 8px;
-    font-size: 12px;
+    min-height: 12px;
+    padding: 2px 2px 2px;
+    font-size: 11px;
     color: var(--muted);
 }
 
@@ -316,9 +325,9 @@
 .history__status.is-loading { color: var(--accent); }
 
 .history__source {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--muted);
-    padding: 2px 2px 6px;
+    padding: 0 2px 2px;
 }
 
 .history__source a {

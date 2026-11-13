@@ -292,7 +292,7 @@
     /* ------------------------------------------------------------------
        Chart rendering (vanilla SVG, app design tokens)
        ------------------------------------------------------------------ */
-    const CHART = { w: 900, h: 320, left: 64, right: 20, top: 22, bottom: 36 };
+    const CHART = { w: 900, h: 270, left: 64, right: 20, top: 16, bottom: 30 };
 
     function niceScale(min, max) {
         if (!Number.isFinite(min) || !Number.isFinite(max)) return { lo: 0, hi: 1, step: 1 };
@@ -347,7 +347,7 @@
         const ticks = Math.min(6, series.length);
         for (let t = 0; t < ticks; t++) {
             const i = Math.round((t / (ticks - 1 || 1)) * (series.length - 1));
-            axis += `<text x="${x(i)}" y="${h - 10}" text-anchor="${t === 0 ? 'start' : t === ticks - 1 ? 'end' : 'middle'}">${prettyDateShort(series[i].date)}</text>`;
+            axis += `<text x="${x(i)}" y="${h - 8}" text-anchor="${t === 0 ? 'start' : t === ticks - 1 ? 'end' : 'middle'}">${prettyDateShort(series[i].date)}</text>`;
         }
         axis += '</g>';
         svg += axis;
