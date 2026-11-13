@@ -142,7 +142,24 @@
     }
   }
 
+  function sharedLocation() {
+    // The app-wide selected location persisted by map.js on every page.
+    try {
+      const saved = JSON.parse(localStorage.getItem("airsense:selected-location") || "null");
+      if (saved && isFinite(+saved.lat) && isFinite(+saved.lon)) {
+        return { lat: +saved.lat, lon: +saved.lon, name: saved.name || null };
+      }
+    } catch (e) { /* ignore unreadable storage */ }
+    return null;
+  }
+
   function fallback(msg) {
+    const shared = sharedLocation();
+    if (shared) {
+      go(shared);
+      notice(msg + " Showing " + (shared.name || "your last selected location") + ". Search a city to change it.");
+      return;
+    }
     const d = C.DEFAULT_LOCATION;
     go({ lat: d.latitude, lon: d.longitude, name: d.name });
     notice(msg + " Showing " + d.name + ". Search a city to change it.");
@@ -287,5 +304,9 @@
   // Optional: the main page can link here with ?lat=..&lon=..&name=..
   const q = new URLSearchParams(location.search);
   if (q.get("lat") && q.get("lon") && isFinite(+q.get("lat")) && isFinite(+q.get("lon"))) go({ lat: +q.get("lat"), lon: +q.get("lon"), name: q.get("name") || null });
-  else useGPS();
+  else {
+    // Prefer the location chosen elsewhere in the app before asking for GPS.
+    const shared = sharedLocation();
+    if (shared) go(shared); else useGPS();
+  }
 })();

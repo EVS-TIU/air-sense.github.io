@@ -153,6 +153,80 @@
     let mapMaximized = false;
     let mapResizeFrame = null;
     const WORLD_BOUNDS = [[-85.051129, -180], [85.051129, 180]];
+    const LOCATION_STORAGE_KEY = 'airsense:selected-location';
+
+    /* ----------------------------------------------------------------------
+       Selected-location persistence.
+       The device-location flow lives in app.js which only runs on the
+       dashboard, so the other pages (AI recommendation, history analysis,
+       smart alert) would otherwise never show a location. The last chosen
+       location is therefore saved here and restored on every page.
+       ---------------------------------------------------------------------- */
+    function saveSelectedLocation(city) {
+        try {
+            window.localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify({
+                name: city.name,
+                region: city.region || '',
+                countryCode: city.countryCode || '',
+                lat: city.lat,
+                lon: city.lon,
+                savedAt: Date.now()
+            }));
+        } catch { /* storage unavailable (private mode/quota): session-only memory */ }
+    }
+
+    function readSavedLocation() {
+        try {
+            const saved = JSON.parse(window.localStorage.getItem(LOCATION_STORAGE_KEY) || 'null');
+            if (!saved || !Number.isFinite(saved.lat) || !Number.isFinite(saved.lon)) return null;
+            return saved;
+        } catch {
+            return null;
+        }
+    }
+
+    function applySavedLocation({ dispatch = true } = {}) {
+        const saved = readSavedLocation();
+        if (!saved) return false;
+
+        currentLat = saved.lat;
+        currentLon = saved.lon;
+        currentName = saved.name || 'Selected Location';
+        currentRegion = saved.region || '';
+        currentCountryCode = saved.countryCode || '';
+
+        if (sidebarMap) {
+            if (sidebarMarker) {
+                sidebarMarker.setLatLng([currentLat, currentLon]);
+            } else {
+                sidebarMarker = window.L.marker([currentLat, currentLon], { icon: pinpointIcon }).addTo(sidebarMap);
+            }
+            sidebarMap.setView([currentLat, currentLon], sidebarMap.getZoom(), { animate: false });
+        }
+        updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
+        syncLocationPopup(false);
+
+        const searchInput = document.getElementById('location-search');
+        if (searchInput) searchInput.value = currentName;
+
+        if (dispatch) {
+            const city = {
+                id: `${currentLat},${currentLon}`,
+                name: currentName,
+                region: currentRegion,
+                country: currentRegion,
+                countryCode: currentCountryCode,
+                lat: currentLat,
+                lon: currentLon
+            };
+            if (window.WeatherlyTopbar?.setLocation) {
+                window.WeatherlyTopbar.setLocation(city);
+            } else {
+                document.dispatchEvent(new CustomEvent('weatherly:location-change', { detail: city }));
+            }
+        }
+        return true;
+    }
 
     function isMaximized() {
         return mapMaximized;
@@ -275,6 +349,10 @@
             currentCountryCode = locationMeta.countryCode || '';
             updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
             syncLocationPopup(true);
+            saveSelectedLocation({
+                name: currentName, region: currentRegion, countryCode: currentCountryCode,
+                lat: currentLat, lon: currentLon
+            });
             return;
         }
 
@@ -332,6 +410,7 @@
             lat: currentLat,
             lon: currentLon
         };
+        saveSelectedLocation(selectedCity);
 
         if (window.WeatherlyTopbar?.setLocation) {
             window.WeatherlyTopbar.setLocation(selectedCity);
@@ -381,6 +460,10 @@
 
         updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
         announceMap('map', sidebarMap);
+
+        // Restore the last location chosen on any page so the sidebar card is
+        // populated immediately (subpages have no device-location flow).
+        applySavedLocation({ dispatch: true });
     }
 
     function readSavedBaseMode() {
@@ -583,6 +666,9 @@
 
     document.addEventListener('weatherly:location-unavailable', () => {
         if (Number.isFinite(currentLat) && Number.isFinite(currentLon)) return;
+        // Geolocation is denied/unavailable: fall back to the last location
+        // chosen on any page instead of showing an empty state.
+        if (applySavedLocation({ dispatch: true })) return;
         currentName = 'Location unavailable';
         currentRegion = 'Allow location access or select a map point';
         updateSidebarBadge(currentName, currentRegion, '', null, null);
