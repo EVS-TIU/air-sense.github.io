@@ -164,10 +164,16 @@
        ---------------------------------------------------------------------- */
     function saveSelectedLocation(city) {
         try {
+            // Preserve a previously saved region when the incoming selection
+            // has none (e.g. city chips and some subpages dispatch without a
+            // region) so the card stays identical on every page.
+            const prev = readSavedLocation();
+            const region = city.region || (prev && prev.name === city.name ? prev.region : '') || '';
+            const countryCode = city.countryCode || (prev && prev.name === city.name ? prev.countryCode : '') || '';
             window.localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify({
                 name: city.name,
-                region: city.region || '',
-                countryCode: city.countryCode || '',
+                region,
+                countryCode,
                 lat: city.lat,
                 lon: city.lon,
                 savedAt: Date.now()
@@ -205,6 +211,7 @@
         }
         updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
         syncLocationPopup(false);
+        enrichSavedRegion();
 
         const searchInput = document.getElementById('location-search');
         if (searchInput) searchInput.value = currentName;
@@ -325,6 +332,35 @@
         return Array.isArray(data.results) && data.results.length ? data.results[0] : null;
     }
 
+    /* Fill in the region line for selections that arrived without one (city
+       chips, subpage restores). Runs once per coordinate; never dispatches
+       events, so it cannot loop. */
+    let regionEnrichedFor = '';
+    async function enrichSavedRegion() {
+        if (!Number.isFinite(currentLat) || !Number.isFinite(currentLon) || currentRegion) return;
+        const key = `${currentLat.toFixed(4)},${currentLon.toFixed(4)}`;
+        if (regionEnrichedFor === key) return;
+        regionEnrichedFor = key;
+        try {
+            const place = await reverseGeocode(currentLat, currentLon);
+            if (!place || regionEnrichedFor !== key || currentRegion) return;
+            const parts = [];
+            if (place.district && place.district.toLowerCase() !== currentName.toLowerCase()) parts.push(place.district);
+            if (place.state && place.state.toLowerCase() !== currentName.toLowerCase()) parts.push(place.state);
+            if (place.country && place.country.toLowerCase() !== currentName.toLowerCase()) parts.push(place.country);
+            if (parts.length || place.country_code) {
+                currentRegion = parts.join(', ');
+                currentCountryCode = currentCountryCode || place.country_code || '';
+                updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
+                syncLocationPopup(false);
+                saveSelectedLocation({
+                    name: currentName, region: currentRegion, countryCode: currentCountryCode,
+                    lat: currentLat, lon: currentLon
+                });
+            }
+        } catch { /* reverse geocoding unavailable: keep the plain line */ }
+    }
+
     async function handleMapSelection(lat, lon, zoomLevel, skipReverse, locationMeta) {
         const selectionId = ++selectionSequence;
         currentLat = Number(lat);
@@ -353,6 +389,7 @@
                 name: currentName, region: currentRegion, countryCode: currentCountryCode,
                 lat: currentLat, lon: currentLon
             });
+            enrichSavedRegion();
             return;
         }
 

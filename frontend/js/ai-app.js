@@ -23,6 +23,16 @@
   const resetSteps = () => document.querySelectorAll("#pipeline li").forEach(li => (li.dataset.state = ""));
   const notice = msg => { const n = $("#notice"); if (!n) return; n.hidden = !msg; n.textContent = msg || ""; };
   const setPlace = (name, sub) => { const city = $("#locName") || $("#sidebar-city"), region = $("#locSub") || $("#sidebar-region"); if (city) city.textContent = name; if (region) region.textContent = sub; };
+  // Region of the active place, kept in sync with the app-wide selected
+  // location so the sidebar card shows the same sub-line on every page.
+  let currentRegion = "";
+  const readSharedRegion = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("airsense:selected-location") || "null");
+      if (saved && isFinite(+saved.lat) && isFinite(+saved.lon)) return saved.region || "";
+    } catch (e) { /* ignore unreadable storage */ }
+    return "";
+  };
   const fmtTime = iso => (iso ? iso.slice(0, 10) + " " + iso.slice(11, 16) + " (UTC" + iso.slice(19) + ")" : "n/a");
 
   function render(res, ai) {
@@ -81,13 +91,14 @@
     document.querySelectorAll(".search .btn").forEach(b => (b.disabled = true));
     const { lat, lon } = place;
     current = place;
-    setPlace(place.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`, `${lat.toFixed(3)}, ${lon.toFixed(3)}`);
+    if (place.name === (sharedLocation()?.name)) currentRegion = readSharedRegion() || currentRegion;
+    setPlace(place.name || `${lat.toFixed(2)}, ${lon.toFixed(2)}`, currentRegion || "Worldwide");
     document.dispatchEvent(new CustomEvent("weatherly:location-change", {
       detail: {
         id: `${lat},${lon}`,
         name: place.name || "Selected Location",
-        region: "",
-        country: "",
+        region: currentRegion,
+        country: currentRegion,
         source: "ai-recommendation",
         lat,
         lon
@@ -102,7 +113,7 @@
           if (c && Date.now() - c.t < C.CACHE_MINUTES * 60000) {
             render(c.res, c.ai);
             ["fetch", "validate", "rules", "ai", "ui"].forEach(s => setStep(s, "done"));
-            if (c.name) setPlace(c.name, `${lat.toFixed(3)}, ${lon.toFixed(3)}`);
+            if (c.name) setPlace(c.name, currentRegion || "Worldwide");
             return;
           }
         } catch (e) { /* ignore bad cache */ }
@@ -147,7 +158,7 @@
     try {
       const saved = JSON.parse(localStorage.getItem("airsense:selected-location") || "null");
       if (saved && isFinite(+saved.lat) && isFinite(+saved.lon)) {
-        return { lat: +saved.lat, lon: +saved.lon, name: saved.name || null };
+        return { lat: +saved.lat, lon: +saved.lon, name: saved.name || null, region: saved.region || "" };
       }
     } catch (e) { /* ignore unreadable storage */ }
     return null;
