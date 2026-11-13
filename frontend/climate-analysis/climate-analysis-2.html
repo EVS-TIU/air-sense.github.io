@@ -1,6 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+        /* Every reload returns to the dashboard's Current Weather view, no matter
+           which tab was open. Deliberate link navigation (type "navigate") is
+           unaffected, so the sidebar tabs stay reachable. */
+        (function () {
+            try {
+                var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+                if (nav && nav.type === 'reload') location.replace('../index.html');
+            } catch (e) { /* navigation timing unavailable: leave the page as-is */ }
+        })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="AirSense - Climate Analysis with date-range picker, weather prediction, trend analysis, and AQI outlook.">
@@ -398,7 +409,7 @@
     <!-- Leaflet Map library -->
     <script src="../assets/vendor/leaflet/leaflet.js"></script>
     <!-- Map synchronization & interaction component -->
-    <script src="../js/map.js?v=20261113-5"></script>
+    <script src="../js/map.js?v=20261113-6"></script>
     <script src="../js/app.js?v=20261113-2" defer></script>
     <script src="../js/topbar.js?v=20261113-2" defer></script>
     <script src="../js/sidebar.js?v=20261102-1" defer></script>

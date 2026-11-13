@@ -711,6 +711,31 @@
         updateSidebarBadge(currentName, currentRegion, '', null, null);
     });
 
+    /* ----------------------------------------------------------------------
+       Always start on the Current Weather view.
+       Reloads and fresh visits must not restore a previous in-page state:
+       no URL hash, no restored scroll position, no maximized hotspot map,
+       and the Current Weather sidebar tab is always the active one.
+       ---------------------------------------------------------------------- */
+    function resetToCurrentWeatherView() {
+        if (!document.body.classList.contains('current-weather-page')) return;
+        try { history.scrollRestoration = 'manual'; } catch { /* not supported */ }
+        if (window.location.hash) {
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        if (mapMaximized) closeModalMap();
+        document.querySelectorAll('.sidebar__nav a').forEach((l) => l.classList.remove('is-active'));
+        const currentWeatherLink = document.querySelector('.sidebar__nav a[data-nav="current-weather"]');
+        if (currentWeatherLink) currentWeatherLink.classList.add('is-active');
+        window.scrollTo(0, 0);
+    }
+    resetToCurrentWeatherView();
+
+    window.addEventListener('pageshow', (event) => {
+        // Back/forward cache restores the page exactly as it was left behind.
+        if (event.persisted) resetToCurrentWeatherView();
+    });
+
     // Sidebar navigation active state handler
     document.querySelectorAll('.sidebar__nav a').forEach((link) => {
         link.addEventListener('click', (e) => {

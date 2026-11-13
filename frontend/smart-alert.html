@@ -1,6 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+    /* Every reload returns to the dashboard's Current Weather view, no matter
+       which tab was open. Deliberate link navigation (type "navigate") is
+       unaffected, so the sidebar tabs stay reachable. */
+    (function () {
+        try {
+            var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+            if (nav && nav.type === 'reload') location.replace('index.html');
+        } catch (e) { /* navigation timing unavailable: leave the page as-is */ }
+    })();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="AirSense - weather recommendations for your location.">
@@ -322,7 +333,7 @@
 </div>
 
 <script src="assets/vendor/leaflet/leaflet.js"></script>
-<script src="js/map.js?v=20261113-5"></script>
+<script src="js/map.js?v=20261113-6"></script>
 <script src="js/config.js"></script>
 <script src="js/weather.js?v=20261110-2"></script>
 <script src="js/engine.js?v=20261110-2"></script>
