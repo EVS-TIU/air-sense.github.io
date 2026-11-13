@@ -33,32 +33,32 @@
        ------------------------------------------------------------------ */
     const LAYER_INFO = {
         temperature: {
-            about: 'Air temperature measured ~2 m above the surface. Cool colours are colder, warm colours hotter. Cold masses often sit north of warm fronts; sharp colour changes along a front mark tighter gradients.',
+            about: 'Colours show the air temperature near the ground — blue is cold, red is hot (°C).',
             boundaryNote: 'colours come from WeatherAPI\'s fixed temperature map tile (°C); the front-end does not repaint them.'
         },
         wind: {
-            about: 'The animated streaks show the 10 m wind field from Open-Meteo: they stream downwind, and their colour is wind speed at ground level on the scale below. Use the speed colours for intensity; the streak curvature reveals how weather systems rotate.',
+            about: 'Animated streaks stream downwind; their colour shows the wind speed 10 m above the ground.',
             fallbackNote: 'When the live vector field cannot load, the layer falls back to a real-time OpenWeather wind tile (no streaks or speed colours).'
         },
         humidity: {
-            about: 'Relative humidity — how close the air is to saturation at its current temperature. High values (>80%) mean fog or heavy dew is likely when air cools; very low values (<30%) raise dry-skin, static and fire risk.'
+            about: 'Colours show relative humidity — how close the air is to saturation. Deep blue is humid, pale gold is dry.'
         },
         pressure: {
-            about: 'Air pressure reduced to sea level, in hectopascals (hPa). Lows ≈ rising air, clouds, unsettled weather; highs ≈ sinking air, clearance and calmer conditions. Tight spacing of extremes marks windy frontal zones.',
+            about: 'Colours show sea-level pressure — lows bring clouds and unsettled weather, highs bring clear calm skies.',
             boundaryNote: 'colours come from WeatherAPI\'s fixed pressure map tile (hPa); L/H areas matter more than exact hues.'
         },
         radar: {
-            about: 'Rainfall echoes from ground radar stations. Stronger echoes (higher reflectivity, dBZ) mean heavier rainfall: light showers read pale, intense storm cells read dark/red. Frames are past observations, in 10-minute steps — no forecast sweep.'
+            about: 'Coloured echoes show where rain is falling right now — pale is light, dark red is a downpour. Past frames only, in 10-minute steps.'
         },
         satellite: {
-            about: 'True-colour satellite imagery of the ground surface: what the sky-free surface physically looks like. It shows terrain, cities and vegetation but carries no weather value ranges; overlay a weather layer to map atmospheric data.',
+            about: 'True-colour photos of the ground from space — terrain, cities and vegetation, not a weather data layer.',
             boundaryNote: 'imagery is a static reference basemap, not a data layer.'
         },
         aqi: {
-            about: 'Composite pollution index combining PM2.5, PM10, ozone, NO₂, SO₂ and CO into one US-EPA-style number. Higher = more pollution. Colours blend smoothly between real CAMS model samples (never inventing readings) and follow official US-AQI category colours below.'
+            about: 'One 0–500 number for how polluted the air is — green is clean, maroon is hazardous. Official US-AQI bands below.'
         },
         standard: {
-            about: 'Basic map with no data overlay — for choosing a location and reading the terrain. Select a layer above to map temperature, wind, air quality and more.'
+            about: 'Plain reference basemap with no weather data — pick a layer above to overlay conditions.'
         }
     };
 
