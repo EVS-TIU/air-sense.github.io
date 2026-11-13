@@ -356,7 +356,7 @@
 
         standardBaseLayer = createTileLayer();
         satelliteBaseLayers = createSatelliteLayers();
-        standardBaseLayer.addTo(sidebarMap);
+        satelliteBaseLayers.forEach((layer) => layer.addTo(sidebarMap));
         setBaseLayer(readSavedBaseMode());
 
         sidebarMap.on('click', (e) => {
@@ -382,9 +382,9 @@
     }
 
     function readSavedBaseMode() {
-        // Open with the standard dark-blue world map; Satellite remains an
-        // explicit selectable basemap.
-        return 'standard';
+        // Always open with the satellite imagery basemap on visit and reload;
+        // the standard dark-blue map remains an explicit selectable basemap.
+        return 'satellite';
     }
 
     function setBaseLayer(mode) {
