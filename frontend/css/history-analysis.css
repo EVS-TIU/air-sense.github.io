@@ -7,7 +7,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 10px 14px;
+    padding: 10px 14px 16px;
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
@@ -212,6 +212,11 @@
     border-radius: var(--panel-radius);
     box-shadow: var(--panel-shadow);
     position: relative;
+    /* Grow to use the free space left under the panel, so the chart uses
+       the full height of the shell with a standard gap at the bottom. */
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .history__chart-head {
@@ -237,11 +242,14 @@
 .history__chart-wrap {
     position: relative;
     width: 100%;
+    /* Fill the remaining height of the chart panel */
+    flex: 1 1 auto;
+    min-height: 230px;
 }
 
 .history__chart-wrap svg {
     width: 100%;
-    height: auto;
+    height: 100%;
     display: block;
     touch-action: pan-y;
 }
