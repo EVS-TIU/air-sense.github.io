@@ -25,6 +25,7 @@ from datetime import date as date_type, timedelta
 
 import httpx
 
+from . import ml_model
 from .config import Settings
 from .services import TTLCache, wind_cardinal
 
@@ -33,6 +34,13 @@ logger = logging.getLogger(__name__)
 HISTORY_YEARS = 5
 HISTORY_WINDOW_DAYS = 2  # days on either side of the target date, per year
 MAX_FORECAST_DAYS_AHEAD = 15  # Open-Meteo forecast horizon is ~16 days
+
+# The trained regression model (ml_model.py) learns temperature from ten
+# years of archive data around the target season, then contributes to the
+# climatology term of the blend. One contiguous archive request covers it.
+MODEL_YEARS = 10
+MODEL_WINDOW_DAYS = 20  # season window (days on either side of the target DOY)
+MODEL_MAX_MAE = 6.0     # a validation MAE above this means the model is useless
 
 # Open-Meteo daily variable -> prediction field, unit, absolute bounds.
 VARIABLES: dict[str, tuple[str, str, tuple[float, float]]] = {
@@ -111,6 +119,22 @@ def summarize(values: list[float]) -> VariableStats | None:
     else:
         std = 0.0
     return VariableStats(round(mean, 2), round(std, 2), min(values), max(values), len(values))
+
+
+def model_weight(validation_mae: float | None) -> float:
+    """Share of the trained MLP inside the climatology term (0 = ignore it).
+
+    The better the model validates on held-out archive years, the more of
+    the climatology term it may carry; a poor model falls back fully to the
+    plain multi-year mean.
+    """
+    if validation_mae is None or validation_mae > MODEL_MAX_MAE:
+        return 0.0
+    if validation_mae <= 1.5:
+        return 0.6
+    if validation_mae <= 2.5:
+        return 0.45
+    return 0.25
 
 
 def provider_weight(days_ahead: int, temp_std: float | None) -> float:
@@ -319,6 +343,53 @@ class ClimatePredictService:
             records.append(record)
         return records
 
+    # -------------------------------------------------------- trained model
+
+    async def _trained_model(self, lat: float, lon: float,
+                             target: date_type) -> ml_model.MLPModel | None:
+        """Train (or reuse) the tiny MLP for this location and season.
+
+        One contiguous archive request covers the last MODEL_YEARS of
+        daily data; the training samples are the days near the target's
+        season. Cached per location and calendar day, like the predictions
+        themselves. Never raises: any failure means "no model", and the
+        plain climatology blend runs as before.
+        """
+        cache_key = f"mlp:{lat:.2f}:{lon:.2f}:{target.month}:{target.day}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return None if cached == "none" else cached
+        try:
+            start = date_type(target.year - MODEL_YEARS, target.month, target.day)
+        except ValueError:  # Feb 29 in a non-leap year
+            start = date_type(target.year - MODEL_YEARS, target.month, 28)
+        try:
+            data = await self._open_meteo(
+                self.settings.openmeteo_archive_url,
+                self._history_params(lat, lon, start, date_type.today()),
+                attempts=2,
+            )
+        except ClimatePredictError as exc:
+            logger.warning("Trained-model archive fetch failed: %s", exc)
+            await self.cache.set(cache_key, "none")
+            return None
+        daily = data.get("daily") or {}
+        times = daily.get("time") or []
+        rows: list[dict] = []
+        for index in range(len(times)):
+            row: dict[str, object] = {"date": times[index]}
+            for variable in VARIABLES:
+                values = daily.get(variable) or []
+                finite = _finite(values[index:index + 1])
+                row[variable] = finite[0] if finite else None
+            rows.append(row)
+        samples = ml_model.build_samples(
+            rows, ml_model.day_of_year(target), MODEL_WINDOW_DAYS)
+        # Training is pure-Python CPU work; keep it off the event loop.
+        model = await asyncio.to_thread(ml_model.train, samples) if samples else None
+        await self.cache.set(cache_key, model if model is not None else "none")
+        return model
+
     async def _open_meteo(self, url: str, params: dict, attempts: int = 3) -> dict:
         delay = 0.6
         last_error: ClimatePredictError | None = None
@@ -423,21 +494,71 @@ class ClimatePredictService:
             days_ahead,
             climatology["temperature_2m_mean"].std if "temperature_2m_mean" in climatology else None,
         )
+
+        # Trained non-linear model: learns mean temperature from weather
+        # drivers + season over the last MODEL_YEARS of archive data, then
+        # carries part of the climatology term when it validates well.
+        ai_model: dict | None = None
+        model_temp: float | None = None
+        mlp_weight = 0.0
+        try:
+            model = await self._trained_model(lat, lon, target)
+        except Exception as exc:  # the model must never break a working prediction
+            logger.warning("Trained model unavailable: %s", exc)
+            model = None
+        if model is not None:
+            mlp_weight = model_weight(model.validation_mae)
+            if mlp_weight > 0.0:
+                model_temp = model.predict(ml_model.day_of_year(target), {
+                    "t_max": provider_row.get("temperature_2m_max"),
+                    "t_min": provider_row.get("temperature_2m_min"),
+                    "humidity": provider_row.get("relative_humidity_2m_mean"),
+                    "wind": provider_row.get("wind_speed_10m_max"),
+                    "precip": provider_row.get("precipitation_sum"),
+                })
+                if model_temp is not None and math.isfinite(model_temp):
+                    model_temp = clamp(model_temp, -90.0, 60.0)
+                    ai_model = {
+                        "type": "MLP 7x8 tanh",
+                        "trainedOn": f"{model.sample_count} archive days "
+                                     f"({MODEL_YEARS}-year window)",
+                        "validationMae": round(model.validation_mae, 2),
+                        "prediction": round(model_temp, 2),
+                        "weight": mlp_weight,
+                    }
+                else:
+                    model_temp = None
+
         blended: dict[str, float | None] = {}
+        baseline_temperature: float | None = None
         for variable, (field, _unit, bounds) in VARIABLES.items():
             provider_value = provider_row.get(variable)
             stats = climatology.get(variable)
             if provider_value is None and stats is None:
                 blended[field] = None
                 continue
+            climatology_term = stats.mean if stats is not None else None
+            if variable == "temperature_2m_mean" and model_temp is not None and climatology_term is not None:
+                baseline_temperature = weight * provider_value + (1.0 - weight) * climatology_term \
+                    if provider_value is not None else climatology_term
+                climatology_term = mlp_weight * model_temp + (1.0 - mlp_weight) * climatology_term
             if provider_value is None:
-                blended[field] = stats.mean
-            elif stats is None:
+                blended[field] = climatology_term
+            elif climatology_term is None:
                 blended[field] = provider_value
             else:
-                blended[field] = weight * provider_value + (1.0 - weight) * stats.mean
+                blended[field] = weight * provider_value + (1.0 - weight) * climatology_term
             lo, hi = bounds
             blended[field] = clamp(blended[field], lo, hi)
+
+        # A learned shift of the mean temperature also shifts the daily
+        # extremes, keeping the diurnal range consistent.
+        if model_temp is not None and baseline_temperature is not None:
+            delta = blended["temperature"] - baseline_temperature
+            if abs(delta) >= 0.05:
+                for field in ("max_temperature", "min_temperature"):
+                    if blended[field] is not None:
+                        blended[field] = clamp(blended[field] + delta, -90.0, 60.0)
 
         # Rain probability: provider probability if present, else wet-day frequency.
         provider_rain_prob = provider_row.get("precipitation_probability_max")
@@ -475,6 +596,8 @@ class ClimatePredictService:
             },
             "blended_baseline": prediction,
         }
+        if ai_model is not None:
+            agent_payload["trainedModel"] = ai_model
         agent = await self._agent_adjust(agent_payload)
         if agent and agent["adjustments"]:
             limits = {field: AGENT_ADJUSTMENT_LIMITS[key]
@@ -514,6 +637,11 @@ class ClimatePredictService:
             prediction, climatology, days_ahead, confidence)
         if agent and agent["anomalies"]:
             insight = insight.rstrip(".") + ". Noted: " + "; ".join(agent["anomalies"]) + "."
+        elif ai_model is not None:
+            insight = insight.rstrip(".") + (
+                f" Trained neural model ({MODEL_YEARS}-year archive, "
+                f"MAE ±{ai_model['validationMae']}°C) estimates "
+                f"{ai_model['prediction']}°C for this date.")
 
         result = {
             "location": {"city": city or f"{lat:.2f}, {lon:.2f}", "country": country or ""},
@@ -537,5 +665,7 @@ class ClimatePredictService:
             "temperatureTrend": trend,
             "aiInsight": insight,
         }
+        if ai_model is not None:
+            result["forecast"]["aiModel"] = ai_model
         await self.cache.set(cache_key, result)
         return result

@@ -76,10 +76,53 @@
       messages.appendChild(user);
       if (reply) { const bot = document.createElement("div"); bot.className = "ai-chat__reply"; bot.textContent = reply; messages.appendChild(bot); }
       messages.scrollTop = messages.scrollHeight;
+      return messages.querySelector(".ai-chat__reply:last-of-type");
+    };
+    // Same base-URL resolution the dashboard uses (js/app.js): localhost
+    // frontends hit the local API, hosted ones use the meta tag default.
+    const API_BASE = (
+      window.AIRSENSE_API_BASE_URL ||
+      (["localhost", "127.0.0.1"].includes(window.location.hostname)
+        ? "http://127.0.0.1:8000/api/v1"
+        : (document.querySelector('meta[name="airsense-api-base"]')?.content || "https://airsense-backend-docker.getvoroa.com/api/v1"))
+    ).replace(/\/+$/, "");
+    const chatHistory = [];
+    const ask = async (text) => {
+      const place = current || sharedLocation();
+      const pending = addMessage(text, "Checking live AirSense data for your location…");
+      try {
+        if (!place || !isFinite(+place.lat) || !isFinite(+place.lon)) {
+          throw new Error("no-location");
+        }
+        const res = await fetch(`${API_BASE}/ai/chat`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            question: text,
+            latitude: +place.lat,
+            longitude: +place.lon,
+            city: place.name || undefined,
+            country: currentRegion || undefined,
+            history: chatHistory.slice(-6),
+          }),
+        });
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        const data = await res.json();
+        if (pending) pending.textContent = data.answer || "No answer was produced — try rephrasing.";
+        chatHistory.push({ role: "user", content: text }, { role: "assistant", content: data.answer || "" });
+        if (chatHistory.length > 12) chatHistory.splice(0, chatHistory.length - 12);
+      } catch (err) {
+        if (pending && err.message === "no-location") {
+          pending.textContent = "Pick a location first (search or Current Location) so I can ground the answer in its live data.";
+        } else if (pending) {
+          pending.textContent = "The AI service is unreachable right now. Try again shortly — the recommendations above are computed locally and still work.";
+        }
+      }
+      messages.scrollTop = messages.scrollHeight;
     };
     document.querySelectorAll(".ai-chat__suggestion").forEach(button => button.addEventListener("click", () => { input.value = button.dataset.query; form.requestSubmit(); }));
-    form.addEventListener("submit", event => { event.preventDefault(); const text = input.value.trim(); if (!text) return; addMessage(text, "I’m analyzing the latest AirSense readings and will provide a climate-aware recommendation shortly."); input.value = ""; });
-    $("#ai-chat-reset")?.addEventListener("click", () => { messages.querySelectorAll(".ai-chat__user-message, .ai-chat__reply").forEach(node => node.remove()); input.value = ""; });
+    form.addEventListener("submit", event => { event.preventDefault(); const text = input.value.trim(); if (!text) return; input.value = ""; ask(text); });
+    $("#ai-chat-reset")?.addEventListener("click", () => { messages.querySelectorAll(".ai-chat__user-message, .ai-chat__reply").forEach(node => node.remove()); chatHistory.length = 0; input.value = ""; });
   }
 
   async function go(place, force) {

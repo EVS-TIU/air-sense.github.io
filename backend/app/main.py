@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .ai_chat import AiChatService
 from .climate_predict import ClimatePredictService
 from .config import get_settings
 from .map_service import MapService
@@ -24,6 +25,8 @@ async def lifespan(app: FastAPI):
     app.state.weather = WeatherClient(settings)
     app.state.map_service = MapService(settings)
     app.state.climate_predict = ClimatePredictService(settings)
+    app.state.ai_chat = AiChatService(settings, weather=app.state.weather,
+                                      predictor=app.state.climate_predict)
     await app.state.weather.startup()
     await app.state.map_service.startup()
     await app.state.climate_predict.startup()
@@ -46,7 +49,7 @@ if settings.environment == "development":
     )
 app.add_middleware(CORSMiddleware, allow_origins=allowed_origins, allow_credentials=False,
                    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-                   allow_methods=["GET"], allow_headers=["Accept", "Content-Type"])
+                   allow_methods=["GET", "POST"], allow_headers=["Accept", "Content-Type"])
 app.include_router(router)
 
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from .ai_chat import AiChatService
 from .climate_predict import ClimatePredictService, ClimatePredictError
 from .map_service import MapService, parse_bbox
 from .services import WeatherClient, WeatherServiceError, build_recommendations
@@ -139,6 +140,36 @@ async def climate_predict(
         return await predictor.predict(location.latitude, location.longitude, target, city=city, country=country)
     except ClimatePredictError as exc:
         raise HTTPException(502, str(exc)) from None
+
+
+class AiChatMessage(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=1000)
+
+
+class AiChatBody(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    city: str | None = Field(default=None, max_length=120)
+    country: str | None = Field(default=None, max_length=120)
+    history: list[AiChatMessage] = Field(default_factory=list, max_length=20)
+
+
+@router.post("/ai/chat")
+async def ai_chat(request: Request, body: AiChatBody) -> dict:
+    """Conversational AI over the dashboard's live data.
+
+    Prediction questions run the trained-ML climate prediction; the hosted
+    LLM (when configured) composes the reply, otherwise a rule-based
+    answer built from the same data is returned.
+    """
+    chat: AiChatService = request.app.state.ai_chat
+    return await chat.ask(
+        body.question.strip(), body.latitude, body.longitude,
+        city=body.city, country=body.country,
+        history=[message.model_dump() for message in body.history],
+    )
 
 
 def bounds(value: str) -> tuple[float, float, float, float]:
