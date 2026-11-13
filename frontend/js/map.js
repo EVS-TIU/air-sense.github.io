@@ -154,6 +154,10 @@
     let mapResizeFrame = null;
     const WORLD_BOUNDS = [[-85.051129, -180], [85.051129, 180]];
     const LOCATION_STORAGE_KEY = 'airsense:selected-location';
+    // The sidebar mini map always shows the selected location zoomed in as far
+    // as the imagery allows. Leaflet clamps this to the active basemap's own
+    // max zoom (19 for satellite imagery, 16 for the standard map).
+    const SIDEBAR_LOCATION_ZOOM = 19;
 
     /* ----------------------------------------------------------------------
        Selected-location persistence.
@@ -207,7 +211,9 @@
             } else {
                 sidebarMarker = window.L.marker([currentLat, currentLon], { icon: pinpointIcon }).addTo(sidebarMap);
             }
-            sidebarMap.setView([currentLat, currentLon], sidebarMap.getZoom(), { animate: false });
+            // Always restore the mini map on the selected location at the
+            // maximum zoom the basemap allows, on every load and revisit.
+            sidebarMap.setView([currentLat, currentLon], SIDEBAR_LOCATION_ZOOM, { animate: false });
         }
         updateSidebarBadge(currentName, currentRegion, currentCountryCode, currentLat, currentLon);
         syncLocationPopup(false);
@@ -375,7 +381,9 @@
             if (zoomLevel) {
                 sidebarMap.flyTo([currentLat, currentLon], zoomLevel, { duration: 1.0 });
             } else {
-                sidebarMap.panTo([currentLat, currentLon]);
+                // No explicit zoom: still show the location at the maximum
+                // zoom the basemap allows instead of keeping the old view.
+                sidebarMap.flyTo([currentLat, currentLon], SIDEBAR_LOCATION_ZOOM, { duration: 1.0 });
             }
         }
 
@@ -465,7 +473,13 @@
         sidebarMap = window.L.map(sidebarMapEl, {
             zoomControl: true,
             scrollWheelZoom: true,
-            attributionControl: true
+            attributionControl: true,
+            // Disabling zoom animation is required for the saved-location view:
+            // Leaflet's zoom animation path schedules a deferred callback that
+            // can fire AFTER applySavedLocation and reset the mini map back to
+            // the world view on reload. With it off, every setView is applied
+            // immediately and cannot be clobbered by a stale animation frame.
+            zoomAnimation: false
         });
         const referencePane = sidebarMap.createPane('mapReferencePane');
         referencePane.style.zIndex = '430';
@@ -478,7 +492,7 @@
         setBaseLayer(readSavedBaseMode());
 
         sidebarMap.on('click', (e) => {
-            handleMapSelection(e.latlng.lat, e.latlng.lng, null, false);
+            handleMapSelection(e.latlng.lat, e.latlng.lng, SIDEBAR_LOCATION_ZOOM, false);
         });
 
         setTimeout(() => {
@@ -540,6 +554,13 @@
     function openModalMap() {
         if (!modalDialog || !sidebarMap || !modalMapHost || mapMaximized) return;
 
+        // The maximized map always opens on the satellite imagery view, no
+        // matter which weather layer was selected before. Going through the
+        // layer controller keeps the select, legend and base map in sync.
+        if (window.AirSenseWeatherMap?.getMode && window.AirSenseWeatherMap.getMode() !== 'satellite') {
+            window.AirSenseWeatherMap.setMode('satellite');
+        }
+
         const view = {
             center: sidebarMap.getCenter(),
             zoom: sidebarMap.getZoom()
@@ -572,18 +593,15 @@
             sidebarMap.fitBounds(WORLD_BOUNDS, { animate: false, padding: [8, 8] });
             sidebarMap.setMinZoom(sidebarMap.getZoom());
             sidebarMap.setMaxBounds(WORLD_BOUNDS);
-            sidebarMap.setMaxBoundsViscosity(1);
+            // This vendored Leaflet build has no setMaxBoundsViscosity method;
+            // viscosity is configured through the map options.
+            sidebarMap.options.maxBoundsViscosity = 1;
             syncLocationPopup(true);
         }, 120);
     }
 
     function closeModalMap() {
         if (!modalDialog || !mapMaximized) return;
-
-        const view = {
-            center: sidebarMap.getCenter(),
-            zoom: sidebarMap.getZoom()
-        };
 
         document.dispatchEvent(new CustomEvent('weatherly:map-modal-close'));
         sidebarMap.closePopup();
@@ -606,14 +624,16 @@
         // Restore the normal sidebar map constraints before restoring its
         // previous city-level view.
         sidebarMap.setMaxBounds(null);
-        sidebarMap.setMaxBoundsViscosity(0);
+        sidebarMap.options.maxBoundsViscosity = 0;
         sidebarMap.setMinZoom(null);
 
         scheduleMapResize();
         setTimeout(() => {
             if (sidebarMap) {
                 sidebarMap.invalidateSize({ animate: false });
-                sidebarMap.setView(view.center, view.zoom, { animate: false });
+                // Returning to the mini map always shows the selected location
+                // at the maximum zoom, matching the sidebar's default view.
+                sidebarMap.setView([currentLat, currentLon], SIDEBAR_LOCATION_ZOOM, { animate: false });
                 syncLocationPopup(false);
             }
         }, 80);
@@ -662,7 +682,7 @@
             return;
         }
 
-        handleMapSelection(lat, lon, 10, true, {
+        handleMapSelection(lat, lon, SIDEBAR_LOCATION_ZOOM, true, {
             name: city.name,
             region: city.region,
             country: city.country,
@@ -692,7 +712,7 @@
                 locationNotices.push('Place name could not be verified by reverse geocoding');
             }
             const region = [baseRegion, ...locationNotices].filter(Boolean).join(' · ');
-            handleMapSelection(detail.latitude, detail.longitude, 10, true, {
+            handleMapSelection(detail.latitude, detail.longitude, SIDEBAR_LOCATION_ZOOM, true, {
                 name: detail.name || 'Current Device Location',
                 region,
                 country: detail.country || '',

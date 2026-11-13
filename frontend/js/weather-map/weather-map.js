@@ -53,12 +53,9 @@
     }
 
     function readStoredMode() {
-        try {
-            const stored = window.localStorage.getItem(STORAGE_KEY);
-            if (stored && isKnownMode(stored) && stored !== 'standard') return stored;
-        } catch {
-            // Storage can be unavailable in privacy modes.
-        }
+        // Always start on the satellite imagery view on every visit and
+        // reload, no matter which layer was active before. The layer choice
+        // remains freely switchable during the session.
         return 'satellite';
     }
 
