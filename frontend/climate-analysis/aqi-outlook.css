@@ -347,3 +347,13 @@
         min-height: 68px;
     }
 }
+
+/* Data loading / error status line */
+.ao__status {
+    margin: 0 18px 10px;
+    font-size: 12px;
+    color: #8fb0c9;
+}
+.ao__status.is-error {
+    color: #ff9a6b;
+}

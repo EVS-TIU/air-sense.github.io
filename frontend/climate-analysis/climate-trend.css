@@ -491,3 +491,13 @@
         transition: none !important;
     }
 }
+
+/* Data loading / error status line */
+.ct-status {
+    margin: -6px 18px 10px;
+    font-size: 12px;
+    color: #8fb0c9;
+}
+.ct-status.is-error {
+    color: #ff9a6b;
+}
