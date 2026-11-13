@@ -229,7 +229,8 @@
        Real fallback writer — full sentences, only numbers from stats.
        ------------------------------------------------------------------ */
     function round(v, d) { return Number(v).toFixed(d === undefined ? 1 : d); }
-    function fallbackText(tabId, s, st) {
+    function fallbackText(tabId, s, payload) {
+        var st = payload.stats || {};
         var loc = s.location || 'The selected location';
         if (tabId === 'ca-climate-trend' && st.temp && st.rain) {
             var t = st.temp;
@@ -254,11 +255,13 @@
         }
         if (tabId === 'ca-weather-prediction' && st.forecast && st.weekTrend) {
             var f = st.forecast, w = st.weekTrend;
+            var rainTxt = (f.rainfallIntensity || '').toLowerCase() === 'no'
+                ? 'no rain expected (0% chance)'
+                : (f.rainfallProbability || 0) + '% chance of ' + (f.rainfallIntensity || '').toLowerCase() + ' rain';
             return 'For ' + (f.date || 'the forecast day') + ' in ' + loc + ': ' +
                 (f.condition || 'conditions unavailable') + ', about ' + round(f.temperature) + '°C ' +
                 '(day range ' + round(f.minTemperature) + '–' + round(f.maxTemperature) + '°C), ' +
-                (f.rainfallProbability || 0) + '% chance of ' + (f.rainfallIntensity || '').toLowerCase() +
-                ' rain and US AQI ' + (f.aqi != null ? f.aqi : 'n/a') + ' (' + (f.aqiStatus || 'n/a') + ').' +
+                rainTxt + ' and US AQI ' + (f.aqi != null ? f.aqi : 'n/a') + ' (' + (f.aqiStatus || 'n/a') + ').' +
                 ' The 7-day highs ' + (w.slopePerDay >= 0 ? 'rise' : 'fall') + ' ~' +
                 round(Math.abs(w.slopePerDay), 2) + '°C per day (R² ' + round(w.r2, 2) + ').';
         }

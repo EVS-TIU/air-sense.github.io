@@ -377,7 +377,16 @@
         if (saved) {
             setLocation({ name: saved.name, region: saved.region, lat: saved.lat, lon: saved.lon });
         } else {
-            setStatus('Pick a location to load its air-quality history.');
+            // Same app default the dashboard uses (js/config.js), so a fresh
+            // visitor still sees data instead of an empty tab. config.js is
+            // not loaded on the standalone page, hence the literal.
+            var dflt = (window.AIREC_CONFIG && window.AIREC_CONFIG.DEFAULT_LOCATION) ||
+                { name: "Kolkata", latitude: 22.5726, longitude: 88.3639 };
+            if (dflt && Number.isFinite(Number(dflt.latitude))) {
+                setLocation({ name: dflt.name, lat: Number(dflt.latitude), lon: Number(dflt.longitude) });
+            } else {
+                setStatus('Pick a location to load its air-quality history.');
+            }
         }
     }
 })();

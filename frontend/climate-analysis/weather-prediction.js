@@ -72,76 +72,163 @@ window.MOCK_CLIMATE_DATA = {
 
 /* ================= climateApi.js ================= */
 /**
- * Climate API service layer.
- * The UI only ever calls ClimateApi.getClimateForecast() and receives a ClimateData object.
- *
- * TO GO LIVE: set USE_MOCK to false and fill in BASE_URL / ENDPOINT below.
- * Nothing else in the UI needs to change, as long as the response matches climateTypes.js.
+ * Climate API service layer — real Open-Meteo data (same sources as the
+ * other tabs): Forecast API for the daily weather prediction and Air
+ * Quality API (CAMS) for the predicted AQI. No local backend required.
+ * The UI only ever calls ClimateApi.getClimateForecast() and receives a
+ * ClimateData object; nothing else in the UI needs to change.
  */
 (function () {
-  // Same local-detection rule as js/app.js: serve from localhost/127.0.0.1 (or the
-  // filesystem) and we hit the local backend; anything else uses the deployed one.
-  var isLocalFrontend = window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1" ||
-    window.location.protocol === "file:";
   var CONFIG = {
-    USE_MOCK: false,         // live prediction from the backend /climate/predict
-    BASE_URL: isLocalFrontend
-      ? "http://127.0.0.1:8000/api/v1"
-      : "https://airsense-backend-docker.getvoroa.com/api/v1",
-    ENDPOINT: "/climate/predict",
-    HEADERS: { Accept: "application/json" }
+    FORECAST_URL: "https://api.open-meteo.com/v1/forecast",
+    AIR_URL: "https://air-quality-api.open-meteo.com/v1/air-quality",
+    FORECAST_DAYS: 8   // today + tomorrow + the 6 days after (7-day trend)
   };
-
-  /** API INTEGRATION PLACEHOLDER – runs only when USE_MOCK is false. */
-  function fetchFromBackend(params) {
-    if (!CONFIG.ENDPOINT) {
-      return Promise.reject(new Error("ClimateApi: set CONFIG.BASE_URL and CONFIG.ENDPOINT to connect the backend."));
+  /* WMO weather code → human condition (Open-Meteo daily weather_code). */
+  function conditionFor(code) {
+    if (code === 0) return "Clear Sky";
+    if (code === 1) return "Mainly Clear";
+    if (code === 2) return "Partly Cloudy";
+    if (code === 3) return "Overcast";
+    if (code === 45 || code === 48) return "Foggy";
+    if (code >= 51 && code <= 57) return "Drizzle";
+    if (code >= 61 && code <= 67) return "Rain";
+    if (code >= 71 && code <= 77) return "Snow";
+    if (code >= 80 && code <= 82) return "Rain Showers";
+    if (code === 85 || code === 86) return "Snow Showers";
+    if (code >= 95) return "Thunderstorm";
+    return "Cloudy";
+  }
+  function compass(deg) {
+    if (!Number.isFinite(deg)) return "–";
+    var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    return dirs[Math.round(deg / 45) % 8];
+  }
+  function rainIntensity(mm) {
+    if (!Number.isFinite(mm) || mm <= 0) return "No";
+    if (mm < 2.5) return "Light";
+    if (mm < 10) return "Moderate";
+    return "Heavy";
+  }
+  /* US EPA bands (the app's AQI standard everywhere else). */
+  function aqiStatus(v) {
+    if (!Number.isFinite(v)) return "Unavailable";
+    if (v <= 50) return "Good";
+    if (v <= 100) return "Moderate";
+    if (v <= 150) return "Unhealthy for Sensitive Groups";
+    if (v <= 200) return "Unhealthy";
+    if (v <= 300) return "Very Unhealthy";
+    return "Hazardous";
+  }
+  function num(v) { return Number.isFinite(v) ? v : null; }
+  function meanOf(vals) {
+    var s = 0, n = 0;
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i];
+      if (v !== null && v !== undefined) { s += v; n += 1; }
     }
-    var qs = new URLSearchParams(params || {}).toString();
-    var url = CONFIG.BASE_URL + CONFIG.ENDPOINT + (qs ? "?" + qs : "");
-    return fetch(url, { headers: CONFIG.HEADERS }).then(function (res) {
-      if (!res.ok) throw new Error("ClimateApi: request failed (" + res.status + ")");
-      return res.json(); // must match ClimateData; add a mapper here if the backend differs
-    });
-  }
-
-  /**
-   * Resolve a city name to coordinates through the existing /location/search
-   * endpoint, so /climate/predict can be called with lat/lon like every
-   * other weather route.
-   * @param {{city?: string, lat?: number, lon?: number}} params
-   * @returns {Promise<typeof params>}
-   */
-  function resolveLocation(params) {
-    if (params.lat != null && params.lon != null) return Promise.resolve(params);
-    var url = CONFIG.BASE_URL + "/location/search?q=" + encodeURIComponent(params.city || "");
-    return fetch(url, { headers: CONFIG.HEADERS }).then(function (res) {
-      if (!res.ok) throw new Error("ClimateApi: location lookup failed (" + res.status + ")");
-      return res.json();
-    }).then(function (out) {
-      var hit = out && out.results && out.results[0];
-      if (!hit) throw new Error("ClimateApi: no coordinates found for " + params.city);
-      params.lat = hit.latitude;
-      params.lon = hit.longitude;
-      if (!params.country && hit.country) params.country = hit.country;
-      return params;
-    });
+    return n ? s / n : null;
   }
   /**
-   * @param {{city?: string, lat?: number, lon?: number, date?: string}} [params]
-   * @returns {Promise<ClimateData>}
+   * @param {{city?: string, country?: string, lat: number, lon: number}} params
+   * @returns {Promise<ClimateData>} same shape as the old backend contract
    */
   function getClimateForecast(params) {
-    if (CONFIG.USE_MOCK) {
-      return Promise.resolve(JSON.parse(JSON.stringify(window.MOCK_CLIMATE_DATA)));
-    }
     params = params || {};
-    return resolveLocation(params).then(function (resolved) {
-      return fetchFromBackend(resolved);
+    var lat = Number(params.lat), lon = Number(params.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return Promise.reject(new Error("ClimateApi: coordinates missing for the selected location"));
+    }
+    var fUrl = new URL(CONFIG.FORECAST_URL);
+    fUrl.searchParams.set("latitude", lat.toFixed(4));
+    fUrl.searchParams.set("longitude", lon.toFixed(4));
+    fUrl.searchParams.set("daily", "weather_code,temperature_2m_mean,temperature_2m_max,temperature_2m_min," +
+      "apparent_temperature_max,relative_humidity_2m_mean,precipitation_sum,precipitation_probability_max," +
+      "wind_speed_10m_max,wind_direction_10m_dominant,snowfall_sum");
+    fUrl.searchParams.set("forecast_days", String(CONFIG.FORECAST_DAYS));
+    fUrl.searchParams.set("timezone", "auto");
+    var aUrl = new URL(CONFIG.AIR_URL);
+    aUrl.searchParams.set("latitude", lat.toFixed(4));
+    aUrl.searchParams.set("longitude", lon.toFixed(4));
+    aUrl.searchParams.set("hourly", "us_aqi");
+    aUrl.searchParams.set("forecast_days", String(Math.min(CONFIG.FORECAST_DAYS, 7)));  // AQI API allows 0–7
+    aUrl.searchParams.set("timezone", "auto");
+    return Promise.all([
+      fetch(fUrl.toString()).then(function (res) {
+        if (!res.ok) throw new Error("Forecast request failed (HTTP " + res.status + ")");
+        return res.json();
+      }),
+      fetch(aUrl.toString()).then(function (res) {
+        if (!res.ok) throw new Error("Air-quality request failed (HTTP " + res.status + ")");
+        return res.json();
+      })
+    ]).then(function (out) {
+      var wx = out[0], air = out[1];
+      if (wx.error) throw new Error(wx.reason || "Forecast request failed");
+      if (air.error) throw new Error(air.reason || "Air-quality request failed");
+      var days = wx.daily.time;               // index 0 = today, 1 = tomorrow
+      var i = Math.min(1, days.length - 1);   // forecast target: tomorrow
+      var day = days[i];
+      var aqiPerDay = {};
+      for (var h = 0; h < air.hourly.time.length; h++) {
+        var dKey = air.hourly.time[h].slice(0, 10);
+        (aqiPerDay[dKey] = aqiPerDay[dKey] || []).push(air.hourly.us_aqi[h]);
+      }
+      var dayAqi = meanOf(aqiPerDay[day] || []);
+      var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      function short(iso) { var p = iso.split("-"); return (+p[2]) + " " + MONTHS[+p[1] - 1]; }
+      var trend = days.map(function (d, k) {
+        return {
+          date: short(d),
+          max: num(wx.daily.temperature_2m_max[k]),
+          min: num(wx.daily.temperature_2m_min[k])
+        };
+      }).filter(function (t) { return t.max !== null && t.min !== null; });
+      // Transparent heuristic: model lead time + data completeness, not a
+      // fabricated weather probability.
+      var fields = [
+        wx.daily.temperature_2m_mean[i], wx.daily.temperature_2m_max[i], wx.daily.temperature_2m_min[i],
+        wx.daily.apparent_temperature_max[i], wx.daily.relative_humidity_2m_mean[i],
+        wx.daily.precipitation_sum[i], wx.daily.wind_speed_10m_max[i],
+        dayAqi
+      ];
+      var completeness = fields.filter(function (v) { return v !== null && v !== undefined; }).length / fields.length;
+      var confidence = Math.round(Math.max(55, Math.min(97, 96 - i * 2 - (1 - completeness) * 25)));
+      var city = params.city || "Selected Location";
+      var country = params.country || "";
+      return {
+        location: { city: city, country: country },
+        forecast: {
+          date: day,
+          condition: conditionFor(wx.daily.weather_code[i]),
+          temperature: num(wx.daily.temperature_2m_mean[i]),
+          feelsLike: num(wx.daily.apparent_temperature_max[i]),
+          confidence: confidence,
+          humidity: num(wx.daily.relative_humidity_2m_mean[i]),
+          windSpeed: num(wx.daily.wind_speed_10m_max[i]),
+          windDirection: compass(wx.daily.wind_direction_10m_dominant[i]),
+          rainfallProbability: num(wx.daily.precipitation_probability_max[i]),
+          rainfallIntensity: rainIntensity(wx.daily.precipitation_sum[i]),
+          aqi: dayAqi !== null ? Math.round(dayAqi) : null,
+          aqiStatus: aqiStatus(dayAqi),
+          snowfall: num(wx.daily.snowfall_sum[i]),
+          maxTemperature: num(wx.daily.temperature_2m_max[i]),
+          minTemperature: num(wx.daily.temperature_2m_min[i])
+        },
+        temperatureTrend: trend,
+        aiInsight: city + ": " + conditionFor(wx.daily.weather_code[i]).toLowerCase() +
+          " conditions expected with a high of " + Math.round(wx.daily.temperature_2m_max[i]) + "°C and a low of " +
+          Math.round(wx.daily.temperature_2m_min[i]) + "°C. " +
+          (rainIntensity(wx.daily.precipitation_sum[i]) === "No"
+            ? "No rain expected (0% chance)"
+            : "Rain chance is about " + (num(wx.daily.precipitation_probability_max[i]) || 0) + "% (" +
+              rainIntensity(wx.daily.precipitation_sum[i]).toLowerCase() + " intensity)") +
+          " and air quality is " +
+          aqiStatus(dayAqi) + " (US AQI " + (dayAqi !== null ? Math.round(dayAqi) : "n/a") + ")." +
+          " Source: Open-Meteo forecast + CAMS air quality."
+      };
     });
   }
-
   window.ClimateApi = { CONFIG: CONFIG, getClimateForecast: getClimateForecast };
 })();
 
@@ -237,7 +324,7 @@ window.MOCK_CLIMATE_DATA = {
           metric("wind", "is-cyan", "Wind", f.windSpeed + " km/h · " + f.windDirection) +
           metric("rain", "is-blue", "Rainfall (Prob.)", f.rainfallProbability + "% (" + f.rainfallIntensity + ")") +
           metric("aqi", "is-green", "AQI (Predicted)", f.aqi + " · " + f.aqiStatus, "is-amber") +
-          metric("snow", "is-cyan", "Snowfall", f.snowfall + "%") +
+          metric("snow", "is-cyan", "Snowfall", f.snowfall + " cm") +
         "</div></div></article>";
   }
 
@@ -276,7 +363,16 @@ window.MOCK_CLIMATE_DATA = {
     var selI = idx - start;
 
     var W = Math.max(1, wrap.clientWidth || 560), H = W < 420 ? 220 : 250;
-    var pl = 46, pr = 16, pt = 66, pb = 34, yMin = 22, yMax = 34;
+    var pl = 46, pr = 16, pt = 66, pb = 34;
+    // Scale the axis to the actual data (any city, any season) instead of a
+    // fixed 22–34 °C band.
+    var lo = Math.min.apply(null, pts.map(function (p) { return p.min; }));
+    var hi = Math.max.apply(null, pts.map(function (p) { return p.max; }));
+    var span = Math.max(hi - lo, 4);
+    var yMin = Math.floor((lo - span * 0.15) / 2) * 2;
+    var yMax = Math.ceil((hi + span * 0.15) / 2) * 2;
+    if (yMax - yMin < 6) { yMax = yMin + 6; }
+    var yStep = (yMax - yMin) > 16 ? 4 : 2;
     var inset = Math.min(18, (W - pl - pr) / (n * 2));
     var x = function (i) { return n === 1 ? pl + (W - pl - pr) / 2 : pl + inset + i * (W - pl - pr - 2 * inset) / (n - 1); };
     var y = function (v) { v = Math.max(yMin, Math.min(yMax, v)); return pt + (yMax - v) / (yMax - yMin) * (H - pt - pb); };
@@ -287,7 +383,7 @@ window.MOCK_CLIMATE_DATA = {
     var svg = '<svg viewBox="0 0 ' + W + " " + H + '" role="slider" tabindex="0" aria-label="Temperature forecast. Use left and right arrow keys to select a date." aria-valuemin="0" aria-valuemax="' + (n - 1) + '">' +
       '<defs><linearGradient id="clArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff7a3d" stop-opacity=".55"/><stop offset="1" stop-color="#ff7a3d" stop-opacity=".12"/></linearGradient></defs>';
 
-    for (var v = yMin; v <= yMax; v += 2) {
+    for (var v = yMin; v <= yMax; v += yStep) {
       svg += '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y(v).toFixed(1) + '" y2="' + y(v).toFixed(1) + '" stroke="rgba(130,170,230,.16)"/>' +
         '<text x="' + (pl - 10) + '" y="' + y(v).toFixed(1) + '" text-anchor="end" dominant-baseline="middle">' + v + "°C</text>";
     }
@@ -430,17 +526,68 @@ window.MOCK_CLIMATE_DATA = {
 })();
 
 /* ================= main.js ================= */
-/** Entry point: fetch data through the service layer, then render. */
+/**
+ * Entry point: fetch real data through the service layer, then render.
+ * Follows the app-wide selected location (map / topbar / sidebar) exactly
+ * like History Analysis, Climate Trend and AQI Outlook do.
+ */
 (function () {
   var root = document.getElementById("climate-dashboard");
   if (!root) return;
-  ClimateApi.getClimateForecast({
-      city: "Delhi",
-      date: new Date(Date.now() + 864e5).toISOString().slice(0, 10) // default: tomorrow
-    })
-    .then(function (data) { ClimateDashboard.mount(root, data); })
-    .catch(function (err) {
-      console.error(err);
-      root.innerHTML = '<div class="cl-card cl-error">Forecast unavailable. Check the API configuration in js/climateApi.js.</div>';
-    });
+  var LOCATION_KEY = "airsense:selected-location";
+  var DEFAULT_LOCATION = (window.AIREC_CONFIG && window.AIREC_CONFIG.DEFAULT_LOCATION) ||
+    { name: "Kolkata", latitude: 22.5726, longitude: 88.3639 };
+  var fetchId = 0;
+  function readLocation() {
+    try {
+      var raw = window.localStorage.getItem(LOCATION_KEY);
+      if (!raw) return null;
+      var saved = JSON.parse(raw);
+      var lat = Number(saved.lat), lon = Number(saved.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return { city: saved.name || "Selected Location", country: saved.region || "", lat: lat, lon: lon };
+    } catch (e) { return null; }
+  }
+  function status(msg) {
+    root.innerHTML = '<div class="cl-card ' + (msg.indexOf("Loading") === 0 ? "" : "cl-error") + '">' + msg + "</div>";
+  }
+  function load(loc) {
+    var myId = ++fetchId;
+    status("Loading real forecast for " + loc.city + "…");
+    ClimateApi.getClimateForecast(loc)
+      .then(function (data) {
+        if (myId !== fetchId) return;
+        ClimateDashboard.mount(root, data);
+      })
+      .catch(function (err) {
+        if (myId !== fetchId) return;
+        console.warn("Weather Prediction load failed:", err);
+        status("Forecast unavailable: " + (err.message || err));
+      });
+  }
+  document.addEventListener("weatherly:location-change", function (e) {
+    var d = e.detail || {};
+    var lat = Number(d.lat !== undefined ? d.lat : d.latitude);
+    var lon = Number(d.lon !== undefined ? d.lon : d.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      load({ city: d.name || "Selected Location", country: d.region || d.country || "", lat: lat, lon: lon });
+    }
+  });
+  document.addEventListener("weatherly:device-location-active", function (e) {
+    var d = e.detail || {};
+    if (Number.isFinite(Number(d.latitude)) && Number.isFinite(Number(d.longitude))) {
+      load({ city: d.name || "Current Location", country: d.region || d.country || "", lat: Number(d.latitude), lon: Number(d.longitude) });
+    }
+  });
+  var initial = window.WeatherlyTopbar && window.WeatherlyTopbar.getLocation();
+  if (initial && Number.isFinite(Number(initial.lat)) && Number.isFinite(Number(initial.lon))) {
+    load({ city: initial.name || "Selected Location", country: initial.region || "", lat: Number(initial.lat), lon: Number(initial.lon) });
+  } else {
+    var saved = readLocation();
+    if (saved) {
+      load(saved);
+    } else {
+      load({ city: DEFAULT_LOCATION.name, country: "", lat: DEFAULT_LOCATION.latitude, lon: DEFAULT_LOCATION.longitude });
+    }
+  }
 })();
