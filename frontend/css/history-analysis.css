@@ -11,6 +11,20 @@
     width: 100%;
     max-width: 1200px;
     margin: 0 auto;
+    /* The app shell (.content-placeholder / .ai-chat) clips overflow, which
+       used to cut the chart panel's bottom edge off. Scroll the section
+       internally instead so the full panel and source note are reachable. */
+    overflow-y: auto;
+    scrollbar-color: #2a4a70 transparent;
+    scrollbar-width: thin;
+}
+
+.history::-webkit-scrollbar { width: 6px; }
+.history::-webkit-scrollbar-thumb { background: #2a4a70; border-radius: 999px; }
+.history::-webkit-scrollbar-track { background: transparent; }
+
+.history > * {
+    flex-shrink: 0;
 }
 
 /* ------------------------------------------------------------------ */
