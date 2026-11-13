@@ -594,6 +594,11 @@
 
     navLinks.forEach((link) => {
         link.addEventListener('click', (e) => {
+            // Links pointing at a real page (e.g. climate-analysis) must
+            // navigate normally; only in-page section links are handled here.
+            const href = link.getAttribute('href') || '';
+            if (!href.startsWith('#')) return;
+
             e.preventDefault();
 
             navLinks.forEach((l) => {
