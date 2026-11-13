@@ -18,6 +18,9 @@
   grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
   grid-template-areas: "pred pred" "trend outlook" "insight insight";
   gap: 16px;
+  /* Match the 16px inset the Climate Trend (.ct) and AQI Outlook (.ao) tabs
+     keep from the panel border. */
+  padding: 16px;
   width: 100%;
   min-width: 0;
   color: var(--cl-text);
