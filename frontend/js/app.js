@@ -11,8 +11,9 @@ const isLocalFrontend =
   window.location.hostname === "127.0.0.1";
 const API_BASE_URL = (
   window.AIRSENSE_API_BASE_URL ||
-  apiBaseMeta?.content ||
-  (isLocalFrontend ? LOCAL_API_BASE_URL : DEFAULT_API_BASE_URL)
+  // A localhost frontend automatically calls the local API; the meta tag only
+  // pins the deployed API for hosted (non-local) frontends.
+  (isLocalFrontend ? LOCAL_API_BASE_URL : (apiBaseMeta?.content || DEFAULT_API_BASE_URL))
 ).replace(/\/+$/, "");
 
 const WEATHER_ASSET_ROOT = "./assets/images/weather/";

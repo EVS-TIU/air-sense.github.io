@@ -18,10 +18,12 @@
         window.location.hostname === '127.0.0.1';
     const apiBase = (
         window.AIRSENSE_API_BASE_URL ||
-        document.querySelector('meta[name="airsense-api-base"]')?.content ||
+        // Local frontend always talks to the local API; the meta tag pins the
+        // deployed API only for hosted (non-local) frontends.
         (isLocalFrontend
             ? 'http://127.0.0.1:8000/api/v1'
-            : 'https://airsense-backend-docker.getvoroa.com/api/v1')
+            : (document.querySelector('meta[name="airsense-api-base"]')?.content ||
+               'https://airsense-backend-docker.getvoroa.com/api/v1'))
     ).replace(/\/+$/, '');
 
     function getCountryFlag(countryCode) {

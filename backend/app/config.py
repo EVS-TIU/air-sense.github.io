@@ -70,8 +70,12 @@ class Settings(BaseSettings):
     # Air-quality grids sample the CAMS lattice with their own budget: real
     # AQI detail is entirely point-limited, and each extra Open-Meteo
     # location is one more real model cell rendered without interpolation.
+    # Open-Meteo's free tier counts every location in a request as one API
+    # call against a ~600/minute weight cap, and fetch_locations fires all
+    # batches at once — so this budget must stay below that cap or a
+    # worldwide AQI view is rejected with 429 on every load.
     map_air_max_points: int = Field(
-        default=2000, validation_alias="MAP_AIR_MAX_POINTS", ge=4, le=6000
+        default=480, validation_alias="MAP_AIR_MAX_POINTS", ge=4, le=6000
     )
     map_max_batch_points: int = Field(
         default=100, validation_alias="MAP_MAX_BATCH_POINTS", ge=1, le=100

@@ -41,9 +41,13 @@
         }
         const local = window.location.hostname === 'localhost' ||
             window.location.hostname === '127.0.0.1';
-        const configured = window.AIRSENSE_API_BASE_URL ||
-            document.querySelector('meta[name="airsense-api-base"]')?.content;
-        return (configured || (local ? LOCAL_API_BASE : DEFAULT_API_BASE)).replace(/\/+$/, '');
+        // Local frontend always talks to the local API; the meta tag pins the
+        // deployed API only for hosted (non-local) frontends.
+        if (window.AIRSENSE_API_BASE_URL) {
+            return window.AIRSENSE_API_BASE_URL.replace(/\/+$/, '');
+        }
+        const configured = document.querySelector('meta[name="airsense-api-base"]')?.content;
+        return (local ? LOCAL_API_BASE : (configured || DEFAULT_API_BASE)).replace(/\/+$/, '');
     }
 
     function roundedBbox(bbox) {
