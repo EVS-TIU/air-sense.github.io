@@ -57,6 +57,28 @@
   border: 1px solid rgba(33, 169, 255, .4); border-radius: 999px;
   background: rgba(33, 169, 255, .12);
 }
+/* Trained-MLP contribution badge */
+.cl-badge-mlp {
+  color: #b9f4d8;
+  border-color: rgba(62, 193, 129, .45);
+  background: rgba(62, 193, 129, .12);
+}
+
+/* Blank state: shown until a prediction date is picked in the calendar */
+.cl-blank {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; min-height: 320px; text-align: center; padding: 40px 24px;
+  border-style: dashed;
+}
+.cl-blank__icon {
+  display: grid; place-items: center;
+  width: 56px; height: 56px; border-radius: 16px;
+  background: rgba(33, 169, 255, .1); border: 1px solid rgba(33, 169, 255, .25);
+  color: var(--cl-cyan);
+}
+.cl-blank__icon .ic { width: 28px; height: 28px; }
+.cl-blank h3 { margin: 4px 0 0; font-size: 16px; color: #eef6ff; }
+.cl-blank p { margin: 0; max-width: 380px; font-size: 13.5px; line-height: 1.6; color: var(--cl-muted); }
 .cl-sub { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px; color: var(--cl-muted); font-size: 13px; }
 .cl-sub span { display: inline-flex; align-items: center; gap: 7px; }
 .cl-sub .ic { color: var(--cl-cyan); width: 17px; height: 17px; }
@@ -127,6 +149,11 @@
 
 .cl-legend { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; margin-top: 6px; font-size: 13px; color: #dcefff; }
 .cl-legend span { display: inline-flex; align-items: center; gap: 8px; }
+.cl-chart-empty {
+  display: grid; place-items: center; min-height: 200px; padding: 20px;
+  font-size: 13.5px; color: var(--cl-muted); text-align: center;
+  border: 1px dashed rgba(33, 169, 255, .25); border-radius: 10px;
+}
 .cl-legend i { width: 11px; height: 11px; border-radius: 50%; border: 2px solid; }
 .cl-legend .mx i { border-color: var(--cl-orange); } .cl-legend .mn i { border-color: var(--cl-blue); }
 

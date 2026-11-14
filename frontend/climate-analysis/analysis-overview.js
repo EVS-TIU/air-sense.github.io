@@ -30,7 +30,8 @@
     var btn = section.querySelector('.ca-generate-btn');
     var card = document.getElementById('ca-summary');
     var body = document.getElementById('ca-summary-body');
-    if (!btn || !card || !body) return;
+    if (!btn) return;   // card/body are optional — without them the overview
+                        // renders into the .ca-mlp-json panel instead
     var TAB_NAMES = {
         'ca-weather-prediction': 'Weather Prediction',
         'ca-climate-trend': 'Climate Trend',
@@ -157,49 +158,24 @@
     function buildPayload(tabId, s) {
         var payload = { tab: TAB_NAMES[tabId] || tabId, location: s.location || '', stats: {} };
         if (tabId === 'ca-climate-trend' && window.ClimateTrend) {
-            payload.range = s.range || '';
-            var t = pairs(s.years, s.temps);
-            var r = pairs(s.years, s.rain);
-            var tFit = quadraticFit(t.xs, t.ys);
-            var rFit = quadraticFit(r.xs, r.ys);
-            var h = pairs(s.years, s.hotDays);
+            payload.range = 'the picked custom day';
             payload.stats = {
                 unit: '°C',
-                temp: tFit && {
-                    firstYear: s.years[0], lastYear: s.years[s.years.length - 1],
-                    first: tFit.first, last: tFit.last, min: tFit.min, max: tFit.max,
-                    mean: tFit.mean, slopePerYear: tFit.slope, r2: tFit.r2,
-                    curvature: tFit.curvature
-                },
-                rain: rFit && {
-                    annualMean: rFit.mean, firstYearValue: rFit.first, lastYearValue: rFit.last,
-                    slopePerYear: rFit.slope, r2: rFit.r2, curvature: rFit.curvature,
-                    halfChangePct: halfMeans(r.ys) && halfMeans(r.ys).changePct
-                },
-                hotDaysChange: halfMeans(h.ys) && halfMeans(h.ys).change,
-                seasonalAmp: s.summary && s.summary.seasonal
+                date: s.date,
+                temperature: s.stats && s.stats.temperature,
+                tempMax: s.stats && s.stats.tempMax,
+                avgHumidity: s.stats && s.stats.avgHumidity,
+                rainfallTotal: s.stats && s.stats.rainfallTotal
             };
         } else if (tabId === 'ca-aqi-outlook' && window.AqiOutlook) {
-            payload.range = s.range || '';
-            var q = pairs(s.years, s.aqi);
-            var qFit = quadraticFit(q.xs, q.ys);
-            var pm = pairs(s.years, s.pm25);
-            var p10 = pairs(s.years, s.pm10);
-            var no2 = pairs(s.years, s.no2);
-            var cl = pairs(s.years, s.clean);
+            payload.range = 'the picked custom day';
             payload.stats = {
                 unit: 'US AQI',
-                aqi: qFit && {
-                    firstYear: s.years[0], lastYear: s.years[s.years.length - 1],
-                    first: qFit.first, last: qFit.last, min: qFit.min, max: qFit.max,
-                    mean: qFit.mean, slopePerYear: qFit.slope, r2: qFit.r2,
-                    curvature: qFit.curvature
-                },
-                pm25Latest: pm.ys[pm.ys.length - 1],
-                pm10Latest: p10.ys[p10.ys.length - 1],
-                no2ChangePct: halfMeans(no2.ys) && halfMeans(no2.ys).changePct,
-                cleanDaysChange: halfMeans(cl.ys) && Math.round(halfMeans(cl.ys).change),
-                cleanDaysLatest: cl.ys[cl.ys.length - 1]
+                date: s.date,
+                aqi: s.stats && s.stats.aqi,
+                aqiStatus: s.stats && s.stats.aqiStatus,
+                peakHour: s.stats && s.stats.peakHour,
+                peakAqi: s.stats && s.stats.peakAqi
             };
         } else if (tabId === 'ca-weather-prediction' && window.ClimateDashboard) {
             var f = s.forecast || {};
@@ -232,26 +208,18 @@
     function fallbackText(tabId, s, payload) {
         var st = payload.stats || {};
         var loc = s.location || 'The selected location';
-        if (tabId === 'ca-climate-trend' && st.temp && st.rain) {
-            var t = st.temp;
-            var dir = t.slopePerYear >= 0 ? 'warmed' : 'cooled';
-            var rainPct = st.rain.halfChangePct;
-            return loc + ' ' + dir + ' at about ' + round(Math.abs(t.slopePerYear), 2) +
-                '°C per year across ' + t.firstYear + '–' + t.lastYear +
-                ' (quadratic fit, R² ' + round(t.r2, 2) + '), with annual temperatures between ' +
-                round(t.min) + '°C and ' + round(t.max) + '°C.' +
-                ' Rainfall averages about ' + round(st.rain.annualMean) + ' mm per year and moved ' +
-                (rainPct >= 0 ? 'up' : 'down') + ' ~' + round(Math.abs(rainPct)) + '% between the earlier and recent half of the range.';
+        if (tabId === 'ca-climate-trend' && st.temperature !== undefined && st.temperature !== null) {
+            return 'Climate for ' + (st.date || 'the picked day') + ' in ' + loc + ': about ' +
+                round(st.temperature) + '°C on average, peaking near ' +
+                (st.tempMax !== null && st.tempMax !== undefined ? round(st.tempMax) + '°C' : 'n/a') +
+                ', with ' + round(st.rainfallTotal) + ' mm of rain and an average humidity of ' +
+                (st.avgHumidity !== null && st.avgHumidity !== undefined ? round(st.avgHumidity, 0) + '%' : 'n/a') +
+                ' across the 24 hours.';
         }
-        if (tabId === 'ca-aqi-outlook' && st.aqi) {
-            var q = st.aqi;
-            return 'Across ' + q.firstYear + '–' + q.lastYear + ', ' + loc +
-                ' averaged US AQI ' + round(q.mean) + ' (range ' + round(q.min) + '–' + round(q.max) +
-                '), moving ' + (q.slopePerYear >= 0 ? 'up' : 'down') + ' about ' +
-                round(Math.abs(q.slopePerYear)) + ' points per year (R² ' + round(q.r2, 2) + ').' +
-                ' Latest-year PM2.5 is ~' + round(st.pm25Latest) + ' µg/m³ and clean-air days ' +
-                (st.cleanDaysChange >= 0 ? 'gained' : 'lost') + ' ~' + Math.abs(st.cleanDaysChange) +
-                ' days per year between the two halves of the range.';
+        if (tabId === 'ca-aqi-outlook' && st.aqi !== undefined && st.aqi !== null) {
+            return 'Air quality for ' + (st.date || 'the picked day') + ' in ' + loc + ': US AQI ' +
+                round(st.aqi, 0) + (st.aqiStatus ? ' (' + st.aqiStatus + ')' : '') +
+                (st.peakHour ? ', worst around ' + st.peakHour + ' at AQI ' + round(st.peakAqi, 0) : '') + '.';
         }
         if (tabId === 'ca-weather-prediction' && st.forecast && st.weekTrend) {
             var f = st.forecast, w = st.weekTrend;
@@ -317,12 +285,20 @@
     /* ------------------------------------------------------------------
        Render into #ca-summary
        ------------------------------------------------------------------ */
-    function showCard() { card.style.display = ''; card.hidden = false; }
+    function showCard() { if (card) { card.style.display = ''; card.hidden = false; } }
     function renderBox(inner, isError) {
-        showCard();
-        body.innerHTML = inner;
-        card.classList.toggle('is-error', !!isError);
-        card.classList.toggle('is-loading', !isError && inner.indexOf('Analyzing') === 0);
+        if (card && body) {
+            showCard();
+            body.innerHTML = inner;
+            card.classList.toggle('is-error', !!isError);
+            card.classList.toggle('is-loading', !isError && inner.indexOf('Analyzing') === 0);
+            return;
+        }
+        /* No summary card in this layout: the overview lives in the
+           prediction panel under the calendar, as plain readable text. */
+        var pre = document.querySelector('.ca-mlp-json');
+        if (pre) pre.textContent = inner.replace(/<[^>]*>/g, ' ')
+            .replace(/\s+/g, ' ').trim();
     }
     function esc(s) {
         return String(s).replace(/[&<>"']/g, function (c) {

@@ -306,15 +306,57 @@
     box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
-/* Month / year label */
-.ca-calendar__month-label {
-    text-align: center;
+/* Year | month selectors (side by side) */
+.ca-calendar__selectors {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.ca-calendar__year-select,
+.ca-calendar__month-select {
+    appearance: none;
+    -webkit-appearance: none;
+
+    padding: 5px 22px 5px 10px;
+
     font-size: 13px;
     font-weight: 600;
     color: #cfeaff;
     letter-spacing: 0.3px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid rgba(116, 174, 213, 0.10);
+
+    background:
+        url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%2374aed5' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 7px center / 10px,
+        rgba(8, 26, 42, 0.72);
+    border: 1px solid rgba(116, 174, 213, 0.18);
+    border-radius: 8px;
+    cursor: pointer;
+
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.ca-calendar__year-select:hover,
+.ca-calendar__month-select:hover {
+    border-color: rgba(33, 169, 255, 0.45);
+}
+
+.ca-calendar__year-select:focus,
+.ca-calendar__month-select:focus {
+    outline: none;
+    border-color: rgba(33, 169, 255, 0.6);
+}
+
+.ca-calendar__year-select option,
+.ca-calendar__month-select option {
+    background: #0b1c30;
+    color: #cfeaff;
+}
+
+.ca-calendar__selector-divider {
+    width: 1px;
+    height: 18px;
+    background: rgba(116, 174, 213, 0.25);
 }
 
 /* Weekday headers */
@@ -388,13 +430,6 @@
     box-shadow: 0 2px 8px rgba(33, 169, 255, 0.3);
 }
 
-/* Range between start and end */
-.ca-calendar__day.is-in-range {
-    background: rgba(33, 169, 255, 0.14);
-    color: #cfeaff;
-    border-radius: 4px;
-}
-
 /* Month / Year picker cells (3×4 grid) */
 .ca-calendar__cell--large {
     aspect-ratio: auto;
@@ -409,17 +444,38 @@
     align-content: center;
 }
 
-/* Make month-year label look clickable */
-.ca-calendar__month-label {
-    cursor: pointer;
+/* MLP prediction overview — raw model output as JSON text */
+.ca-mlp-overview {
+    flex: 0 0 auto;
+
+    padding: 14px 16px;
+
+    background: linear-gradient(150deg, rgba(24, 47, 67, 0.72), rgba(8, 27, 44, 0.82));
+    border: 1px solid rgba(105, 158, 196, 0.20);
+    border-radius: 14px;
 }
 
-.ca-calendar__month-label:hover {
-    color: #21a9ff;
+.ca-mlp-overview__title {
+    margin: 0 0 8px;
+
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #eef6ff;
+    letter-spacing: 0.2px;
 }
 
-/* Generate Analysis button */
-.ca-generate-btn {
+.ca-mlp-json {
+    margin: 0;
+
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #9fd8ff;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Generate Analysis button */.ca-generate-btn {
     flex: 0 0 auto;
 
     display: flex;

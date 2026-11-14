@@ -31,13 +31,13 @@
     <!-- Popular cities sidebar section -->
     <link rel="stylesheet" href="../css/popular-cities.css?v=20261102-1">
     <!-- Climate Analysis module styles -->
-    <link rel="stylesheet" href="./climate-analysis.css?v=20261113-2">
+    <link rel="stylesheet" href="./climate-analysis.css?v=20261115-2">
     <!-- Climate Trend tab styles -->
     <link rel="stylesheet" href="./climate-trend.css">
     <!-- AQI Outlook tab styles -->
-    <link rel="stylesheet" href="./aqi-outlook.css?v=20261112-2">
+    <link rel="stylesheet" href="./aqi-outlook.css?v=20261115-2">
     <!-- Weather Prediction tab styles -->
-    <link rel="stylesheet" href="./weather-prediction.css?v=20261113-2">
+    <link rel="stylesheet" href="./weather-prediction.css?v=20261115-2">
 
     <!-- Page-specific overrides: make Climate Analysis always visible on this page -->
     <style>
@@ -289,7 +289,7 @@
 
                         <!-- Calendar header with navigation -->
                         <div class="ca-calendar__header">
-                            <h3 class="ca-calendar__title">Select Date Range</h3>
+                            <h3 class="ca-calendar__title">Select Prediction Date</h3>
                             <div class="ca-calendar__nav">
                                 <button class="ca-calendar__nav-btn" type="button" aria-label="Previous month">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
@@ -302,13 +302,23 @@
 
                         <!-- Calendar grid container -->
                         <div class="ca-calendar__grid" role="grid" aria-label="Date selection calendar">
-                            <div class="ca-calendar__month-label"></div>
+                            <div class="ca-calendar__selectors">
+                                <select class="ca-calendar__year-select" aria-label="Select year"></select>
+                                <span class="ca-calendar__selector-divider" aria-hidden="true"></span>
+                                <select class="ca-calendar__month-select" aria-label="Select month"></select>
+                            </div>
                             <div class="ca-calendar__weekdays">
                                 <span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span>
                             </div>
                             <div class="ca-calendar__days"></div>
                         </div>
 
+                    </div>
+
+                    <!-- MLP prediction overview (raw model output, JSON) -->
+                    <div class="ca-mlp-overview" aria-label="Trained model prediction overview">
+                        <h4 class="ca-mlp-overview__title">MLP Prediction Overview</h4>
+                        <pre class="ca-mlp-json">// No MLP prediction yet — pick a prediction date in the calendar.</pre>
                     </div>
 
                     <!-- Generate Analysis button -->
@@ -319,19 +329,6 @@
                         </svg>
                         Generate Analysis
                     </button>
-
-                    <!-- AI Summary card (shown after generate) -->
-                    <div class="ca-summary" id="ca-summary" style="display:none;">
-                        <div class="ca-summary__header">
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
-                            </svg>
-                            <span>AI Summary</span>
-                        </div>
-                        <div class="ca-summary__body" id="ca-summary-body">
-                            <!-- Filled by JS -->
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Right: dynamic tabbed content -->
@@ -418,13 +415,13 @@
     <script src="../js/popular-cities.js?v=20261102-1" defer></script>
     <script src="../js/sidebar-active.js?v=20261112-2" defer></script>
     <!-- Climate Analysis module -->
-    <script src="./climate-analysis.js?v=20261113-2" defer></script>
-    <script src="./analysis-overview.js?v=20261113-3" defer></script>
+    <script src="./climate-analysis.js?v=20261115-2" defer></script>
+    <script src="./analysis-overview.js?v=20261115-6" defer></script>
     <!-- Climate Trend tab -->
-    <script src="./climate-trend.js?v=20261113-2" defer></script>
+    <script src="./climate-trend.js?v=20261115-4" defer></script>
     <!-- Weather Prediction tab -->
-    <script src="./weather-prediction.js?v=20261113-4" defer></script>
+    <script src="./weather-prediction.js?v=20261115-5" defer></script>
     <!-- AQI Outlook tab -->
-    <script src="./aqi-outlook.js?v=20261113-2" defer></script>
+    <script src="./aqi-outlook.js?v=20261115-4" defer></script>
 </body>
 </html>

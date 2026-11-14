@@ -121,6 +121,62 @@ def summarize(values: list[float]) -> VariableStats | None:
     return VariableStats(round(mean, 2), round(std, 2), min(values), max(values), len(values))
 
 
+def hourly_temperatures(prediction: dict, target_iso: str,
+                        provider_hourly: dict) -> list[dict]:
+    """24 temperature points for the predicted day (the one custom day).
+
+    Prefers the provider's real hourly curve, re-centred so its mean
+    matches the blended daily mean. When no provider hourly exists for
+    the date (archive targets), a standard shape-of-day curve is derived
+    from the predicted min/mean/max instead (coldest ~03:00, warmest
+    ~15:00) — the magnitude always comes from the prediction itself.
+    """
+    mean = prediction.get("temperature")
+    hi = prediction.get("max_temperature")
+    lo = prediction.get("min_temperature")
+    if mean is None or hi is None or lo is None:
+        return []
+    day = provider_hourly.get(target_iso) or []
+    day = [point for point in day if point.get("c") is not None]
+    if len(day) >= 20:
+        values = [point["c"] for point in day]
+        shift = mean - (sum(values) / len(values))
+        return [{"hour": point["hour"],
+                 "c": round(clamp(point["c"] + shift, -90.0, 60.0), 1)}
+                for point in day]
+    amplitude = hi - lo
+    points: list[dict] = []
+    for hour in range(24):
+        # 0 at 03:00 (coldest → predicted min) → 1 at 15:00 (warmest → max)
+        shape = 0.5 * (1.0 - math.cos(2.0 * math.pi * ((hour - 3) % 24) / 24.0))
+        points.append({
+            "hour": f"{hour:02d}:00",
+            "c": round(clamp(lo + amplitude * shape, -90.0, 60.0), 1),
+        })
+    return points
+
+
+def hourly_series(provider_hourly: dict, target_iso: str, key: str,
+                  fill: float | None) -> list[dict]:
+    """One provider variable's 24 hourly points for the predicted day.
+
+    `fill` pads missing hours so the chart keeps its 0–24h axis.
+    """
+    day = provider_hourly.get(target_iso) or []
+    if not day:
+        return []
+    points: list[dict] = []
+    for hour in range(24):
+        label = f"{hour:02d}:00"
+        match = next((p for p in day if p["hour"] == label), None)
+        value = match.get(key) if match else None
+        if value is None and fill is not None:
+            value = fill
+        points.append({"hour": label,
+                       "v": round(value, 1) if isinstance(value, float) else value})
+    return points
+
+
 def model_weight(validation_mae: float | None) -> float:
     """Share of the trained MLP inside the climatology term (0 = ignore it).
 
@@ -271,13 +327,14 @@ class ClimatePredictService:
 
     # ------------------------------------------------------------------ fetch
 
-    async def _forecast(self, lat: float, lon: float, start: date_type, end: date_type) -> dict:
+    async def _forecast(self, lat: float, lon: float, start: date_type, end: date_type) -> tuple[dict, dict]:
         data = await self._open_meteo(
             self.settings.openmeteo_forecast_url,
             {
                 "latitude": lat,
                 "longitude": lon,
                 "daily": ",".join(VARIABLES) + "," + ",".join(FORECAST_ONLY_VARS),
+                "hourly": "temperature_2m,relative_humidity_2m,precipitation",
                 "timezone": "auto",
                 "start_date": start.isoformat(),
                 "end_date": end.isoformat(),
@@ -295,7 +352,25 @@ class ClimatePredictService:
             rows[day] = row
         if not rows:
             raise ClimatePredictError("Provider returned no forecast rows")
-        return rows
+        hourly: dict[str, list] = {}
+        hourly_block = data.get("hourly") or {}
+        hourly_times = hourly_block.get("time") or []
+        hourly_values = hourly_block.get("temperature_2m") or []
+        humidity_values = hourly_block.get("relative_humidity_2m") or []
+        rain_values = hourly_block.get("precipitation") or []
+
+        def hourly_at(values: list, index: int) -> float | None:
+            finite = _finite(values[index:index + 1])
+            return finite[0] if finite else None
+
+        for index, stamp in enumerate(hourly_times):
+            hourly.setdefault(stamp[:10], []).append({
+                "hour": stamp[11:16],
+                "c": hourly_at(hourly_values, index),
+                "rh": hourly_at(humidity_values, index),
+                "pr": hourly_at(rain_values, index),
+            })
+        return rows, hourly
 
     def _history_params(self, lat: float, lon: float, start: date_type, end: date_type) -> dict:
         return {
@@ -420,6 +495,43 @@ class ClimatePredictService:
         except (ClimatePredictError, TypeError, ValueError):
             return None
 
+    async def _hourly_aqi(self, lat: float, lon: float, target: date_type) -> dict:
+        """Hourly US-AQI + pollutants for the predicted day (never breaks a request)."""
+        try:
+            data = await self._open_meteo(
+                self.settings.openmeteo_air_quality_url,
+                {
+                    "latitude": lat, "longitude": lon,
+                    "hourly": "us_aqi,pm2_5,pm10,nitrogen_dioxide",
+                    "timezone": "auto",
+                    "start_date": target.isoformat(),
+                    "end_date": target.isoformat(),
+                },
+            )
+            block = data.get("hourly") or {}
+            times = block.get("time") or []
+
+            def series(key: str) -> list[dict]:
+                values = block.get(key) or []
+                points: list[dict] = []
+                for index, stamp in enumerate(times):
+                    finite = _finite(values[index:index + 1])
+                    value = finite[0] if finite else None
+                    points.append({
+                        "hour": stamp[11:16],
+                        "v": round(value, 1) if value is not None else None,
+                    })
+                return points
+
+            return {
+                "us_aqi": series("us_aqi"),
+                "pm2_5": series("pm2_5"),
+                "pm10": series("pm10"),
+                "nitrogen_dioxide": series("nitrogen_dioxide"),
+            }
+        except (ClimatePredictError, TypeError, ValueError):
+            return {}
+
     # ------------------------------------------------------------------- agent
 
     async def _agent_adjust(self, payload: dict) -> dict | None:
@@ -466,10 +578,20 @@ class ClimatePredictService:
         window_start = target - timedelta(days=HISTORY_WINDOW_DAYS)
         window_end = target + timedelta(days=HISTORY_WINDOW_DAYS)
 
-        forecast_rows, aqi = await asyncio.gather(
+        forecast_res, aqi, hourly_aqi = await asyncio.gather(
             self._forecast(lat, lon, today, trend_end),
             self._current_aqi(lat, lon),
+            self._hourly_aqi(lat, lon, target),
         )
+        forecast_rows, provider_hourly = forecast_res
+        hourly_aqi_series = hourly_aqi.get("us_aqi") or []
+        if aqi is not None and not any(
+                point.get("v") is not None for point in hourly_aqi_series):
+            # Provider hourly AQI not available for this day (beyond the
+            # air-quality forecast horizon): hold the daily value flat so
+            # the chart keeps its 0–24h axis.
+            hourly_aqi_series = [{"hour": f"{hour:02d}:00", "v": round(aqi, 1)}
+                                 for hour in range(24)]
         provider_row = forecast_rows.get(target.isoformat())
         if provider_row is None:
             raise ClimatePredictError("Provider returned no row for the target date")
@@ -663,6 +785,16 @@ class ClimatePredictService:
                 "minTemperature": prediction["min_temperature"],
             },
             "temperatureTrend": trend,
+            "hourlyTemperatures": hourly_temperatures(
+                prediction, target.isoformat(), provider_hourly),
+            "hourlyHumidity": hourly_series(
+                provider_hourly, target.isoformat(), "rh", None),
+            "hourlyRainfall": hourly_series(
+                provider_hourly, target.isoformat(), "pr", 0.0),
+            "hourlyAqi": hourly_aqi_series,
+            "hourlyPm25": hourly_aqi.get("pm2_5") or [],
+            "hourlyPm10": hourly_aqi.get("pm10") or [],
+            "hourlyNo2": hourly_aqi.get("nitrogen_dioxide") or [],
             "aiInsight": insight,
         }
         if ai_model is not None:

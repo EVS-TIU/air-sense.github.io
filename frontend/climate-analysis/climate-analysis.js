@@ -82,12 +82,14 @@
     }
 
     /* ------------------------------------------------------------------
-       Calendar — date-range picker with Day / Month / Year views
-       Click the month-year label to drill up:  Days → Months → Years
+       Calendar — single custom-day picker
+       Year | month dropdowns choose the month; clicking a day selects
+       exactly one prediction target date.
        ------------------------------------------------------------------ */
 
     var calendarCard  = section.querySelector('.ca-calendar-card');
-    var monthLabel    = section.querySelector('.ca-calendar__month-label');
+    var yearSelect    = section.querySelector('.ca-calendar__year-select');
+    var monthSelect   = section.querySelector('.ca-calendar__month-select');
     var weekdaysRow   = section.querySelector('.ca-calendar__weekdays');
     var daysContainer = section.querySelector('.ca-calendar__days');
     var prevBtn       = calendarCard ? calendarCard.querySelector('.ca-calendar__nav-btn[aria-label="Previous month"]') : null;
@@ -97,21 +99,17 @@
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
     ];
-    var MONTH_SHORT = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
 
     var today      = new Date();
     var viewYear   = today.getFullYear();
     var viewMonth  = today.getMonth();
-    var rangeStart = null;
-    var rangeEnd   = null;
+    var selectedDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-    // 'days' | 'months' | 'years'
-    var calendarView = 'days';
-    // Base year for the 12-year grid
-    var yearRangeStart = viewYear - 5;
+    // Scrollable year span: first year of the archive data through a
+    // decade ahead — this is a prediction tab, so future possibilities
+    // must be selectable.
+    var FIRST_DATA_YEAR = 2005;
+    var FUTURE_YEARS = 10;
 
     function isSameDay(a, b) {
         return a && b &&
@@ -120,21 +118,54 @@
             a.getDate() === b.getDate();
     }
 
-    function isBetween(date, start, end) {
-        if (!start || !end) return false;
-        var t = date.getTime();
-        var s = Math.min(start.getTime(), end.getTime());
-        var e = Math.max(start.getTime(), end.getTime());
-        return t > s && t < e;
+    // Local-calendar ISO date. toISOString() shifts by the UTC offset,
+    // which made every day cell one day early in UTC+5:30.
+    function localISO(d) {
+        var month = d.getMonth() + 1;
+        var day = d.getDate();
+        return d.getFullYear() + '-' + (month < 10 ? '0' + month : month) +
+               '-' + (day < 10 ? '0' + day : day);
+    }
+
+    /* ---------- Year | month dropdowns ---------- */
+
+    function initSelectors() {
+        if (!yearSelect || !monthSelect) return;
+
+        var years = '';
+        var lastYear = today.getFullYear() + FUTURE_YEARS;
+        for (var y = FIRST_DATA_YEAR; y <= lastYear; y++) {
+            years += '<option value="' + y + '"' + (y === viewYear ? ' selected' : '') + '>' + y + '</option>';
+        }
+        yearSelect.innerHTML = years;
+
+        var months = '';
+        for (var m = 0; m < 12; m++) {
+            months += '<option value="' + m + '"' + (m === viewMonth ? ' selected' : '') + '>' + MONTH_NAMES[m] + '</option>';
+        }
+        monthSelect.innerHTML = months;
+
+        yearSelect.addEventListener('change', function () {
+            viewYear = parseInt(yearSelect.value, 10);
+            renderCalendar();
+        });
+        monthSelect.addEventListener('change', function () {
+            viewMonth = parseInt(monthSelect.value, 10);
+            renderCalendar();
+        });
+    }
+
+    function syncSelectors() {
+        if (yearSelect && String(viewYear) !== yearSelect.value) yearSelect.value = String(viewYear);
+        if (monthSelect && String(viewMonth) !== monthSelect.value) monthSelect.value = String(viewMonth);
     }
 
     /* ---------- Day view ---------- */
 
     function renderDays() {
-        if (!monthLabel || !daysContainer) return;
+        if (!daysContainer) return;
 
-        monthLabel.textContent = MONTH_NAMES[viewMonth] + ' ' + viewYear;
-        monthLabel.style.cursor = 'pointer';
+        syncSelectors();
         if (weekdaysRow) weekdaysRow.style.display = '';
 
         var firstDay      = new Date(viewYear, viewMonth, 1);
@@ -147,135 +178,57 @@
         for (var p = startOffset - 1; p >= 0; p--) {
             var pDay = prevMonthDays - p;
             html += '<span class="ca-calendar__day is-outside" data-date="' +
-                new Date(viewYear, viewMonth - 1, pDay).toISOString().slice(0, 10) +
+                localISO(new Date(viewYear, viewMonth - 1, pDay)) +
                 '">' + pDay + '</span>';
         }
 
         for (var d = 1; d <= daysInMonth; d++) {
             var date = new Date(viewYear, viewMonth, d);
             var cls  = 'ca-calendar__day';
-            if (isSameDay(date, today))      cls += ' is-today';
-            if (isSameDay(date, rangeStart))  cls += ' is-selected';
-            if (isSameDay(date, rangeEnd))    cls += ' is-selected';
-            if (isBetween(date, rangeStart, rangeEnd)) cls += ' is-in-range';
+            if (isSameDay(date, today))          cls += ' is-today';
+            if (isSameDay(date, selectedDate))   cls += ' is-selected';
 
             html += '<span class="' + cls + '" data-date="' +
-                date.toISOString().slice(0, 10) + '">' + d + '</span>';
+                localISO(date) + '">' + d + '</span>';
         }
 
         var totalCells = startOffset + daysInMonth;
         var remaining  = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
         for (var n = 1; n <= remaining; n++) {
             html += '<span class="ca-calendar__day is-outside" data-date="' +
-                new Date(viewYear, viewMonth + 1, n).toISOString().slice(0, 10) +
+                localISO(new Date(viewYear, viewMonth + 1, n)) +
                 '">' + n + '</span>';
         }
 
         daysContainer.innerHTML = html;
     }
 
-    /* ---------- Month view ---------- */
-
-    function renderMonths() {
-        if (!monthLabel || !daysContainer) return;
-
-        monthLabel.textContent = String(viewYear);
-        monthLabel.style.cursor = 'pointer';
-        if (weekdaysRow) weekdaysRow.style.display = 'none';
-
-        var html = '';
-        for (var m = 0; m < 12; m++) {
-            var cls = 'ca-calendar__day ca-calendar__cell--large';
-            if (m === today.getMonth() && viewYear === today.getFullYear()) cls += ' is-today';
-            html += '<span class="' + cls + '" data-month="' + m + '">' + MONTH_SHORT[m] + '</span>';
-        }
-        daysContainer.innerHTML = html;
-    }
-
-    /* ---------- Year view ---------- */
-
-    function renderYears() {
-        if (!monthLabel || !daysContainer) return;
-
-        var end = yearRangeStart + 11;
-        monthLabel.textContent = yearRangeStart + ' – ' + end;
-        monthLabel.style.cursor = 'default';
-        if (weekdaysRow) weekdaysRow.style.display = 'none';
-
-        var html = '';
-        for (var y = yearRangeStart; y <= end; y++) {
-            var cls = 'ca-calendar__day ca-calendar__cell--large';
-            if (y === today.getFullYear()) cls += ' is-today';
-            html += '<span class="' + cls + '" data-year="' + y + '">' + y + '</span>';
-        }
-        daysContainer.innerHTML = html;
-    }
-
     /* ---------- Unified render ---------- */
 
     function renderCalendar() {
-        if (calendarView === 'years')  renderYears();
-        else if (calendarView === 'months') renderMonths();
-        else renderDays();
+        renderDays();
     }
 
-    /* ---------- Click: month-year label to drill up ---------- */
-
-    if (monthLabel) {
-        monthLabel.addEventListener('click', function () {
-            if (calendarView === 'days') {
-                calendarView = 'months';
-            } else if (calendarView === 'months') {
-                calendarView = 'years';
-                yearRangeStart = viewYear - 5;
-            }
-            renderCalendar();
-        });
-    }
-
-    /* ---------- Click: day / month / year cells ---------- */
+    /* ---------- Click: day cells (single-day selection) ---------- */
 
     if (daysContainer) {
         daysContainer.addEventListener('click', function (e) {
             var cell = e.target.closest('.ca-calendar__day');
             if (!cell) return;
 
-            // Year view → pick year → go to month view
-            if (cell.dataset.year !== undefined) {
-                viewYear = parseInt(cell.dataset.year, 10);
-                calendarView = 'months';
-                renderCalendar();
-                return;
-            }
-
-            // Month view → pick month → go to day view
-            if (cell.dataset.month !== undefined) {
-                viewMonth = parseInt(cell.dataset.month, 10);
-                calendarView = 'days';
-                renderCalendar();
-                return;
-            }
-
-            // Day view → range selection
             if (!cell.dataset.date) return;
             var clicked = new Date(cell.dataset.date + 'T00:00:00');
-
-            if (!rangeStart || (rangeStart && rangeEnd)) {
-                rangeStart = clicked;
-                rangeEnd   = null;
-            } else {
-                if (clicked.getTime() < rangeStart.getTime()) {
-                    rangeEnd   = rangeStart;
-                    rangeStart = clicked;
-                } else {
-                    rangeEnd = clicked;
-                }
-            }
+            selectedDate = clicked;
 
             // If clicked day is in a different month, navigate there
             viewYear  = clicked.getFullYear();
             viewMonth = clicked.getMonth();
             renderCalendar();
+
+            // Tell the prediction tab to run the trained model for this day.
+            document.dispatchEvent(new CustomEvent('weatherly:prediction-date', {
+                detail: { date: localISO(clicked) }
+            }));
         });
     }
 
@@ -283,33 +236,30 @@
 
     if (prevBtn) {
         prevBtn.addEventListener('click', function () {
-            if (calendarView === 'years') {
-                yearRangeStart -= 12;
-            } else if (calendarView === 'months') {
-                viewYear--;
-            } else {
-                viewMonth--;
-                if (viewMonth < 0) { viewMonth = 11; viewYear--; }
-            }
+            viewMonth--;
+            if (viewMonth < 0) { viewMonth = 11; viewYear--; }
             renderCalendar();
         });
     }
 
     if (nextBtn) {
         nextBtn.addEventListener('click', function () {
-            if (calendarView === 'years') {
-                yearRangeStart += 12;
-            } else if (calendarView === 'months') {
-                viewYear++;
-            } else {
-                viewMonth++;
-                if (viewMonth > 11) { viewMonth = 0; viewYear++; }
-            }
+            viewMonth++;
+            if (viewMonth > 11) { viewMonth = 0; viewYear++; }
             renderCalendar();
         });
     }
 
     // Initial render
+    initSelectors();
     renderCalendar();
+
+    /* Public accessor: the single prediction target day, for the
+       Generate Analysis / prediction pipeline to consume. */
+    window.CaCalendar = {
+        getSelectedDate: function () {
+            return selectedDate ? localISO(selectedDate) : null;
+        }
+    };
 
 })();

@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     await app.state.weather.shutdown()
 
 
-app = FastAPI(title="AIR_SENSE Weather Intelligence API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="AIR_SENSE Weather Intelligence API", version="1.1.0", lifespan=lifespan)
 settings = get_settings()
 allowed_origins = [settings.frontend_url]
 deployed_frontend_origin = "https://air-sense-web.vercel.app"

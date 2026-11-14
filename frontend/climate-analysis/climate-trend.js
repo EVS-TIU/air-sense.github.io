@@ -1,12 +1,10 @@
 /* ==========================================================================
    Climate Trend tab — renders into #ca-climate-trend
-   Real Open-Meteo Archive API data (ERA5, same source as History Analysis):
-   - Annual average temperature  (mean of daily means)
-   - Annual rainfall             (sum of daily precipitation)
-   - Hot days (≥ 35 °C)          (count of daily maxima)
-   - Seasonal variation          (warmest vs coldest month of the year)
-   Only complete calendar years are shown; the running year is skipped.
-   The chart, KPI cards and insight react to the selected location.
+   One-custom-date view driven by the backend MLP prediction (no direct
+   external API calls): the Weather Prediction tab fans the prediction for
+   the picked calendar day out to this tab via the
+   weatherly:prediction-data / -blank / -error events, and this tab shows
+   that day's hourly temperature and rainfall in the same layout.
    ========================================================================== */
 (function () {
     'use strict';
@@ -15,18 +13,12 @@
     /* ------------------------------------------------------------------
        Data layer
        ------------------------------------------------------------------ */
-    var ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
-    // The ERA5 archive lags a few days behind real time; keep a safe margin.
-    var ARCHIVE_LAG_DAYS = 5;
-    var HISTORY_YEARS = 21;   // complete years to show
-    var HOT_DAY_C = 35;       // a day with max ≥ this counts as a "hot day"
     var LOCATION_KEY = 'airsense:selected-location';
 
     var locationName = 'Selected Location';
-    var loc = null;           // { lat, lon }
-    var data = null;          // { years, temps, rain, hotDays, seasonal, ranges }
+    var data = null;          // { years (hour labels), temps, rain, ranges } for the picked day
+    var meta = null;          // { date, temperature, tempMax, humidity[], insight }
     var activeRange = null;
-    var fetchId = 0;
     /* ------------------------------------------------------------------
        Icons (inline SVG, stroke-based to match the existing UI)
        ------------------------------------------------------------------ */
@@ -66,15 +58,15 @@
             '<div class="ct-stats" id="ct-stats"></div>' +
             '<div class="ct-charts">' +
                 '<article class="ct-chart">' +
-                    '<div class="ct-chart__head">' + ICON.thermoS + '<h4 class="ct-chart__title">Temperature Trend</h4></div>' +
+                    '<div class="ct-chart__head">' + ICON.thermoS + '<h4 class="ct-chart__title">Temperature by Hour</h4></div>' +
                     '<div class="ct-chart__plot" id="ct-temp-plot"></div>' +
-                    '<div class="ct-legend"><span class="ct-legend__item"><i class="ct-legend__dot"></i>Avg. Temperature</span></div>' +
+                    '<div class="ct-legend"><span class="ct-legend__item"><i class="ct-legend__dot"></i>Temperature (°C)</span></div>' +
                 '</article>' +
                 '<article class="ct-chart">' +
-                    '<div class="ct-chart__head">' + ICON.cloud + '<h4 class="ct-chart__title">Annual Rainfall Trend</h4><span class="ct-chip" id="ct-rain-avg"></span></div>' +
+                    '<div class="ct-chart__head">' + ICON.cloud + '<h4 class="ct-chart__title">Rainfall by Hour</h4><span class="ct-chip" id="ct-rain-avg"></span></div>' +
                     '<div class="ct-chart__plot" id="ct-rain-plot"></div>' +
                     '<div class="ct-legend">' +
-                        '<span class="ct-legend__item"><i class="ct-legend__sq"></i>Annual Rainfall</span>' +
+                        '<span class="ct-legend__item"><i class="ct-legend__sq"></i>Rainfall (mm)</span>' +
                         '<span class="ct-legend__item"><i class="ct-legend__dash"></i><span id="ct-trend-label"></span></span>' +
                     '</div>' +
                 '</article>' +
@@ -172,163 +164,86 @@
         return locObj.name + (region ? ', ' + region : '');
     }
     /* ------------------------------------------------------------------
-       Fetch + aggregate: daily values → complete calendar years
+       Data: fed from the backend MLP prediction (the Weather Prediction
+       tab fans it out) — no direct external API calls here.
        ------------------------------------------------------------------ */
-    function isoToday() { return new Date().toISOString().slice(0, 10); }
-    function isoShift(iso, days) {
-        var d = new Date(iso + 'T00:00:00Z');
-        d.setUTCDate(d.getUTCDate() + days);
-        return d.toISOString().slice(0, 10);
-    }
-    function aggregate(body) {
-        var tMean = body.daily.temperature_2m_mean;
-        var tMax = body.daily.temperature_2m_max;
-        var rain = body.daily.precipitation_sum;
-        var days = body.daily.time;
-        var buckets = {};   // year → { days:n, tSum, tN, rainSum, hot, monthMeans }
-        for (var i = 0; i < days.length; i++) {
-            var day = days[i];
-            var vT = tMean[i], vX = tMax[i], vR = rain[i];
-            var year = day.slice(0, 4);
-            var month = Number(day.slice(5, 7));
-            var b = buckets[year];
-            if (!b) { b = buckets[year] = { days: 0, tSum: 0, tN: 0, rainSum: 0, hot: 0, months: {} }; }
-            b.days += 1;
-            if (vT !== null && vT !== undefined) { b.tSum += vT; b.tN += 1; }
-            if (vR !== null && vR !== undefined) { b.rainSum += vR; }
-            if (vX !== null && vX !== undefined && vX >= HOT_DAY_C) { b.hot += 1; }
-            if (vT !== null && vT !== undefined) {
-                var m = b.months[month] || (b.months[month] = { sum: 0, n: 0 });
-                m.sum += vT; m.n += 1;
-            }
-        }
-        var years = [], temps = [], rainY = [], hot = [], seasonal = [];
-        Object.keys(buckets).sort().forEach(function (year) {
-            var b = buckets[year];
-            // Keep only complete calendar years (~330+ days of data).
-            if (b.days < 330 || b.tN === 0) return;
-            var monthMeans = Object.keys(b.months).map(function (mo) { return b.months[mo].sum / b.months[mo].n; });
-            if (monthMeans.length < 6) return; // not enough months for a seasonal read
-            years.push(Number(year));
-            temps.push(b.tSum / b.tN);
-            rainY.push(b.rainSum);
-            hot.push(b.hot);
-            seasonal.push(Math.max.apply(null, monthMeans) - Math.min.apply(null, monthMeans));
+    function hourlyValues(list, key) {
+        return (list || []).map(function (p) {
+            var v = p[key];
+            return v === null || v === undefined ? 0 : v;
         });
-        if (years.length < 2) return null;
-        return { years: years, temps: temps, rain: rainY, hotDays: hot, seasonal: seasonal };
     }
-    // Half-mean comparison (same logic as History Analysis trend stat).
-    function halfMeanChange(values) {
-        var half = Math.floor(values.length / 2);
-        var mean = function (arr) { return arr.reduce(function (a, b) { return a + b; }, 0) / (arr.length || 1); };
-        var before = mean(values.slice(0, half));
-        var after = mean(values.slice(values.length - half));
-        return { change: after - before, before: before, after: after };
-    }
-    function pct(before, after) {
-        if (!before) return 0;
-        return ((after - before) / Math.abs(before)) * 100;
-    }
-    function buildData(agg) {
-        var years = agg.years;
-        var total = years.length;
-        function rangeDef(trailing, label) {
-            var n = Math.min(trailing, total);
-            var from = total - n;
-            var slice = function (arr) { return arr.slice(from); };
-            var t = halfMeanChange(slice(agg.temps));
-            var r = halfMeanChange(slice(agg.rain));
-            var h = halfMeanChange(slice(agg.hotDays));
-            return {
-                id: 'y' + trailing,
-                years: n,
-                label: years[from] + ' \u2013 ' + years[total - 1] + ' (' + label + ')',
-                summary: {
-                    tempChange: t.change,
-                    rainTrend: pct(r.before, r.after),
-                    hotDays: h.change,
-                    seasonal: slice(agg.seasonal).reduce(function (a, b) { return a + b; }, 0) / n
-                }
-            };
-        }
-        return {
-            years: years,
-            temps: agg.temps,
-            rain: agg.rain,
-            ranges: [rangeDef(total, 'Long term'), rangeDef(11, 'Historical'), rangeDef(6, 'Recent')]
+    function mountPrediction(detail) {
+        detail = detail || {};
+        var f = detail.forecast || {};
+        var hours = (detail.hourlyTemperatures || []).map(function (p) { return p.hour; });
+        if (hours.length < 2) { resetToBlank(); return; }
+        data = {
+            years: hours,
+            temps: hourlyValues(detail.hourlyTemperatures, 'c'),
+            rain: hourlyValues(detail.hourlyRainfall, 'v'),
+            ranges: [{ id: 'day', years: hours.length, label: f.date || 'picked day', summary: {} }]
         };
-    }
-    async function fetchClimate() {
-        if (!loc) return;
-        var myId = ++fetchId;
-        setStatus('Loading climate data for ' + locationName + '\u2026');
-        try {
-            var end = isoShift(isoToday(), -ARCHIVE_LAG_DAYS);
-            var startYear = new Date().getUTCFullYear() - HISTORY_YEARS;
-            var url = new URL(ARCHIVE_URL);
-            url.searchParams.set('latitude', loc.lat.toFixed(4));
-            url.searchParams.set('longitude', loc.lon.toFixed(4));
-            url.searchParams.set('start_date', startYear + '-01-01');
-            url.searchParams.set('end_date', end);
-            url.searchParams.set('daily', 'temperature_2m_mean,temperature_2m_max,precipitation_sum');
-            url.searchParams.set('timezone', 'auto');
-            var res = await fetch(url.toString());
-            var body = await res.json();
-            if (myId !== fetchId) return;
-            if (body.error) throw new Error(body.reason || 'Open-Meteo request failed');
-            var agg = aggregate(body);
-            if (!agg) throw new Error('Not enough historical data for this location');
-            data = buildData(agg);
-            activeRange = data.ranges[0].id;
-            els.rangeBtn.disabled = false;
-            buildMenu();
-            renderAll();
-            setStatus('');
-        } catch (err) {
-            if (myId !== fetchId) return;
-            console.warn('Climate Trend load failed:', err);
-            setStatus('Could not load climate data: ' + (err.message || err), 'error');
-        }
-    }
-    function setLocation(detail) {
-        if (!detail || typeof detail !== 'object') return;
-        var lat = Number(detail.lat !== undefined ? detail.lat : detail.latitude);
-        var lon = Number(detail.lon !== undefined ? detail.lon : detail.longitude);
-        var name = String(detail.name || detail.city || '').trim();
-        if (!name || /^(current location|device location)$/i.test(name)) return;
-        var nextName = labelFor(detail);
-        var nextLoc = Number.isFinite(lat) && Number.isFinite(lon) ? { lat: lat, lon: lon } : null;
-        if (nextName === locationName && (!nextLoc || (loc && nextLoc.lat === loc.lat && nextLoc.lon === loc.lon))) return;
-        locationName = nextName;
-        loc = nextLoc || readLocation();
-        data = null;
+        meta = {
+            date: f.date,
+            temperature: f.temperature,
+            tempMax: f.max_temperature,
+            humidity: detail.hourlyHumidity || [],
+            insight: detail.aiInsight || ''
+        };
+        activeRange = 'day';
         els.rangeBtn.disabled = true;
+        buildMenu();
+        renderAll();
+        setStatus('');
+    }
+    function resetToBlank() {
+        data = null;
+        meta = null;
+        activeRange = null;
+        els.rangeBtn.disabled = true;
+        els.rangeLbl.textContent = '';
         els.stats.innerHTML = '';
         els.tempPlot.innerHTML = '';
         els.rainPlot.innerHTML = '';
         els.rainAvg.textContent = '';
         els.trendLbl.textContent = '';
         els.insight.textContent = '';
-        if (!loc) {
-            setStatus('No coordinates for ' + locationName + ' yet — pick a location first.', 'error');
-            return;
-        }
-        fetchClimate();
+        els.sub.textContent = 'Pick a prediction date in the calendar to see its climate.';
+        setStatus('');
+    }
+    function setLocation(detail) {
+        if (!detail || typeof detail !== 'object') return;
+        var name = String(detail.name || detail.city || '').trim();
+        if (!name || /^(current location|device location)$/i.test(name)) return;
+        var nextName = labelFor(detail);
+        if (nextName === locationName) return;
+        locationName = nextName;
+        /* No fetching here: the Weather Prediction tab owns the prediction
+           and fans the data out — clear the day until its next fan-out. */
+        resetToBlank();
+        els.sub.textContent = locationName + ' — pick a prediction date in the calendar.';
     }
     /* ------------------------------------------------------------------
        Render: header, KPI cards, insight
        ------------------------------------------------------------------ */
     function renderText() {
         var c = current();
-        var s = c.range.summary;
-        els.sub.textContent = 'Real climate history (Open-Meteo ERA5 archive) for ' + locationName + '.';
-        els.rangeLbl.textContent = c.range.label;
+        els.sub.textContent = 'MLP-model prediction for ' + locationName +
+            (meta && meta.date ? ' \u00B7 ' + meta.date : '') + '.';
+        els.rangeLbl.textContent = (meta && meta.date) || '';
+        var humMean = null;
+        if (meta) {
+            var hum = meta.humidity.map(function (p) { return p.v; })
+                .filter(function (v) { return v !== null && v !== undefined; });
+            if (hum.length) humMean = hum.reduce(function (a, b) { return a + b; }, 0) / hum.length;
+        }
+        var rainTotal = c.rain.reduce(function (a, b) { return a + b; }, 0);
         var cards = [
-            { cls: 'heat',   icon: ICON.thermo, label: 'Avg. Temp Change',     value: signed(s.tempChange, 2, '\u00B0C'),  badge: s.tempChange >= 0 ? ICON.up : ICON.down },
-            { cls: 'rain',   icon: ICON.rain,   label: 'Annual Rainfall Trend', value: signed(s.rainTrend, 1, '%'),         badge: s.rainTrend < 0 ? ICON.down : ICON.up },
-            { cls: 'hot',    icon: ICON.sun,    label: 'Hot Days (\u2265 35\u00B0C)', value: signed(s.hotDays, 0, ' days'), badge: s.hotDays >= 0 ? ICON.up : ICON.down },
-            { cls: 'season', icon: ICON.layers, label: 'Seasonal Variation',    value: '\u00B1' + s.seasonal.toFixed(1) + '\u00B0C', badge: '' }
+            { cls: 'heat',   icon: ICON.thermo, label: 'Day Temperature',  value: meta && meta.temperature != null ? meta.temperature.toFixed(1) + '\u00B0C' : 'n/a', badge: '' },
+            { cls: 'rain',   icon: ICON.rain,   label: 'Rainfall Total',   value: fmt(rainTotal) + ' mm', badge: '' },
+            { cls: 'hot',    icon: ICON.sun,    label: 'Peak Temperature', value: meta && meta.tempMax != null ? meta.tempMax.toFixed(1) + '\u00B0C' : 'n/a', badge: '' },
+            { cls: 'season', icon: ICON.layers, label: 'Avg Humidity',     value: humMean !== null ? Math.round(humMean) + '%' : 'n/a', badge: '' }
         ];
         els.stats.innerHTML = cards.map(function (k) {
             return '<div class="ct-stat ct-stat--' + k.cls + '">' + k.icon +
@@ -337,16 +252,17 @@
                 (k.badge ? '<span class="ct-stat__badge">' + k.badge + '</span>' : '') +
                 '</div>';
         }).join('');
-        var avg = c.rain.reduce(function (a, b) { return a + b; }, 0) / c.rain.length;
-        els.rainAvg.textContent = 'Avg: ' + fmt(avg) + ' mm';
-        els.trendLbl.textContent = 'Trend (' + signed(s.rainTrend, 1, '%').replace('+', '') + ')';
-        els.insight.textContent =
-            locationName.split(',')[0] + ' has ' + (s.tempChange >= 0 ? 'warmed' : 'cooled') + ' by ~' +
-            Math.abs(s.tempChange).toFixed(2) + '\u00B0C over this period, with a ~' +
-            Math.abs(s.rainTrend).toFixed(1) + '% ' + (s.rainTrend < 0 ? 'decline' : 'increase') +
-            ' in annual rainfall. The number of hot days (\u2265 35\u00B0C) has ' +
-            (s.hotDays >= 0 ? 'increased' : 'decreased') + ' by ~' + Math.abs(Math.round(s.hotDays)) +
-            ' days. Source: Open-Meteo ERA5 archive, complete years ' + c.years[0] + '\u2013' + c.years[c.years.length - 1] + '.';
+        els.rainAvg.textContent = 'Total: ' + fmt(rainTotal) + ' mm';
+        els.trendLbl.textContent = 'hourly';
+        if (meta && meta.insight) {
+            els.insight.textContent = meta.insight;
+        } else {
+            els.insight.textContent = locationName.split(',')[0] + ' on ' +
+                ((meta && meta.date) || 'the picked day') + ': about ' +
+                (meta && meta.temperature != null ? meta.temperature.toFixed(1) : 'n/a') + '\u00B0C on average, peaking near ' +
+                (meta && meta.tempMax != null ? meta.tempMax.toFixed(1) : 'n/a') + '\u00B0C, with ' +
+                fmt(rainTotal) + ' mm of rain across the 24 hours. Source: trained MLP prediction model.';
+        }
     }
     /* ------------------------------------------------------------------
        Render: temperature area chart
@@ -364,7 +280,7 @@
         function Y(v) { return m.t + ph - ((v - sc.lo) / (sc.hi - sc.lo)) * ph; }
         plot.innerHTML = '';
         var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img',
-            'aria-label': 'Average temperature by year, ' + c.years[0] + ' to ' + c.years[n - 1] });
+            'aria-label': 'Hourly temperature for the picked day' });
         plot.appendChild(svg);
         var defs = svgEl('defs');
         var grad = svgEl('linearGradient', { id: 'ct-grad-temp', x1: 0, y1: 0, x2: 0, y2: 1 });
@@ -437,7 +353,7 @@
         function Y(v) { return m.t + ph - (v / max) * ph; }
         plot.innerHTML = '';
         var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img',
-            'aria-label': 'Annual rainfall by year, ' + c.years[0] + ' to ' + c.years[n - 1] });
+            'aria-label': 'Hourly rainfall for the picked day' });
         plot.appendChild(svg);
         var defs = svgEl('defs');
         var grad = svgEl('linearGradient', { id: 'ct-grad-rain', x1: 0, y1: 0, x2: 0, y2: 1 });
@@ -543,22 +459,24 @@
         setLocation: setLocation,
         // Overview feed for the Generate Analysis pipeline.
         getSeries: function () {
-            if (!data) return { tab: 'Climate Trend', ready: false, location: locationName };
-            var range = data.ranges.filter(function (r) { return r.id === activeRange; })[0] || data.ranges[0];
-            var n = Math.min(range.years, data.years.length);
-            var from = data.years.length - n;
-            var slice = function (arr) { return arr.slice(from); };
+            if (!data || !meta) return { tab: 'Climate Trend', ready: false, location: locationName };
+            var hum = meta.humidity.map(function (p) { return p.v; })
+                .filter(function (v) { return v !== null && v !== undefined; });
             return {
                 tab: 'Climate Trend',
                 ready: true,
                 location: locationName,
-                range: range.label,
-                years: slice(data.years),
-                temps: slice(data.temps),
-                rain: slice(data.rain),
-                hotDays: slice(data.hotDays),
-                seasonal: slice(data.seasonal),
-                summary: range.summary
+                date: meta.date,
+                years: data.years,     // hour labels (00:00–23:00)
+                temps: data.temps,     // hourly °C
+                rain: data.rain,       // hourly mm
+                humidity: meta.humidity,
+                stats: {
+                    temperature: meta.temperature,
+                    tempMax: meta.tempMax,
+                    rainfallTotal: Math.round(data.rain.reduce(function (a, b) { return a + b; }, 0) * 10) / 10,
+                    avgHumidity: hum.length ? Math.round(hum.reduce(function (a, b) { return a + b; }, 0) / hum.length) : null
+                }
             };
         },
         setData: function (next) {
@@ -571,8 +489,11 @@
         }
     };
     /* ------------------------------------------------------------------
-       Live location + initial load
+       Prediction fan-out + live location
        ------------------------------------------------------------------ */
+    document.addEventListener('weatherly:prediction-data', function (e) { mountPrediction(e.detail); });
+    document.addEventListener('weatherly:prediction-blank', resetToBlank);
+    document.addEventListener('weatherly:prediction-error', resetToBlank);
     document.addEventListener('weatherly:location-change', function (e) { setLocation(e.detail); });
     document.addEventListener('weatherly:device-location-active', function (e) { setLocation(e.detail); });
     var initial = window.WeatherlyTopbar && window.WeatherlyTopbar.getLocation();
@@ -591,7 +512,7 @@
             if (dflt && Number.isFinite(Number(dflt.latitude))) {
                 setLocation({ name: dflt.name, lat: Number(dflt.latitude), lon: Number(dflt.longitude) });
             } else {
-                setStatus('Pick a location to load its climate history.');
+                setStatus('Pick a prediction date in the calendar to see its climate.');
             }
         }
     }
