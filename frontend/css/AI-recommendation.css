@@ -56,9 +56,9 @@ h3 { font-size: 15px; }
 /* Sidebar visual tokens mirror css/style.css so the sidebar looks the same
    as on the dashboard pages (brand, location card, nav). */
 .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; letter-spacing: -0.4px; padding: 0 4px 18px; border-bottom: 1px solid rgba(116, 174, 213, 0.12); }
-.logo-mark { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: #ffffff; box-shadow: 0 0 16px rgba(33, 169, 255, 0.28); padding: 2px; overflow: hidden; }
+.logo-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: #ffffff; box-shadow: 0 0 16px rgba(33, 169, 255, 0.28); padding: 3px; overflow: hidden; }
 .logo-mark .logo-art { width: 24px; height: 24px; fill: none; stroke-linecap: round; stroke-linejoin: round; }.logo-mark .logo-sun { fill: #ffb21c; stroke: #ffcf4d; stroke-width: 1; }.logo-mark .logo-ray { stroke: #ffd34d; stroke-width: 1.4; }.logo-mark .logo-cloud { fill: #eef8ff; stroke: #9bdcff; stroke-width: 1.2; }
-.logo-mark { overflow: hidden; }.logo-mark .logo-image { width: 100%; height: 100%; object-fit: contain; border-radius: 9px; }
+.logo-mark { overflow: hidden; }.logo-mark .logo-image { width: 100%; height: 100%; object-fit: cover; object-position: 28% 50%; border-radius: 9px; }
 .logo-mark .ico { width: 19px; height: 19px; stroke: #fff; }
 .loc-card { padding: 11px 10px; border-radius: 13px; background: rgba(8, 26, 42, 0.55); border: 1px solid rgba(116, 174, 213, 0.14); }
 .loc-card .eyebrow { font-size: 9.5px; letter-spacing: .4px; }
