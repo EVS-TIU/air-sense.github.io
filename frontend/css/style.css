@@ -91,7 +91,9 @@ button {
     grid-column: 2;
     grid-row: 2 / 10;
     align-self: start;
-    height: 837px;
+    /* 896 (main column bottom, incl. the 7-day forecast panel) minus the
+       44px top row — keeps the sidebar flush with the content column. */
+    height: 852px;
 }
 
 .current-weather {
@@ -381,7 +383,7 @@ button {
 }
 
 /* ==========================================================================
-   Sidebar - 242 x 837
+   Sidebar - 242 x 852
    ========================================================================== */
 
 .sidebar {
@@ -1934,7 +1936,7 @@ button {
     grid-area: sidebar;
     width: auto;
     height: max-content;
-    min-height: 837px;
+    min-height: 852px;
     max-height: none;
     padding: 20px 18px;
     gap: 22px;
