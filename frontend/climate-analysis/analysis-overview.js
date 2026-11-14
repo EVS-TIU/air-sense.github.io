@@ -152,7 +152,7 @@
             : window.ClimateDashboard;
         if (!api || typeof api.getSeries !== 'function') return null;
         var s = api.getSeries();
-        if (!s || !s.ready) return null;
+        if (!s || !s.ready || s.blank) return null;
         return s;
     }
     function buildPayload(tabId, s) {
@@ -306,10 +306,13 @@
         });
     }
     function renderLoading(tabName) {
-        showCard();
-        body.innerHTML = '<p class="ca-summary__text is-loading">Analyzing ' + esc(tabName) + ' in the background…</p>';
-        card.classList.add('is-loading');
-        card.classList.remove('is-error');
+        /* Go through renderBox: on layouts without the summary card it
+           renders into the .ca-mlp-json panel instead of crashing. */
+        renderBox('<p class="ca-summary__text is-loading">Analyzing ' + esc(tabName) + ' in the background…</p>');
+        if (card) {
+            card.classList.add('is-loading');
+            card.classList.remove('is-error');
+        }
     }
     function renderResult(overview, meta) {
         renderBox(
@@ -324,6 +327,45 @@
         );
     }
     /* ------------------------------------------------------------------
+       Prediction-first: if the active tab has no data yet, trigger the
+       same event the calendar fires so the Weather Prediction tab runs
+       the MLP for the selected day, then wait for the fan-out. The
+       fan-out fills every tab (prediction, climate trend, AQI outlook),
+       so one wait covers all of them.
+       ------------------------------------------------------------------ */
+    function todayISO() {
+        var d = new Date();
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+    function ensurePrediction() {
+        return new Promise(function (resolve) {
+            var settled = false;
+            var cleanup = function () {
+                document.removeEventListener('weatherly:prediction-data', onData);
+                document.removeEventListener('weatherly:prediction-error', onFail);
+                document.removeEventListener('weatherly:prediction-blank', onFail);
+                clearTimeout(timer);
+            };
+            var done = function (v) {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                resolve(v);
+            };
+            var onData = function () { done(true); };
+            var onFail = function () { done(false); };
+            var timer = setTimeout(function () { done(false); }, 60000);
+            document.addEventListener('weatherly:prediction-data', onData);
+            document.addEventListener('weatherly:prediction-error', onFail);
+            document.addEventListener('weatherly:prediction-blank', onFail);
+            var iso = (window.CaCalendar && typeof window.CaCalendar.getSelectedDate === 'function')
+                ? window.CaCalendar.getSelectedDate() : null;
+            document.dispatchEvent(new CustomEvent('weatherly:prediction-date',
+                { detail: { date: iso || todayISO() } }));
+        });
+    }
+    /* ------------------------------------------------------------------
        Click flow (runs in the background; button just flips to busy)
        ------------------------------------------------------------------ */
     var running = false;
@@ -332,13 +374,23 @@
         var tabId = activeTabId();
         var tabName = TAB_NAMES[tabId] || tabId;
         var s = collect(tabId);
-        if (!s) {
-            renderBox('<p class="ca-summary__text">This tab has no data yet. Wait for its data to load, then run the analysis again.</p>', true);
-            return;
-        }
         running = true;
         btn.classList.add('is-busy');
         btn.disabled = true;
+        if (!s) {
+            /* No data yet: proceed with the prediction first instead of
+               stopping — the button always moves the pipeline forward. */
+            renderBox('<p class="ca-summary__text">No prediction yet — running the MLP prediction for the selected date first…</p>');
+            var ok = await ensurePrediction();
+            s = collect(tabId);
+            if (!s) {
+                renderBox('<p class="ca-summary__text">Prediction did not return data. Pick a prediction date in the calendar and try again.</p>', true);
+                running = false;
+                btn.classList.remove('is-busy');
+                btn.disabled = false;
+                return;
+            }
+        }
         renderLoading(tabName);
         // Yield so the loading state paints before the regression starts.
         await new Promise(function (r) { setTimeout(r, 30); });

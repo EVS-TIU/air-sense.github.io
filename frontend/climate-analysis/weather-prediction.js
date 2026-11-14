@@ -388,6 +388,7 @@ window.MOCK_CLIMATE_DATA = {
   }
 
   var lastData = null;
+  var lastIsBlank = true;
   /* ---------- Default (no-data) dataset ------------------------------
      The tab starts with the full layout but every value at zero / "No
      data", until a prediction date is picked in the calendar. ---------- */
@@ -431,8 +432,9 @@ window.MOCK_CLIMATE_DATA = {
   }
 
   window.ClimateDashboard = {
-    mount: function (root, data) {
+    mount: function (root, data, isBlank) {
       lastData = data;
+      lastIsBlank = !!isBlank;
       root.innerHTML = predictedConditions(data) + temperatureTrendShell() + weatherOutlook(data) + aiInsight(data);
       mountTrend(root.querySelector(".cl-trend"), data);
     },
@@ -443,7 +445,11 @@ window.MOCK_CLIMATE_DATA = {
       var l = lastData.location || {};
       return {
         tab: "Weather Prediction",
-        ready: true,
+        /* The blank placeholder (all zeros, shown before a date is picked)
+           must not pass as data — Generate Analysis then triggers the real
+           prediction instead of summarising zeros. */
+        ready: !lastIsBlank,
+        blank: lastIsBlank,
         location: l.city + (l.country ? ", " + l.country : ""),
         forecast: lastData.forecast,
         temperatureTrend: lastData.temperatureTrend
@@ -527,7 +533,7 @@ window.MOCK_CLIMATE_DATA = {
 
   function blankState() {
     /* Full layout, zero values — data arrives when a date is picked. */
-    ClimateDashboard.mount(root, ClimateDashboard.defaultData(currentLocation));
+    ClimateDashboard.mount(root, ClimateDashboard.defaultData(currentLocation), true);
     writeJsonOverview(null);
     fanOut("blank");
   }
