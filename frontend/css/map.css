@@ -57,6 +57,7 @@
     box-shadow: 0 0 16px rgba(33, 169, 255, 0.28);
     padding: 3px;
     overflow: hidden;
+    transform: translateX(-2px);
 }
 
 .brand-mark img {
