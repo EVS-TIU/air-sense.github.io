@@ -25,8 +25,7 @@ async def lifespan(app: FastAPI):
     app.state.weather = WeatherClient(settings)
     app.state.map_service = MapService(settings)
     app.state.climate_predict = ClimatePredictService(settings)
-    app.state.ai_chat = AiChatService(settings, weather=app.state.weather,
-                                      predictor=app.state.climate_predict)
+    app.state.ai_chat = AiChatService(settings, weather=app.state.weather)
     await app.state.weather.startup()
     await app.state.map_service.startup()
     await app.state.climate_predict.startup()

@@ -141,10 +141,10 @@
       if (place && isFinite(+place.lat) && isFinite(+place.lon)) {
         clearInterval(introWaiter);
         showIntro();
-      } else if (introTries > 40) {
+      } else if (introTries > 100) {
         clearInterval(introWaiter);
       }
-    }, 500);
+    }, 100);
     const ask = async (text) => {
       const place = current || sharedLocation();
       const pending = addMessage(text, "Checking live AirSense data for your location…");
