@@ -39,19 +39,21 @@ AQI_ADVICE = {
 }
 
 SYSTEM_PROMPT = (
-    "You are AirSense, a friendly weather and air-quality chat assistant "
-    "inside a weather dashboard. Answer the user using ONLY the JSON DATA "
-    "provided with their message (live site data for their selected "
-    "location, for today). Quote concrete numbers with units when the "
-    "data contains them, never invent values, and if the data does not "
-    "cover the question say so briefly. Chat naturally — greet, suggest "
-    "what to do for the rest of the day (outdoor plans, clothing, "
-    "health precautions) and answer follow-up questions in context. Stay "
-    "strictly on topic: weather, air quality and this app's own features. "
-    "If the user asks about anything else — news, coding, games, personal "
-    "or medical advice unrelated to weather — politely decline in one "
-    "short sentence and say you can only help with weather and "
-    "air-quality questions. Reply in at most 120 words of plain text."
+    "You are AirSense, a friendly general-purpose chat assistant that "
+    "lives inside a weather dashboard. You can chat about anything a "
+    "normal assistant would — questions, advice, explanations, ideas, "
+    "small talk — while also knowing the live weather and air quality "
+    "for the user's selected location, provided as JSON DATA with their "
+    "message. When the topic relates to weather, air quality, health, "
+    "clothing, travel or day planning, ground your answer in that DATA "
+    "and quote concrete numbers with units. Never invent weather or "
+    "AQI values; if the DATA does not cover something, say so briefly. "
+    "For unrelated topics, just answer normally as a helpful "
+    "assistant — no need to steer back to weather. Chat naturally, "
+    "keep replies concise (at most 150 words), and stay "
+    "in context across follow-ups. You may format replies with simple "
+    "Markdown: **bold** for key values and short bullet lists when it "
+    "helps readability."
 )
 
 INTRO_PROMPT = (
@@ -65,6 +67,9 @@ INTRO_PROMPT = (
 
 KEY_NOTE = ("Full conversational replies need the LLM key (LLM_API_KEY, "
             "LLM_BASE_URL, LLM_MODEL) configured on this server.")
+LLM_FAILED_NOTE = ("The LLM is briefly unavailable (provider rate limit or "
+                   "timeout), so here are the live numbers instead. "
+                   "Try again in a moment.")
 
 
 def _pick(data: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
@@ -126,7 +131,8 @@ class AiChatService:
             answer = await self._llm_answer(question, context, history or [])
         used_llm = answer is not None
         if not used_llm:
-            answer = self._fallback_answer(context, first=not history)
+            answer = self._fallback_answer(context, first=not history,
+                                           llm_failed=self.llm_enabled)
         return {
             "answer": answer,
             "usedLlm": used_llm,
@@ -150,7 +156,8 @@ class AiChatService:
             answer = await self._llm_answer(INTRO_PROMPT, context, [])
         used_llm = answer is not None
         if not used_llm:
-            answer = self._fallback_answer(context, first=True)
+            answer = self._fallback_answer(context, first=True,
+                                           llm_failed=self.llm_enabled)
         return {"answer": answer, "usedLlm": used_llm}
 
     # ----------------------------------------------------------------- llm
@@ -168,7 +175,7 @@ class AiChatService:
             "content": f"{question}\n\nDATA:\n{json.dumps(context, ensure_ascii=False)}",
         })
         body = {"model": self.settings.llm_model, "messages": messages,
-                "temperature": 0.4, "max_tokens": 300}
+                "temperature": 0.4, "max_tokens": 500}
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
@@ -184,13 +191,14 @@ class AiChatService:
 
     # ------------------------------------------------------------ fallback
 
-    def _fallback_answer(self, context: dict, first: bool) -> str:
-        """No LLM key: report the live numbers once, then stop pretending.
+    def _fallback_answer(self, context: dict, first: bool,
+                         llm_failed: bool = False) -> str:
+        """No LLM reply: report the live numbers once, then stop pretending.
 
         The old behaviour replayed the same canned text for every message;
-        now the first turn gives the factual summary plus a notice about
-        the missing key, and later turns just point at the notice instead
-        of repeating the same paragraph.
+        now the first turn gives the factual summary plus a notice, and later
+        turns just point at the notice instead of repeating the paragraph.
+        The notice differs: missing key vs. key present but LLM unreachable.
         """
         lines: list[str] = []
         city = (context.get("location") or {}).get("city", "this location")
@@ -216,6 +224,6 @@ class AiChatService:
         if not lines:
             lines.append("Live weather data is unavailable right now.")
         if first:
-            lines.append(KEY_NOTE)
+            lines.append(LLM_FAILED_NOTE if llm_failed else KEY_NOTE)
             return " ".join(lines)
-        return KEY_NOTE
+        return LLM_FAILED_NOTE if llm_failed else KEY_NOTE

@@ -71,10 +71,33 @@
   function initChat() {
     const form = $("#ai-chat-form"), input = $("#ai-chat-input"), messages = $("#ai-chat-messages");
     if (!form || !input || !messages) return;
+    /* Minimal safe Markdown for chat replies: the LLM answers with
+       **bold**, *emphasis* and * / - bullets. Escape first, then convert,
+       so no raw HTML from the model can ever reach innerHTML. */
+    const renderMd = (raw) => {
+      let t = esc(raw);
+      t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      t = t.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s.,!?)]|$)/g, "$1<em>$2</em>");
+      const lines = t.split("\n");
+      const out = [];
+      let inList = false;
+      for (const line of lines) {
+        const m = line.match(/^\s*(?:\*|-)\s+(.*)$/);
+        if (m) {
+          if (!inList) { out.push("<ul>"); inList = true; }
+          out.push(`<li>${m[1]}</li>`);
+          continue;
+        }
+        if (inList) { out.push("</ul>"); inList = false; }
+        if (line.trim()) out.push(`<p>${line.trim()}</p>`);
+      }
+      if (inList) out.push("</ul>");
+      return out.join("");
+    };
     const addMessage = (text, reply) => {
       const user = document.createElement("div"); user.className = "ai-chat__user-message"; user.textContent = text;
       messages.appendChild(user);
-      if (reply) { const bot = document.createElement("div"); bot.className = "ai-chat__reply"; bot.textContent = reply; messages.appendChild(bot); }
+      if (reply) { const bot = document.createElement("div"); bot.className = "ai-chat__reply"; bot.innerHTML = renderMd(reply); messages.appendChild(bot); }
       messages.scrollTop = messages.scrollHeight;
       return messages.querySelector(".ai-chat__reply:last-of-type");
     };
@@ -124,7 +147,7 @@
         if (!res.ok) throw new Error(`API ${res.status}`);
         const data = await res.json();
         pending.classList.remove("ai-chat__typing");
-        pending.textContent = data.answer || "Hello! Ask me anything about the weather or air quality where you are.";
+        pending.innerHTML = renderMd(data.answer || "Hello! Ask me anything about the weather or air quality where you are.");
         chatHistory.push({ role: "assistant", content: data.answer || "" });
       } catch (err) {
         pending.classList.remove("ai-chat__typing");
@@ -166,7 +189,10 @@
         });
         if (!res.ok) throw new Error(`API ${res.status}`);
         const data = await res.json();
-        if (pending) pending.textContent = data.answer || "No answer was produced — try rephrasing.";
+        if (pending) {
+          pending.classList.remove("ai-chat__typing");
+          pending.innerHTML = renderMd(data.answer || "No answer was produced — try rephrasing.");
+        }
         chatHistory.push({ role: "user", content: text }, { role: "assistant", content: data.answer || "" });
         if (chatHistory.length > 12) chatHistory.splice(0, chatHistory.length - 12);
       } catch (err) {
