@@ -162,7 +162,7 @@
     /* ----------------------------------------------------------------------
        Selected-location persistence.
        The device-location flow lives in app.js which only runs on the
-       dashboard, so the other pages (AI recommendation, history analysis,
+       dashboard, so the other pages (weather chat, history analysis,
        smart alert) would otherwise never show a location. The last chosen
        location is therefore saved here and restored on every page.
        ---------------------------------------------------------------------- */

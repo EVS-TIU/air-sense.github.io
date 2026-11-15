@@ -1,5 +1,5 @@
 /* ============================================================
-   AirSense - AI Recommendation config. Put your keys here.
+   AirSense - Weather Chat config. Put your keys here.
    Keys in browser JS are visible to every visitor. Before going
    live, move the LLM call behind your own server / serverless route.
    ============================================================ */
