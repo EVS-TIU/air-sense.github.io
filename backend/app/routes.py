@@ -172,6 +172,21 @@ async def ai_chat(request: Request, body: AiChatBody) -> dict:
     )
 
 
+class AiChatIntroBody(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    city: str | None = Field(default=None, max_length=120)
+    country: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/ai/chat/intro")
+async def ai_chat_intro(request: Request, body: AiChatIntroBody) -> dict:
+    """Automatic opening message: today's overview for the location."""
+    chat: AiChatService = request.app.state.ai_chat
+    return await chat.intro(
+        body.latitude, body.longitude, city=body.city, country=body.country)
+
+
 def bounds(value: str) -> tuple[float, float, float, float]:
     try:
         return parse_bbox(value)

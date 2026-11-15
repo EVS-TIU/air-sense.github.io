@@ -87,6 +87,64 @@
         : (document.querySelector('meta[name="airsense-api-base"]')?.content || "https://airsense-backend-docker.getvoroa.com/api/v1"))
     ).replace(/\/+$/, "");
     const chatHistory = [];
+    /* Reloads always start a fresh chat: messages and history live only in
+       this closure, nothing is written to localStorage. */
+    const addTyping = () => {
+      const bot = document.createElement("div");
+      bot.className = "ai-chat__reply ai-chat__typing";
+      bot.setAttribute("aria-live", "polite");
+      bot.textContent = "AirSense is preparing today's overview…";
+      messages.appendChild(bot);
+      messages.scrollTop = messages.scrollHeight;
+      return bot;
+    };
+    /* Automatic opening message: the backend composes a today-overview for
+       the selected location and posts it as the first assistant bubble. */
+    let introStarted = false;
+    const showIntro = async () => {
+      if (introStarted) return;
+      const place = current || sharedLocation();
+      if (!place || !isFinite(+place.lat) || !isFinite(+place.lon)) return;
+      // If the user already typed first, the conversation is live — no
+      // canned opening on top of it.
+      if (messages.querySelector(".ai-chat__user-message, .ai-chat__reply")) { introStarted = true; return; }
+      introStarted = true;
+      const pending = addTyping();
+      try {
+        const res = await fetch(`${API_BASE}/ai/chat/intro`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            latitude: +place.lat,
+            longitude: +place.lon,
+            city: place.name || undefined,
+            country: currentRegion || undefined,
+          }),
+        });
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        const data = await res.json();
+        pending.classList.remove("ai-chat__typing");
+        pending.textContent = data.answer || "Hello! Ask me anything about the weather or air quality where you are.";
+        chatHistory.push({ role: "assistant", content: data.answer || "" });
+      } catch (err) {
+        pending.classList.remove("ai-chat__typing");
+        pending.textContent = "Hi! I'm your AirSense assistant. Ask me anything about the weather or air quality at your selected location.";
+      }
+      messages.scrollTop = messages.scrollHeight;
+    };
+    // The location resolves asynchronously on load (saved city, GPS or the
+    // default); wait for it, then fire the intro once.
+    let introTries = 0;
+    const introWaiter = setInterval(() => {
+      introTries += 1;
+      const place = current || sharedLocation();
+      if (place && isFinite(+place.lat) && isFinite(+place.lon)) {
+        clearInterval(introWaiter);
+        showIntro();
+      } else if (introTries > 40) {
+        clearInterval(introWaiter);
+      }
+    }, 500);
     const ask = async (text) => {
       const place = current || sharedLocation();
       const pending = addMessage(text, "Checking live AirSense data for your location…");

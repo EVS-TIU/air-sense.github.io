@@ -57,7 +57,21 @@ SYSTEM_PROMPT = (
     "with the question (live site data for their selected location). Quote "
     "concrete numbers with units when the data contains them, never invent "
     "values, and if the data does not cover the question say so briefly. "
-    "Reply in at most 120 words of plain text."
+    "Stay strictly on topic: weather, air quality and this app's own "
+    "features (current conditions, forecasts and predictions, UV, "
+    "recommendations). If the user asks about anything else — news, coding, "
+    "games, personal or medical advice unrelated to weather — politely "
+    "decline in one short sentence and say you can only help with weather "
+    "and air-quality questions. Reply in at most 120 words of plain text."
+)
+
+INTRO_PROMPT = (
+    "Open the conversation: greet the user and give a short overview of "
+    "today's conditions at their selected location, using ONLY the DATA. "
+    "Cover the current temperature and sky, one notable factor (wind, "
+    "humidity or rain), the US AQI value with its health meaning, and one "
+    "practical tip for the next hours. End by inviting questions about "
+    "weather or air quality. At most 90 words of plain text."
 )
 
 
@@ -154,6 +168,62 @@ class AiChatService:
             "contextKeys": sorted(context.keys() - {"location"}),
         }
 
+    # ------------------------------------------------------------------ intro
+
+    async def intro(self, lat: float, lon: float,
+                    city: str | None = None, country: str | None = None) -> dict:
+        """Automatic opening message: today's overview for the location.
+
+        The AI Recommendation page fires this on load so the chat always
+        starts with a grounded, data-backed greeting instead of an empty
+        panel. Composed by the hosted LLM when configured; otherwise the
+        deterministic overview is returned.
+        """
+        location = city or f"{lat:.2f}, {lon:.2f}"
+
+        async def safe(call):
+            try:
+                return await call
+            except Exception as exc:  # the intro must appear even with partial data
+                logger.warning("Chat intro context fetch failed: %s", exc)
+                return None
+
+        try:
+            prediction = await safe(self.predictor.predict(
+                lat, lon, date_type.today(), city=city, country=country))
+        except Exception as exc:
+            logger.warning("Chat intro prediction failed: %s", exc)
+            prediction = None
+
+        current, air_quality = await asyncio.gather(
+            safe(self.weather.current(lat, lon)),
+            safe(self.weather.air_quality(lat, lon)),
+        )
+
+        context: dict[str, Any] = {
+            "location": {"city": location, "country": country or "",
+                         "latitude": round(lat, 3), "longitude": round(lon, 3)},
+        }
+        if isinstance(current, dict):
+            context["currentWeather"] = _pick(current, CURRENT_KEYS)
+        if isinstance(air_quality, dict):
+            modelled = air_quality.get("modelled") or {}
+            aqi = (modelled.get("aqi") or {}).get("value") if isinstance(modelled, dict) else None
+            if aqi is not None:
+                context["airQuality"] = {"usAqi": round(float(aqi), 1),
+                                         "status": aqi_status(aqi)}
+        if prediction is not None:
+            forecast = prediction.get("forecast") or {}
+            context["todayOutlook"] = _pick(forecast, PREDICTION_KEYS)
+
+        answer = None
+        if self.llm_enabled:
+            answer = await self._llm_answer(INTRO_PROMPT, context, [])
+        used_llm = answer is not None
+        if not used_llm:
+            answer = self._fallback_answer(context, "general")
+        return {"answer": answer, "usedLlm": used_llm}
+
     # ------------------------------------------------------------------- llm
 
     async def _llm_answer(self, question: str, context: dict,
@@ -208,6 +278,10 @@ class AiChatService:
                 line += f" {advice}"
             lines.append(line)
         prediction = context.get("prediction")
+        today_outlook = context.get("todayOutlook")
+        if today_outlook and not prediction:
+            # Intro path: today's outlook stands in for the prediction slot.
+            prediction = today_outlook
         if prediction:
             line = (f"Prediction for {prediction.get('date')}: "
                     f"{prediction.get('temperature')}°C "
