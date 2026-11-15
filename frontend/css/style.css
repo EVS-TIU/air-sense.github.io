@@ -2043,7 +2043,14 @@ button {
 @media (max-width: 900px) {
     .current-weather-page .app {
         display: flex;
+        flex-direction: column;
         padding: 14px;
+    }
+
+    .current-weather-page .app > .topbar {
+        width: 100%;
+        height: auto;
+        min-height: 0;
     }
 
     .current-weather-page .weather-main {
@@ -2176,6 +2183,9 @@ button {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* Flex item must be allowed to shrink, or the ellipsis never engages
+       and the name pushes the country chip past the card edge. */
+    min-width: 0;
 }
 
 .current-weather__country {
@@ -2189,6 +2199,10 @@ button {
     background: rgba(15, 50, 77, 0.62);
     border: 1px solid rgba(41, 182, 255, 0.3);
     border-radius: 999px;
+    /* Long "City, Region, Country" strings must clip inside the card. */
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .current-weather__country:empty {

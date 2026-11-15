@@ -588,7 +588,6 @@
     width: 15px;
     height: 15px;
     flex: 0 0 auto;
-
     fill: none;
     stroke: currentColor;
     stroke-width: 1.7;
@@ -703,5 +702,28 @@
 @media (prefers-reduced-motion: reduce) {
     .ca-summary__text.is-loading {
         animation: none;
+    }
+}
+
+/* Phone widths: three tab labels + icons cannot fit side by side — drop
+   the icons and tighten the buttons so the row never overflows (its
+   overflow used to widen the whole layout viewport, shrinking the page). */
+@media (max-width: 640px) {
+    .ca-tabs {
+        gap: 3px;
+        padding: 4px;
+    }
+
+    .ca-tabs__btn {
+        gap: 0;
+        height: 34px;
+        padding: 0 6px;
+        font-size: 11px;
+        white-space: nowrap;
+        min-width: 0;
+    }
+
+    .ca-tabs__btn svg {
+        display: none;
     }
 }
