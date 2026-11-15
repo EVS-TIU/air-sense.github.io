@@ -134,7 +134,10 @@
 
         var years = '';
         var lastYear = today.getFullYear() + FUTURE_YEARS;
-        for (var y = FIRST_DATA_YEAR; y <= lastYear; y++) {
+        // Past years are gone: predictions start from today, so the
+        // dropdown begins at the current year.
+        var firstYear = Math.max(FIRST_DATA_YEAR, today.getFullYear());
+        for (var y = firstYear; y <= lastYear; y++) {
             years += '<option value="' + y + '"' + (y === viewYear ? ' selected' : '') + '>' + y + '</option>';
         }
         yearSelect.innerHTML = years;

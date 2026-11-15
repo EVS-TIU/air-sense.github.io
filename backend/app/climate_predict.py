@@ -34,6 +34,10 @@ logger = logging.getLogger(__name__)
 HISTORY_YEARS = 5
 HISTORY_WINDOW_DAYS = 2  # days on either side of the target date, per year
 MAX_FORECAST_DAYS_AHEAD = 15  # Open-Meteo forecast horizon is ~16 days
+# Beyond the provider horizon the prediction becomes a climate outlook:
+# trained MLP + multi-year archive climatology for the same calendar
+# window ("what this date is usually like"), not a day-specific forecast.
+MAX_OUTLOOK_DAYS_AHEAD = 365
 
 # The trained regression model (ml_model.py) learns temperature from ten
 # years of archive data around the target season, then contributes to the
@@ -164,7 +168,13 @@ def hourly_series(provider_hourly: dict, target_iso: str, key: str,
     """
     day = provider_hourly.get(target_iso) or []
     if not day:
-        return []
+        # No provider hourly for the target (archive/climate-outlook
+        # targets): hold the fill value flat so the chart keeps its
+        # 0–24h axis instead of going blank.
+        if fill is None:
+            return []
+        return [{"hour": f"{hour:02d}:00", "v": round(fill, 1)}
+                for hour in range(24)]
     points: list[dict] = []
     for hour in range(24):
         label = f"{hour:02d}:00"
@@ -415,6 +425,7 @@ class ClimatePredictService:
                 values = daily.get(variable) or []
                 finite = _finite(values[index:index + 1])
                 record[variable] = finite[0] if finite else None
+            record["date"] = times[index]
             records.append(record)
         return records
 
@@ -566,24 +577,39 @@ class ClimatePredictService:
         if target < today:
             target = today
         days_ahead = (target - today).days
-        if days_ahead > MAX_FORECAST_DAYS_AHEAD:
-            raise ClimatePredictError(f"date must be within {MAX_FORECAST_DAYS_AHEAD} days of today")
+        if days_ahead > MAX_OUTLOOK_DAYS_AHEAD:
+            raise ClimatePredictError("date must be within 1 year of today")
+        # Beyond the provider horizon we cannot fetch a day-specific
+        # forecast; the prediction is built from climatology + the trained
+        # model only and is labelled a climate outlook in the response.
+        outlook = days_ahead > MAX_FORECAST_DAYS_AHEAD
 
         cache_key = f"predict:{lat:.3f}:{lon:.3f}:{target.isoformat()}"
         cached = await self.cache.get(cache_key)
         if cached is not None:
             return cached
 
-        trend_end = min(max(target, today + timedelta(days=6)), today + timedelta(days=MAX_FORECAST_DAYS_AHEAD))
+        if outlook:
+            trend_end = target + timedelta(days=6)
+        else:
+            trend_end = min(max(target, today + timedelta(days=6)), today + timedelta(days=MAX_FORECAST_DAYS_AHEAD))
         window_start = target - timedelta(days=HISTORY_WINDOW_DAYS)
         window_end = target + timedelta(days=HISTORY_WINDOW_DAYS)
 
-        forecast_res, aqi, hourly_aqi = await asyncio.gather(
-            self._forecast(lat, lon, today, trend_end),
-            self._current_aqi(lat, lon),
-            self._hourly_aqi(lat, lon, target),
-        )
-        forecast_rows, provider_hourly = forecast_res
+        if outlook:
+            aqi, hourly_aqi = await asyncio.gather(
+                self._current_aqi(lat, lon),
+                self._hourly_aqi(lat, lon, target),
+            )
+            forecast_rows: dict[str, dict] = {}
+            provider_hourly: dict[str, list] = {}
+        else:
+            forecast_res, aqi, hourly_aqi = await asyncio.gather(
+                self._forecast(lat, lon, today, trend_end),
+                self._current_aqi(lat, lon),
+                self._hourly_aqi(lat, lon, target),
+            )
+            forecast_rows, provider_hourly = forecast_res
         hourly_aqi_series = hourly_aqi.get("us_aqi") or []
         if aqi is not None and not any(
                 point.get("v") is not None for point in hourly_aqi_series):
@@ -593,7 +619,7 @@ class ClimatePredictService:
             hourly_aqi_series = [{"hour": f"{hour:02d}:00", "v": round(aqi, 1)}
                                  for hour in range(24)]
         provider_row = forecast_rows.get(target.isoformat())
-        if provider_row is None:
+        if provider_row is None and not outlook:
             raise ClimatePredictError("Provider returned no row for the target date")
 
         # Sequential on purpose: hammering the archive endpoint with parallel
@@ -612,7 +638,7 @@ class ClimatePredictService:
             if stats is not None:
                 climatology[variable] = stats
 
-        weight = provider_weight(
+        weight = 0.0 if outlook else provider_weight(
             days_ahead,
             climatology["temperature_2m_mean"].std if "temperature_2m_mean" in climatology else None,
         )
@@ -631,12 +657,20 @@ class ClimatePredictService:
         if model is not None:
             mlp_weight = model_weight(model.validation_mae)
             if mlp_weight > 0.0:
+                # Driver inputs: the provider forecast when it exists, else
+                # (climate outlook) the climatology means for the season.
+                def driver(variable: str) -> float | None:
+                    if provider_row is not None:
+                        return provider_row.get(variable)
+                    stats = climatology.get(variable)
+                    return stats.mean if stats is not None else None
+
                 model_temp = model.predict(ml_model.day_of_year(target), {
-                    "t_max": provider_row.get("temperature_2m_max"),
-                    "t_min": provider_row.get("temperature_2m_min"),
-                    "humidity": provider_row.get("relative_humidity_2m_mean"),
-                    "wind": provider_row.get("wind_speed_10m_max"),
-                    "precip": provider_row.get("precipitation_sum"),
+                    "t_max": driver("temperature_2m_max"),
+                    "t_min": driver("temperature_2m_min"),
+                    "humidity": driver("relative_humidity_2m_mean"),
+                    "wind": driver("wind_speed_10m_max"),
+                    "precip": driver("precipitation_sum"),
                 })
                 if model_temp is not None and math.isfinite(model_temp):
                     model_temp = clamp(model_temp, -90.0, 60.0)
@@ -654,7 +688,7 @@ class ClimatePredictService:
         blended: dict[str, float | None] = {}
         baseline_temperature: float | None = None
         for variable, (field, _unit, bounds) in VARIABLES.items():
-            provider_value = provider_row.get(variable)
+            provider_value = (provider_row or {}).get(variable)
             stats = climatology.get(variable)
             if provider_value is None and stats is None:
                 blended[field] = None
@@ -683,7 +717,7 @@ class ClimatePredictService:
                         blended[field] = clamp(blended[field] + delta, -90.0, 60.0)
 
         # Rain probability: provider probability if present, else wet-day frequency.
-        provider_rain_prob = provider_row.get("precipitation_probability_max")
+        provider_rain_prob = (provider_row or {}).get("precipitation_probability_max")
         wet_days = [record["precipitation_sum"] for record in records
                     if record["precipitation_sum"] is not None]
         climatology_rain_prob = (100.0 * sum(1 for mm in wet_days if mm >= 1.0) / len(wet_days)) if wet_days else None
@@ -708,7 +742,7 @@ class ClimatePredictService:
             "location": city or f"{lat:.2f}, {lon:.2f}",
             "date": target.isoformat(),
             "days_ahead": days_ahead,
-            "provider_forecast": {key: value for key, value in provider_row.items() if value is not None},
+            "provider_forecast": {key: value for key, value in (provider_row or {}).items() if value is not None},
             "climatology": {
                 variable: {
                     "mean": stats.mean, "std": stats.std, "min": stats.min,
@@ -733,18 +767,46 @@ class ClimatePredictService:
                                                     hi if hi is not None else 250.0), 1)
 
         trend: list[dict] = []
-        trend_day = today
-        while trend_day <= trend_end and len(trend) < 7:
-            row = forecast_rows.get(trend_day.isoformat()) or {}
-            max_temp = row.get("temperature_2m_max")
-            min_temp = row.get("temperature_2m_min")
-            if max_temp is not None or min_temp is not None:
-                trend.append({
-                    "date": trend_day.strftime("%d %b"),
-                    "max": round(max_temp if max_temp is not None else prediction["max_temperature"], 1),
-                    "min": round(min_temp if min_temp is not None else prediction["min_temperature"], 1),
-                })
-            trend_day += timedelta(days=1)
+        if outlook:
+            # Climate-outlook trend: mean max/min per calendar day from the
+            # archive window (target ± HISTORY_WINDOW_DAYS); days beyond the
+            # window fall back to the seasonal climatology mean.
+            max_stats = climatology.get("temperature_2m_max")
+            min_stats = climatology.get("temperature_2m_min")
+            per_day: dict[str, list[dict]] = {}
+            for record in records:
+                day = record.get("date")
+                if isinstance(day, str):
+                    per_day.setdefault(day, []).append(record)
+            trend_day = target
+            while trend_day <= trend_end and len(trend) < 7:
+                rows = per_day.get(trend_day.isoformat(), [])
+                maxes = [r["temperature_2m_max"] for r in rows
+                         if r.get("temperature_2m_max") is not None]
+                mins = [r["temperature_2m_min"] for r in rows
+                        if r.get("temperature_2m_min") is not None]
+                max_temp = (sum(maxes) / len(maxes)) if maxes else (max_stats.mean if max_stats else None)
+                min_temp = (sum(mins) / len(mins)) if mins else (min_stats.mean if min_stats else None)
+                if max_temp is not None or min_temp is not None:
+                    trend.append({
+                        "date": trend_day.strftime("%d %b"),
+                        "max": round(max_temp if max_temp is not None else prediction["max_temperature"], 1),
+                        "min": round(min_temp if min_temp is not None else prediction["min_temperature"], 1),
+                    })
+                trend_day += timedelta(days=1)
+        else:
+            trend_day = today
+            while trend_day <= trend_end and len(trend) < 7:
+                row = forecast_rows.get(trend_day.isoformat()) or {}
+                max_temp = row.get("temperature_2m_max")
+                min_temp = row.get("temperature_2m_min")
+                if max_temp is not None or min_temp is not None:
+                    trend.append({
+                        "date": trend_day.strftime("%d %b"),
+                        "max": round(max_temp if max_temp is not None else prediction["max_temperature"], 1),
+                        "min": round(min_temp if min_temp is not None else prediction["min_temperature"], 1),
+                    })
+                trend_day += timedelta(days=1)
 
         temp_stats = climatology.get("temperature_2m_mean")
         confidence = confidence_score(
@@ -754,6 +816,10 @@ class ClimatePredictService:
         )
         if agent:
             confidence = int(clamp(confidence + (2 if not agent["anomalies"] else -3), 25, 95))
+        if outlook:
+            # An outlook is not a forecast: cap the confidence so the UI
+            # never presents it with forecast-level certainty.
+            confidence = min(confidence, 45)
 
         insight = agent["insight"] if agent else fallback_insight(
             prediction, climatology, days_ahead, confidence)
@@ -769,13 +835,14 @@ class ClimatePredictService:
             "location": {"city": city or f"{lat:.2f}, {lon:.2f}", "country": country or ""},
             "forecast": {
                 "date": target.isoformat(),
+                "mode": "climate-outlook" if outlook else "provider-forecast",
                 "condition": condition_text(blended["cloud_cover"], blended["precipitation"], rainfall_probability),
                 "temperature": prediction["temperature"],
                 "feelsLike": prediction["feels_like"],
                 "confidence": confidence,
                 "humidity": prediction["humidity"],
                 "windSpeed": prediction["wind_speed"],
-                "windDirection": wind_cardinal(provider_row.get("wind_direction_10m_dominant")),
+                "windDirection": wind_cardinal((provider_row or {}).get("wind_direction_10m_dominant")),
                 "rainfallProbability": prediction["rainfall_probability"],
                 "rainfallIntensity": rainfall_intensity(prediction["precipitation"]),
                 "aqi": aqi,
@@ -788,7 +855,8 @@ class ClimatePredictService:
             "hourlyTemperatures": hourly_temperatures(
                 prediction, target.isoformat(), provider_hourly),
             "hourlyHumidity": hourly_series(
-                provider_hourly, target.isoformat(), "rh", None),
+                provider_hourly, target.isoformat(), "rh",
+                None if provider_hourly else prediction["humidity"]),
             "hourlyRainfall": hourly_series(
                 provider_hourly, target.isoformat(), "pr", 0.0),
             "hourlyAqi": hourly_aqi_series,
