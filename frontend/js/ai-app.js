@@ -178,7 +178,6 @@
       }
       messages.scrollTop = messages.scrollHeight;
     };
-    document.querySelectorAll(".ai-chat__suggestion").forEach(button => button.addEventListener("click", () => { input.value = button.dataset.query; form.requestSubmit(); }));
     form.addEventListener("submit", event => { event.preventDefault(); const text = input.value.trim(); if (!text) return; input.value = ""; ask(text); });
     $("#ai-chat-reset")?.addEventListener("click", () => { messages.querySelectorAll(".ai-chat__user-message, .ai-chat__reply").forEach(node => node.remove()); chatHistory.length = 0; input.value = ""; });
   }
