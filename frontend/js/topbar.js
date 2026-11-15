@@ -557,13 +557,13 @@
         createDropdown(mobileMenuRoot, (action) => {
             if (action === 'C' || action === 'F') {
                 setUnit(action);
-            } else if (action === 'login') {
-                const loginItem = mobileMenuRoot.querySelector('[data-value="login"]');
-                if (!loginItem?.dataset.href) {
-                    console.error('The mobile login link is missing its destination.');
+            } else if (action === 'github') {
+                const githubItem = mobileMenuRoot.querySelector('[data-value="github"]');
+                if (!githubItem?.dataset.href) {
+                    console.error('The mobile GitHub link is missing its destination.');
                     return;
                 }
-                window.location.assign(loginItem.dataset.href);
+                window.open(githubItem.dataset.href, '_blank', 'noopener');
             } else if (action === 'climate-analysis') {
                 emit('navigate', { view: action });
                 window.location.assign('./climate-analysis/climate-analysis-2.html');

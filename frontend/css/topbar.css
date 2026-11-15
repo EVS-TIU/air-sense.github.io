@@ -233,13 +233,20 @@
     border-color: rgba(33, 169, 255, 0.45);
 }
 
-.topbar-login {
+.topbar-github {
     justify-content: center;
     min-width: 76px;
     font-weight: 600;
 }
 
-.topbar-login:focus-visible {
+.topbar-github svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    stroke: none;
+}
+
+.topbar-github:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
@@ -727,7 +734,7 @@
         display: none;
     }
 
-    .topbar-login--mobile-menu {
+    .topbar-github--mobile-menu {
         display: none;
     }
 
