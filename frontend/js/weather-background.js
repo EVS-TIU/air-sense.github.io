@@ -13,6 +13,7 @@
 (function () {
   "use strict";
 
+  const ASSET_VERSION = "20261118-2";
   const FALLBACK_VIDEO = "cloudy.mp4";
   const FALLBACK_POSTER = "Overcast.jpg";
   const LOCATION_STORAGE_KEY = "airsense:selected-location";
@@ -139,7 +140,7 @@
     video.poster = new URL(poster, posterDir).href;
     video.classList.toggle("is-night", filter);
 
-    const url = new URL(file, videoDir).href;
+    const url = new URL(`${file}?v=${ASSET_VERSION}`, videoDir).href;
     if (video.src !== url) {
       video.src = url;
       video.load();

@@ -713,14 +713,19 @@ back to `cloudy.mp4` (`Overcast.jpg` poster).
 To add or replace a clip, drop an `.mp4` (H.264, 720p, 10–30 s loop) into
 `frontend/assets/video/` and add or edit its entry in the `CLIPS` map. Videos
 are muted, looped and `playsinline`; `prefers-reduced-motion` hides them
-entirely. Keep clips short and compressed — the current `overcast.mp4`
-(29 MB) and `snow_fall.mp4` (86 MB) are the heaviest assets in the repo, e.g.:
+entirely. Keep clips short and compressed: most shipped clips are 20–30 s
+(a few short loops are 4–12 s) and the whole folder is about 28 MB, down from
+145 MB before compression. Re-encode a heavy clip with:
 
 ```bash
-ffmpeg -ss 0 -t 20 -i frontend/assets/video/snow_fall.mp4 \
-  -an -vf scale=1280:-2 -c:v libx264 -crf 28 -preset slow \
-  -movflags +faststart /tmp/snow_fall.mp4
+ffmpeg -ss 0 -t 24 -i frontend/assets/video/snow_fall.mp4 \
+  -an -vf "fps=24,scale=1280:-2" -c:v libx264 -crf 29 -preset slow \
+  -pix_fmt yuv420p -profile:v high -movflags +faststart /tmp/snow_fall.mp4
 ```
+
+The clips are served with a `?v=` asset version (`ASSET_VERSION` in
+`weather-background.js`); bump that and the `<video src>` query when replacing
+a file so returning visitors do not keep a stale cached copy.
 
 ### Tests
 
