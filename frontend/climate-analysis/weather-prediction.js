@@ -380,13 +380,6 @@ window.MOCK_CLIMATE_DATA = {
       "</ul></article>";
   }
 
-  /* ---------- D. AI Insight ---------- */
-  function aiInsight(d) {
-    return '<article class="cl-card cl-insight" aria-label="AI insight">' +
-      '<div class="head">' + icon("leaf") + "<h3>AI Insight</h3></div>" +
-      '<span class="sep" aria-hidden="true"></span><p>' + esc(d.aiInsight) + "</p></article>";
-  }
-
   var lastData = null;
   var lastIsBlank = true;
   /* ---------- Default (no-data) dataset ------------------------------
@@ -435,7 +428,7 @@ window.MOCK_CLIMATE_DATA = {
     mount: function (root, data, isBlank) {
       lastData = data;
       lastIsBlank = !!isBlank;
-      root.innerHTML = predictedConditions(data) + temperatureTrendShell() + weatherOutlook(data) + aiInsight(data);
+      root.innerHTML = predictedConditions(data) + temperatureTrendShell() + weatherOutlook(data);
       mountTrend(root.querySelector(".cl-trend"), data);
     },
     defaultData: defaultData,

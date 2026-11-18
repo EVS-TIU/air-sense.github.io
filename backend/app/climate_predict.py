@@ -25,7 +25,7 @@ from datetime import date as date_type, timedelta
 
 import httpx
 
-from . import ml_model
+from . import chronos_model, ml_model
 from .config import Settings
 from .services import TTLCache, wind_cardinal
 
@@ -45,6 +45,10 @@ MAX_OUTLOOK_DAYS_AHEAD = 365
 MODEL_YEARS = 10
 MODEL_WINDOW_DAYS = 20  # season window (days on either side of the target DOY)
 MODEL_MAX_MAE = 6.0     # a validation MAE above this means the model is useless
+
+# Chronos-Bolt-mini forecasts the next days from a contiguous window of daily
+# mean temperatures. It is a day-specific model, so it is skipped for the
+# climate-outlook mode (beyond the provider's forecast horizon).
 
 # Open-Meteo daily variable -> prediction field, unit, absolute bounds.
 VARIABLES: dict[str, tuple[str, str, tuple[float, float]]] = {
@@ -212,6 +216,17 @@ def provider_weight(days_ahead: int, temp_std: float | None) -> float:
     return clamp(weight, 0.5, 0.92)
 
 
+def chronos_weight(days_ahead: int, configured: float) -> float:
+    """Share of the Chronos forecast inside the learned temperature term.
+
+    The weight starts at the configured value and halves by the end of the
+    provider horizon: a 15-day extrapolation of a univariate series deserves
+    less trust than a 1-day one.
+    """
+    decay = 1.0 - 0.5 * clamp(days_ahead / MAX_FORECAST_DAYS_AHEAD, 0.0, 1.0)
+    return configured * decay
+
+
 def confidence_score(days_ahead: int, temp_std: float | None, precip_values: list[float]) -> int:
     """Confidence derives from lead time and observed historical spread."""
     score = 92.0 - 3.0 * days_ahead
@@ -327,6 +342,12 @@ class ClimatePredictService:
         # Date+location predictions are expensive (multi-year archive fetch);
         # reuse them well beyond the default weather cache window.
         self.cache: TTLCache = TTLCache(max(settings.cache_ttl_seconds, 1800))
+        # Optional zero-shot time-series model; loads on first use, never on boot.
+        self.chronos = (
+            chronos_model.ChronosForecaster(settings.chronos_model_path)
+            if settings.chronos_enabled
+            else None
+        )
 
     async def startup(self) -> None:
         return None
@@ -475,6 +496,67 @@ class ClimatePredictService:
         model = await asyncio.to_thread(ml_model.train, samples) if samples else None
         await self.cache.set(cache_key, model if model is not None else "none")
         return model
+
+    async def _chronos_prediction(self, lat: float, lon: float, target: date_type,
+                                  days_ahead: int) -> dict | None:
+        """Forecast the target day with Chronos-Bolt from recent daily means.
+
+        One contiguous archive request supplies the context window (the last
+        `chronos_context_days` of observed temperatures); the pretrained
+        model extrapolates to the target. Cached per location and day and
+        never raises: any failure just means the blend runs without it.
+        """
+        if self.chronos is None or not self.chronos.available:
+            return None
+        cache_key = f"chronos:{lat:.2f}:{lon:.2f}:{target.isoformat()}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return None if cached == "none" else cached
+        end = date_type.today() - timedelta(days=1)
+        start = end - timedelta(days=self.settings.chronos_context_days - 1)
+        try:
+            data = await self._open_meteo(
+                self.settings.openmeteo_archive_url,
+                {
+                    "latitude": lat, "longitude": lon,
+                    "daily": "temperature_2m_mean",
+                    "timezone": "auto",
+                    "start_date": start.isoformat(),
+                    "end_date": end.isoformat(),
+                },
+                attempts=2,
+            )
+        except ClimatePredictError as exc:
+            logger.info("Chronos context fetch failed: %s", exc)
+            await self.cache.set(cache_key, "none")
+            return None
+        daily = data.get("daily") or {}
+        values = daily.get("temperature_2m_mean") or []
+        times = daily.get("time") or []
+        last_index: int | None = None
+        for index in range(len(values) - 1, -1, -1):
+            value = values[index]
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                last_index = index
+                break
+        if last_index is None:
+            await self.cache.set(cache_key, "none")
+            return None
+        history = chronos_model.clean_series(values[:last_index + 1])
+        if not history:
+            await self.cache.set(cache_key, "none")
+            return None
+        try:
+            last_observed = date_type.fromisoformat(str(times[last_index]))
+        except (IndexError, ValueError):
+            last_observed = end
+        # The archive lags by a few days, so count from the last real
+        # observation rather than assuming the window reaches yesterday.
+        steps_ahead = max(1, (target - last_observed).days)
+        result = await asyncio.to_thread(
+            self.chronos.forecast_point, history, min(steps_ahead, 64))
+        await self.cache.set(cache_key, result if result is not None else "none")
+        return result
 
     async def _open_meteo(self, url: str, params: dict, attempts: int = 3) -> dict:
         delay = 0.6
@@ -685,6 +767,25 @@ class ClimatePredictService:
                 else:
                     model_temp = None
 
+        # Zero-shot Chronos-Bolt forecast: an independent, pretrained view of
+        # the same day from the recent temperature series. Day-specific only,
+        # so it is skipped for the climate-outlook mode.
+        chronos: dict | None = None
+        chronos_temp: float | None = None
+        chronos_share = 0.0
+        if self.chronos is not None and not outlook:
+            try:
+                chronos = await self._chronos_prediction(lat, lon, target, days_ahead)
+            except Exception as exc:  # never break a working prediction
+                logger.warning("Chronos-Bolt unavailable: %s", exc)
+                chronos = None
+            value = (chronos or {}).get("prediction")
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                chronos_temp = clamp(float(value), -90.0, 60.0)
+                chronos_share = chronos_weight(days_ahead, self.settings.chronos_weight)
+            else:
+                chronos = None
+
         blended: dict[str, float | None] = {}
         baseline_temperature: float | None = None
         for variable, (field, _unit, bounds) in VARIABLES.items():
@@ -694,10 +795,16 @@ class ClimatePredictService:
                 blended[field] = None
                 continue
             climatology_term = stats.mean if stats is not None else None
-            if variable == "temperature_2m_mean" and model_temp is not None and climatology_term is not None:
+            if (variable == "temperature_2m_mean" and climatology_term is not None
+                    and (model_temp is not None or chronos_temp is not None)):
                 baseline_temperature = weight * provider_value + (1.0 - weight) * climatology_term \
                     if provider_value is not None else climatology_term
-                climatology_term = mlp_weight * model_temp + (1.0 - mlp_weight) * climatology_term
+                learned = climatology_term
+                if model_temp is not None:
+                    learned = mlp_weight * model_temp + (1.0 - mlp_weight) * learned
+                if chronos_temp is not None:
+                    learned = chronos_share * chronos_temp + (1.0 - chronos_share) * learned
+                climatology_term = learned
             if provider_value is None:
                 blended[field] = climatology_term
             elif climatology_term is None:
@@ -709,7 +816,7 @@ class ClimatePredictService:
 
         # A learned shift of the mean temperature also shifts the daily
         # extremes, keeping the diurnal range consistent.
-        if model_temp is not None and baseline_temperature is not None:
+        if (model_temp is not None or chronos_temp is not None) and baseline_temperature is not None:
             delta = blended["temperature"] - baseline_temperature
             if abs(delta) >= 0.05:
                 for field in ("max_temperature", "min_temperature"):
@@ -754,6 +861,8 @@ class ClimatePredictService:
         }
         if ai_model is not None:
             agent_payload["trainedModel"] = ai_model
+        if chronos is not None:
+            agent_payload["chronosForecast"] = chronos
         agent = await self._agent_adjust(agent_payload)
         if agent and agent["adjustments"]:
             limits = {field: AGENT_ADJUSTMENT_LIMITS[key]
@@ -825,11 +934,20 @@ class ClimatePredictService:
             prediction, climatology, days_ahead, confidence)
         if agent and agent["anomalies"]:
             insight = insight.rstrip(".") + ". Noted: " + "; ".join(agent["anomalies"]) + "."
-        elif ai_model is not None:
-            insight = insight.rstrip(".") + (
-                f" Trained neural model ({MODEL_YEARS}-year archive, "
-                f"MAE ±{ai_model['validationMae']}°C) estimates "
-                f"{ai_model['prediction']}°C for this date.")
+        elif agent is None:
+            notes: list[str] = []
+            if ai_model is not None:
+                notes.append(
+                    f"Trained neural model ({MODEL_YEARS}-year archive, "
+                    f"MAE ±{ai_model['validationMae']}°C) estimates "
+                    f"{ai_model['prediction']}°C for this date.")
+            if chronos is not None:
+                notes.append(
+                    f"Chronos-Bolt, a pretrained time-series model, expects "
+                    f"{chronos['prediction']}°C (80% range "
+                    f"{chronos['low']}–{chronos['high']}°C).")
+            if notes:
+                insight = insight.rstrip(".") + ". " + " ".join(notes)
 
         result = {
             "location": {"city": city or f"{lat:.2f}, {lon:.2f}", "country": country or ""},
@@ -867,5 +985,13 @@ class ClimatePredictService:
         }
         if ai_model is not None:
             result["forecast"]["aiModel"] = ai_model
+        if chronos is not None:
+            result["forecast"]["chronosModel"] = {
+                "model": chronos["model"],
+                "prediction": chronos["prediction"],
+                "range": [chronos["low"], chronos["high"]],
+                "contextDays": chronos["contextDays"],
+                "weight": round(chronos_share, 3),
+            }
         await self.cache.set(cache_key, result)
         return result

@@ -249,46 +249,6 @@
 .ao-chart__bar--pm25 { fill: #a878ef; }
 .ao-chart__bar--pm10 { fill: #20b6f2; }
 
-.ao__insight {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-    flex: 0 0 auto;
-    padding: 11px 14px;
-    background: var(--ao-card);
-    border: 1px solid var(--ao-line);
-    border-radius: 13px;
-}
-
-.ao__insight-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
-    padding-right: 13px;
-    border-right: 1px solid var(--ao-line);
-    font-size: 14px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.ao__insight-title svg {
-    width: 23px;
-    height: 23px;
-    fill: none;
-    stroke: #74df55;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-.ao__insight-text {
-    margin: 0;
-    color: #dcefff;
-    font-size: 11px;
-    line-height: 1.5;
-}
-
 @media (max-width: 1200px) {
     .ao__stats {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -324,17 +284,6 @@
 
     .ao-chart {
         min-height: 240px;
-    }
-
-    .ao__insight {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .ao__insight-title {
-        padding: 0;
-        border: 0;
     }
 }
 

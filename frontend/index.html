@@ -6,7 +6,7 @@
     <meta name="description" content="AirSense - live weather dashboard with a location-aware background.">
     <meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
     <title>AirSense - Weather Dashboard</title>
-    <link rel="stylesheet" href="./css/style.css?v=20261115-6">
+    <link rel="stylesheet" href="./css/style.css?v=20261118-1">
 
     <!-- Leaflet interactive map styles -->
     <link rel="stylesheet" href="./assets/vendor/leaflet/leaflet.css">
@@ -39,6 +39,7 @@
             class="weather-background__video"
             id="bg-video"
             src="./assets/video/cloudy.mp4"
+            poster="./assets/images/weather/Overcast.jpg"
             autoplay
             muted
             loop
@@ -746,7 +747,8 @@
     <script src="./js/weather-map/legends.js?v=20261113-3"></script>
     <script src="./js/weather-map/popup.js?v=20261104-1"></script>
     <script src="./js/weather-map/weather-map.js?v=20261113-2"></script>
-    <script src="./js/app.js?v=20261113-2" defer></script>
+    <script src="./js/weather-background.js?v=20261118-1" defer></script>
+    <script src="./js/app.js?v=20261118-1" defer></script>
     <script src="./js/topbar.js?v=20261113-3" defer></script>
     <!-- Popular cities sidebar section -->
     <script src="./js/popular-cities-data.js?v=20261102-1" defer></script>

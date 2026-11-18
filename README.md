@@ -2,8 +2,9 @@
 
 AIR_SENSE is a location-aware weather, air-quality and climate-prediction dashboard.
 It combines **live forecast APIs, a 10-year reanalysis archive, a custom-trained
-neural network (pure-Python MLP), an LLM "comparing agent" and a deterministic
-rule engine** into one system that answers three questions:
+neural network (pure-Python MLP), an optional pretrained time-series model
+(Chronos-Bolt-mini), an LLM "comparing agent" and a deterministic rule engine**
+into one system that answers three questions:
 
 1. *What is the weather/air right now and on the map?* — live data layer
 2. *What will it be on a chosen date (up to 1 year ahead)?* — the prediction pipeline
@@ -26,9 +27,10 @@ and presentation.
   - [3.3 The blending mathematics](#33-the-blending-mathematics)
   - [3.4 Confidence scoring](#34-confidence-scoring)
   - [3.5 Hourly shape-of-day reconstruction](#35-hourly-shape-of-day-reconstruction)
+  - [3.6 The Chronos-Bolt-mini forecaster](#36-the-chronos-bolt-mini-forecaster)
 - [4. The trained model (ml_model.py)](#4-the-trained-model-ml_modelpy)
   - [4.1 The task](#41-the-task)
-  - [4.2 Features](#42-features)
+  - [4.2 Features (7 inputs)](#42-features-7-inputs)
   - [4.3 Architecture](#43-architecture)
   - [4.4 Training procedure](#44-training-procedure)
   - [4.5 Validation and quality gates](#45-validation-and-quality-gates)
@@ -65,6 +67,7 @@ a vanilla-JS single-page dashboard (no build step, no framework).
 │     ├─► MapService (map_service.py) ────── viewport grids: weather / AQI / historical        │
 │     ├─► ClimatePredictService ─────────── the prediction pipeline (section 3)                │
 │     │      ├─ ml_model.py  7×8×1 MLP, trained per request-location (section 4)               │
+│     │      ├─ chronos_model.py  optional Chronos-Bolt-mini, zero-shot (§ 3.6)                │
 │     │      └─ LLM agent (optional) nudges blended values within hard clamps (section 5)      │
 │     └─► AiChatService ──────────────────── LLM chat grounded in live dashboard data (§ 8)    │
 │                                                                                              │
@@ -79,6 +82,8 @@ a vanilla-JS single-page dashboard (no build step, no framework).
 Everything stateless: no database, no training pipeline on disk. Each prediction
 is computed on demand from public data and cached in memory (TTL ≥ 30 min for
 predictions, 5 min for live data, 15 min for AQI grids, 60 min for historical grids).
+The only optional state on disk is the Chronos-Bolt checkpoint (§ 3.6), which is
+gitignored and absent from the deployment image.
 
 ---
 
@@ -87,7 +92,7 @@ predictions, 5 min for live data, 15 min for AQI grids, 60 min for historical gr
 | Source | What it provides | Key required | Role in the system |
 |---|---|---|---|
 | **Open-Meteo Forecast API** | Day-specific daily + hourly forecast (~16-day horizon), NOAA GFS fallback host | none (free) | Primary driver of any forecast ≤ 15 days ahead; supplies the MLP's driver inputs |
-| **Open-Meteo Archive API** (ERA5 reanalysis) | Daily reanalysis values for past years | none (free) | (a) 5-year climatology, (b) the 10-year **training set for the MLP** |
+| **Open-Meteo Archive API** (ERA5 reanalysis) | Daily reanalysis values for past years | none (free) | (a) 5-year climatology, (b) the 10-year **training set for the MLP**, (c) the 180-day context for Chronos-Bolt |
 | **Open-Meteo Historical-Forecast API** | ERA5-based historical model forecasts | none (free) | Fallback host when the archive host answers "service overloaded" (503) |
 | **Open-Meteo Air-Quality API (CAMS)** | Modelled US AQI, PM2.5, PM10, NO₂, O₃, SO₂, CO | none (free) | Air-quality everywhere (point + map grids) |
 | **WAQI** | Live ground-station AQI + pollutant details | optional token | Independent *validation* of modelled AQI; never mixed into the model grid |
@@ -129,18 +134,21 @@ target date chosen (today … +365 days)
    │       archive requests are what gets the host to return "overloaded".
    ├─(4) Train/reuse the MLP (section 4): last 10 years of archive data
    │       around the target's season; cached per (location, calendar day).
-   ├─(5) Blend: weighted mix of provider value and climatology mean,
-   │       with the MLP carrying part of the temperature climatology term.
-   ├─(6) LLM agent (optional): compares forecast vs climatology, returns
+   ├─(5) Chronos-Bolt (optional, § 3.6): last 180 days of archived mean
+   │       temperature → pretrained forecast for the target day.
+   ├─(6) Blend: weighted mix of provider value and climatology mean,
+   │       with the MLP and Chronos carrying part of the temperature term.
+   ├─(7) LLM agent (optional): compares forecast vs climatology, returns
    │       strict-JSON adjustments; every delta re-validated and clamped.
-   ├─(7) Derivations: condition text, rain intensity, 7-day trend,
+   ├─(8) Derivations: condition text, rain intensity, 7-day trend,
    │       24-hour temperature/humidity/rain/AQI series, insight text.
-   └─(8) Cache the whole result (TTL ≥ 1800 s) under `predict:{lat}:{lon}:{date}`
+   └─(9) Cache the whole result (TTL ≥ 1800 s) under `predict:{lat}:{lon}:{date}`
 ```
 
-The MLP must never break a working prediction: any failure in step 4 (archive
-down, too few samples, non-finite loss) simply means "no model this time" and
-the plain climatology blend runs exactly as before.
+The MLP and Chronos must never break a working prediction: any failure in step
+4 (archive down, too few samples, non-finite loss) or step 5 (torch or model
+missing, inference error) simply means "no model this time" and the plain
+climatology blend runs exactly as before.
 
 ### 3.3 The blending mathematics
 
@@ -184,6 +192,23 @@ Because a learned shift of the mean must not distort the diurnal range, the
 same temperature delta is also applied to max/min so the day's amplitude stays
 consistent.
 
+**The Chronos-Bolt contribution** also applies only to mean temperature, in
+`provider-forecast` mode (it is skipped for climate outlooks). It is layered
+inside the same term, after the MLP:
+
+```
+climatology_term_temp = w_chronos · chronos_prediction
+                     + (1 − w_chronos) · (MLP blend above)
+
+w_chronos = CHRONOS_WEIGHT · (1 − 0.5 · days_ahead / 15)
+```
+
+The default `CHRONOS_WEIGHT=0.45` gives ≈ 0.42 at +1 day and ≈ 0.23 at +15
+days: a univariate extrapolation deserves less trust as the horizon grows. Set
+`CHRONOS_WEIGHT=0` to keep the model report-only (or `CHRONOS_ENABLED=false`
+to skip it entirely). If the model is unavailable, `w_chronos = 0` and the
+formula collapses to the MLP blend.
+
 **Rain probability** blends the provider's probability with a *wet-day
 frequency* computed from the archive (fraction of past days with ≥ 1 mm rain),
 falling back to whichever is available.
@@ -220,13 +245,67 @@ coldest at ≈ 03:00, warmest at ≈ 15:00 — the *shape* is a model, the
 *magnitude* always comes from the prediction itself. Missing humidity/rain/AQI
 hours are held flat rather than leaving blank charts.
 
+### 3.6 The Chronos-Bolt-mini forecaster
+
+An optional second learned signal: [autogluon/chronos-bolt-mini](https://huggingface.co/autogluon/chronos-bolt-mini),
+a ~48 M-parameter pretrained time-series model (Chronos-Bolt family) run
+zero-shot — it is never trained on this project's data.
+
+- **Input**: the last `CHRONOS_CONTEXT_DAYS` (default 180) daily mean
+  temperatures for the location, from the same Open-Meteo archive used for
+  climatology. Gaps are forward-filled; sparse windows (≥ 40 % missing) are
+  rejected.
+- **Inference**: one step per day of lead time; the archive's real lag is
+  respected by counting from the last observed day, not from yesterday.
+- **Output**: median plus 10 %/90 % quantiles, exposed in the prediction as
+  `forecast.chronosModel` and narrated in `aiInsight`:
+
+```json
+"chronosModel": {
+  "model": "chronos-bolt-mini",
+  "prediction": 25.69,
+  "range": [24.36, 27.23],
+  "contextDays": 180,
+  "weight": 0.435
+}
+```
+
+**Does it help?** Backtested on Kolkata with 25 independent 180-day windows
+(archive observations, lead times from the forecast date):
+
+| Lead | Chronos MAE | Persistence MAE | 30-day mean MAE |
+|---|---|---|---|
+| +1 day | **0.63 °C** | 0.65 °C | 1.38 °C |
+| +3 days | **1.23 °C** | 1.41 °C | 1.86 °C |
+| +7 days | **1.87 °C** | 1.96 °C | 2.04 °C |
+
+It beats persistence and climatology at every lead, modestly. Because the
+provider forecast still carries most of the top-level weight at short range,
+Chronos acts as an independent correction that matters more as lead time grows
+rather than overriding the NWP.
+
+**Operational behaviour**: torch and the pipeline are imported/loaded lazily on
+the first prediction that needs them (≈ 2–5 s), then reused. The checkpoint is
+read from `CHRONOS_MODEL_PATH` (default `backend/models/chronos-bolt-mini`).
+When the weights, package or torch are absent — as in the lean Docker image —
+the feature disables itself silently; it needs ~0.5 GB RSS, so it is not part
+of the 512 MB deployment budget.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CHRONOS_ENABLED` | `true` | Master switch; `false` skips the model entirely |
+| `CHRONOS_MODEL_PATH` | `backend/models/chronos-bolt-mini` | Local checkpoint directory |
+| `CHRONOS_CONTEXT_DAYS` | `180` | Days of history fed to the model (32–1024) |
+| `CHRONOS_WEIGHT` | `0.45` | Share of the learned temperature term; decays with lead time |
+
 ---
 
 ## 4. The trained model (`ml_model.py`)
 
-This is the genuine machine-learning component of the project: a
+This is the custom-trained machine-learning component of the project: a
 fully-connected neural network implemented **from scratch in stdlib Python**
 (only `math` and `random`), trained on demand against real reanalysis data.
+The pretrained Chronos-Bolt model in § 3.6 is a separate, optional signal.
 
 ### 4.1 The task
 
@@ -436,7 +515,7 @@ Base path `/api/v1`. Coordinates accept `lat`/`lon` or `latitude`/`longitude`.
 | `GET /weather/current` | Normalised current conditions + next forecast points |
 | `GET /weather/forecast` | Normalised 5-day / 3-hourly forecast |
 | `GET /weather/air-quality` | Modelled US AQI + pollutants, with optional WAQI/OpenAQ station validation |
-| `GET /climate/predict?date=…` | **The prediction pipeline** (§ 3): blended forecast or climate outlook, trained-model block, hourly series, insight, confidence |
+| `GET /climate/predict?date=…` | **The prediction pipeline** (§ 3): blended forecast or climate outlook, trained-model block (`forecast.aiModel`), optional Chronos block (`forecast.chronosModel`), hourly series, insight, confidence |
 | `POST /ai/chat` | LLM chat grounded in live dashboard data |
 | `POST /ai/chat/intro` | Automatic grounded opening message |
 | `GET /map/weather?bbox=…&zoom=…&time=…` | Viewport weather grid (all variables in one call) with forecast-timeline slicing |
@@ -458,6 +537,7 @@ configuration → 503; rate limits → 503 with `Retry-After`. Full details in
 
 ```
 air_sense/
+├── run.py                       ★ one-command launcher: venv + backend + frontend
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              FastAPI app, lifespan wiring, CORS
@@ -467,6 +547,7 @@ air_sense/
 │   │   │                        normalisers, EPA AQI calc, recommendations
 │   │   ├── climate_predict.py   ★ prediction pipeline: climatology + blend + LLM agent
 │   │   ├── ml_model.py          ★ the pure-Python MLP: features, training, inference
+│   │   ├── chronos_model.py     optional Chronos-Bolt-mini wrapper (lazy, zero-shot)
 │   │   ├── ai_chat.py           chat service (LLM + grounded fallback)
 │   │   ├── llm.py               optional LLM recommendation adapter (isolated)
 │   │   ├── openmeteo.py         Open-Meteo HTTP client (batched locations)
@@ -476,7 +557,12 @@ air_sense/
 │   │   ├── map_service.py       viewport grid orchestration
 │   │   ├── map_grid.py          grid geometry: antimeridian, lat clamp, step ladder
 │   │   └── map_cache.py         per-family TTL grid cache + coalescing
-│   └── tests/                   pytest: API, ML model, climate predict, map, chat…
+│   ├── scripts/
+│   │   └── download_chronos.py  fetch the Chronos checkpoint from Hugging Face
+│   ├── models/                  Chronos weights (gitignored, ~82 MB)
+│   ├── requirements.txt         six lean runtime dependencies
+│   ├── requirements-ml.txt      optional torch + chronos extras
+│   └── tests/                   pytest: API, ML models, climate predict, map, chat…
 ├── frontend/                    static SPA (no build step)
 │   ├── index.html               dashboard
 │   ├── climate-analysis/        prediction / AQI outlook / climate trend pages
@@ -485,9 +571,10 @@ air_sense/
 │   ├── js/
 │   │   ├── engine.js            ★ deterministic rule engine (P0–P4) + activities
 │   │   ├── weather.js / app.js  dashboard data wiring
+│   │   ├── weather-background.js ★ condition + day/night background video
 │   │   ├── ai-app.js            chat UI (Markdown-safe rendering)
 │   │   └── weather-map/         map renderers: palettes, scalar, wind, legends, popups
-│   └── assets/                  icons, weather images, vendored Leaflet
+│   └── assets/                  icons, weather images, background clips, vendored Leaflet
 ├── docs/                        api.md (endpoint handbook), architecture.md
 ├── docker-compose.yml           backend service
 ├── Dockerfile                   repo-root image building the FastAPI app
@@ -499,9 +586,12 @@ air_sense/
 ## 11. Tech stack
 
 - **Backend**: Python 3, FastAPI, pydantic-settings, httpx (async), Uvicorn —
-  six runtime dependencies total; the neural network needs **zero** of them.
+  six lean runtime dependencies; the MLP needs **zero** of them and runs on
+  the 512 MB deployment target.
 - **ML**: hand-written MLP (7×8×1, tanh), full-batch gradient descent, exact
-  backprop — no ML framework.
+  backprop — no ML framework. Optionally, Chronos-Bolt-mini (48 M params,
+  zero-shot, `torch` CPU + `chronos-forecasting`) as a separate extras
+  install; it is lazy-loaded and not part of the lean deployment image.
 - **Frontend**: vanilla HTML/CSS/JS, Leaflet + vendored plugins, no bundler,
   no framework, no build step.
 - **Testing**: pytest with mocked providers (tests for the API contract, the
@@ -514,7 +604,65 @@ air_sense/
 
 ## 12. Running, testing and deployment
 
-### Backend
+### Quick start (one command, frontend + backend)
+
+```bash
+# one-time: create an environment with the lean runtime deps
+python3 -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
+# (on Debian/Ubuntu without python3-venv:)
+# uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -r backend/requirements.txt
+
+# then, from the repo root:
+python3 run.py
+# frontend: http://127.0.0.1:5500
+# backend:  http://127.0.0.1:8000 (docs at /docs)
+```
+
+`run.py` detects `.venv` (even when the system Python cannot import the
+dependencies), serves `frontend/` statically and runs uvicorn for
+`app.main:app` in the same process group. Ctrl+C stops both.
+
+| Flag | Effect |
+|---|---|
+| `--install` | install `backend/requirements.txt` (uses `uv pip` when available) |
+| `--reload` | backend auto-reload on code changes |
+| `--open` | open the frontend in the default browser |
+| `--backend-port` / `--frontend-port` | override defaults `8000` / `5500` |
+
+Environment variables (`PORT`, `FRONTEND_URL`, provider keys) are read from
+`backend/.env`; `run.py` changes into `backend/` before starting uvicorn, so
+relative paths in that file behave as usual.
+
+### Chronos-Bolt-mini (optional forecaster)
+
+The climate prediction endpoint can blend in a pretrained zero-shot
+time-series model, [autogluon/chronos-bolt-mini](https://huggingface.co/autogluon/chronos-bolt-mini)
+(see § 3.6). It reads the last months of archived daily temperatures and
+forecasts the target day; the result appears as `forecast.chronosModel` and in
+the insight.
+
+```bash
+# inside the project venv (adds torch CPU ~200 MB + chronos)
+uv pip install --python .venv/bin/python -r backend/requirements-ml.txt
+
+python3 backend/scripts/download_chronos.py
+# -> backend/models/chronos-bolt-mini (82 MB, gitignored)
+```
+
+With `run.py` already running, verify it on a live prediction:
+
+```bash
+curl 'http://127.0.0.1:8000/api/v1/climate/predict?lat=22.5726&lon=88.3639'
+# "chronosModel": {"model": "chronos-bolt-mini", "prediction": ...}
+```
+
+It is lazy-loaded on the first prediction (≈ 2–5 s once) and skipped entirely
+when the weights, torch or the package are missing — the deployment image
+therefore stays lean and within its 512 MB budget (the model needs ~0.5 GB
+RAM). Tune with `CHRONOS_ENABLED`, `CHRONOS_MODEL_PATH`,
+`CHRONOS_CONTEXT_DAYS` and `CHRONOS_WEIGHT` (see `backend/.env.example`).
+
+### Backend (manual, without `run.py`)
 
 ```bash
 cd backend
@@ -528,7 +676,7 @@ Optional server-side integrations go in `.env` (never in frontend JS or git):
 `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL` (OpenRouter-compatible), and
 `WAQI_API_TOKEN` / `OPENAQ_API_KEY` for station validation.
 
-### Frontend
+### Frontend (manual, without `run.py`)
 
 ```bash
 cd frontend
@@ -536,11 +684,55 @@ python3 -m http.server 5500 --bind 127.0.0.1
 # open http://127.0.0.1:5500/index.html — localhost automatically targets the local API
 ```
 
+### Weather-aware background video
+
+The dashboard, climate, history and chat pages share one fixed full-screen
+background clip that follows the live weather at the selected location.
+`frontend/js/weather-background.js` maps the backend `condition` to a clip in
+`frontend/assets/video/` and picks a day or night variant:
+
+| Condition | Day clip | Night clip |
+| --- | --- | --- |
+| `clear` | `sunny.mp4` | `clear_night_sky.mp4` |
+| `partly_cloudy` | `partly_cloud.mp4` | `night_cloudy.mp4` |
+| `cloudy` / `unknown` | `cloudy.mp4` | `night_cloudy.mp4` |
+| `overcast` | `overcast.mp4` | `night_cloudy.mp4` |
+| `fog` | `fog_sky.mp4` | `fog_sky.mp4` + night filter |
+| `drizzle` / `rain` | `rain_shower.mp4` | `dark_rain_clouds.mp4` |
+| `snow` | `snow_fall.mp4` | `snow_fall.mp4` + night filter |
+| `thunderstorm` | `thunderstorm.mp4` | `thunderstorm.mp4` + night filter |
+
+Day/night comes from `is_day` when the provider supplies it, otherwise from
+`timezone_offset`, so the clip matches the selected city and not the viewer's
+clock. Pages driven by `app.js` call `AirSenseBackground.update(weather)`;
+standalone pages set `data-weather-background="auto"` on their container and
+the script fetches `/weather/current` itself and follows
+`weatherly:location-change` events. A missing clip logs a warning and falls
+back to `cloudy.mp4` (`Overcast.jpg` poster).
+
+To add or replace a clip, drop an `.mp4` (H.264, 720p, 10–30 s loop) into
+`frontend/assets/video/` and add or edit its entry in the `CLIPS` map. Videos
+are muted, looped and `playsinline`; `prefers-reduced-motion` hides them
+entirely. Keep clips short and compressed — the current `overcast.mp4`
+(29 MB) and `snow_fall.mp4` (86 MB) are the heaviest assets in the repo, e.g.:
+
+```bash
+ffmpeg -ss 0 -t 20 -i frontend/assets/video/snow_fall.mp4 \
+  -an -vf scale=1280:-2 -c:v libx264 -crf 28 -preset slow \
+  -movflags +faststart /tmp/snow_fall.mp4
+```
+
 ### Tests
 
 ```bash
 cd backend && pytest
 ```
+
+The suite covers the API contract, MLP training/invariants, the Chronos
+wrapper, the climate pipeline, map grids and chat fallbacks. A network-free
+run is fully green; on a machine with internet access `test_missing_api_key`
+can report a failure because the Open-Meteo fallback succeeds where the test
+expects a provider failure — that is not a regression in the prediction code.
 
 ### Docker
 
@@ -552,7 +744,9 @@ docker compose up --build
 ```
 
 The container reads `PORT` and listens on `0.0.0.0`; health check path is
-`/api/v1/health`.
+`/api/v1/health`. The Chronos model weights are excluded from the build
+context (`backend/.dockerignore`), and `chronos_model.py` disables itself when
+torch/weights are absent, so the image stays inside the deployment budget.
 
 ---
 
@@ -586,6 +780,11 @@ same rule protects chat ("never invent weather or AQI values").
   shown for comparison only and are never merged into the model field.
 - The archive host is occasionally overloaded (503); the system falls back to
   the ERA5 historical-forecast host and, failing that, degrades gracefully.
+- Chronos-Bolt is a univariate temperature model: it sees only past daily
+  means, not pressure/wind/humidity, so it cannot anticipate a synoptic change.
+  It is used only in `provider-forecast` mode, its weight decays with lead
+  time, and it is disabled automatically on the lean deployment (≈ 0.5 GB RAM
+  with torch).
 - Free-tier provider weight caps bound how many grid points can be fetched per
   request; the grid therefore becomes coarser rather than failing on wide views.
 

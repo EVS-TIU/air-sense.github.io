@@ -15,3 +15,5 @@ Dockerfile
 *.log
 .coverage
 htmlcov
+# Chronos weights are ~82 MB and not used by the Docker image.
+models

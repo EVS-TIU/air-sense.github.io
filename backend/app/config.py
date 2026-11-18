@@ -26,6 +26,20 @@ class Settings(BaseSettings):
     llm_base_url: str = Field(default="", validation_alias="LLM_BASE_URL")
     llm_model: str = Field(default="", validation_alias="LLM_MODEL")
 
+    # Optional Chronos-Bolt-mini zero-shot forecaster (see chronos_model.py).
+    # Disabled automatically when the checkpoint or torch is missing.
+    chronos_enabled: bool = Field(default=True, validation_alias="CHRONOS_ENABLED")
+    chronos_model_path: str = Field(
+        default=str(Path(__file__).resolve().parents[1] / "models" / "chronos-bolt-mini"),
+        validation_alias="CHRONOS_MODEL_PATH",
+    )
+    chronos_context_days: int = Field(
+        default=180, validation_alias="CHRONOS_CONTEXT_DAYS", ge=32, le=1024
+    )
+    chronos_weight: float = Field(
+        default=0.45, validation_alias="CHRONOS_WEIGHT", ge=0.0, le=1.0
+    )
+
     # Open-Meteo map data. URLs are configurable so a self-hosted or proxy
     # deployment can be used without changing application code.
     openmeteo_forecast_url: str = Field(

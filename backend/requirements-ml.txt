@@ -1,0 +1,11 @@
+# Optional time-series forecasting model (Chronos-Bolt-mini).
+#
+# Heavy: pulls PyTorch (~200 MB wheel on CPU, ~500 MB RSS at inference).
+# The API runs fine without it; chronos_model.py degrades gracefully when
+# the package or the checkpoint is absent. Install with:
+#
+#   uv pip install -r backend/requirements-ml.txt
+#   python3 backend/scripts/download_chronos.py
+#
+chronos-forecasting>=2.3,<3
+huggingface-hub>=0.27

@@ -17,7 +17,7 @@
 <meta name="description" content="AirSense - weather recommendations for your location.">
 <meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
 <title>AirSense - History Analysis</title>
-<link rel="stylesheet" href="css/style.css?v=20261101-22">
+<link rel="stylesheet" href="css/style.css?v=20261118-1">
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/map.css?v=20261115-5">
 <link rel="stylesheet" href="css/popular-cities.css?v=20261102-1">
@@ -26,8 +26,8 @@
 <link rel="stylesheet" href="css/history-analysis.css?v=20261113-5">
 </head>
 <body class="ai-recommendation-page history-page">
-<div class="weather-background" aria-hidden="true">
-  <video class="weather-background__video" autoplay muted loop playsinline preload="auto" src="./assets/video/cloudy.mp4"></video>
+<div class="weather-background" data-weather-background="auto" aria-hidden="true">
+  <video class="weather-background__video" autoplay muted loop playsinline preload="auto" poster="./assets/images/weather/Overcast.jpg" src="./assets/video/cloudy.mp4"></video>
   <div class="weather-background__layer" data-weather-layer="a"></div>
   <div class="weather-background__layer" data-weather-layer="b"></div>
   <div class="weather-background__scrim"></div>
@@ -409,6 +409,7 @@
 <script src="assets/vendor/leaflet/leaflet.js"></script>
 <script src="js/map.js?v=20261113-7"></script>
 <script src="js/config.js"></script>
+<script src="js/weather-background.js?v=20261118-1"></script>
 <script src="js/weather.js?v=20261110-2"></script>
 <script src="js/engine.js?v=20261110-2"></script>
 <script src="js/llm.js"></script>

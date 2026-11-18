@@ -17,7 +17,7 @@
 
     var locationName = 'Selected Location';
     var data = null;          // { years (hour labels), temps, rain, ranges } for the picked day
-    var meta = null;          // { date, temperature, tempMax, humidity[], insight }
+    var meta = null;          // { date, temperature, tempMax, humidity[] }
     var activeRange = null;
     /* ------------------------------------------------------------------
        Icons (inline SVG, stroke-based to match the existing UI)
@@ -71,10 +71,6 @@
                     '</div>' +
                 '</article>' +
             '</div>' +
-            '<div class="ct-insight">' +
-                '<div class="ct-insight__title">' + ICON.leaf + 'Trend Insight</div>' +
-                '<p class="ct-insight__text" id="ct-insight-text"></p>' +
-            '</div>' +
         '</div>';
     var els = {
         sub:      host.querySelector('#ct-sub'),
@@ -86,7 +82,6 @@
         rainPlot: host.querySelector('#ct-rain-plot'),
         rainAvg:  host.querySelector('#ct-rain-avg'),
         trendLbl: host.querySelector('#ct-trend-label'),
-        insight:  host.querySelector('#ct-insight-text'),
         status:   host.querySelector('#ct-status')
     };
     /* ------------------------------------------------------------------
@@ -188,8 +183,7 @@
             date: f.date,
             temperature: f.temperature,
             tempMax: f.max_temperature,
-            humidity: detail.hourlyHumidity || [],
-            insight: detail.aiInsight || ''
+            humidity: detail.hourlyHumidity || []
         };
         activeRange = 'day';
         els.rangeBtn.disabled = true;
@@ -208,7 +202,6 @@
         els.rainPlot.innerHTML = '';
         els.rainAvg.textContent = '';
         els.trendLbl.textContent = '';
-        els.insight.textContent = '';
         els.sub.textContent = 'Pick a prediction date in the calendar to see its climate.';
         setStatus('');
     }
@@ -225,7 +218,7 @@
         els.sub.textContent = locationName + ' — pick a prediction date in the calendar.';
     }
     /* ------------------------------------------------------------------
-       Render: header, KPI cards, insight
+       Render: header, KPI cards
        ------------------------------------------------------------------ */
     function renderText() {
         var c = current();
@@ -254,15 +247,6 @@
         }).join('');
         els.rainAvg.textContent = 'Total: ' + fmt(rainTotal) + ' mm';
         els.trendLbl.textContent = 'hourly';
-        if (meta && meta.insight) {
-            els.insight.textContent = meta.insight;
-        } else {
-            els.insight.textContent = locationName.split(',')[0] + ' on ' +
-                ((meta && meta.date) || 'the picked day') + ': about ' +
-                (meta && meta.temperature != null ? meta.temperature.toFixed(1) : 'n/a') + '\u00B0C on average, peaking near ' +
-                (meta && meta.tempMax != null ? meta.tempMax.toFixed(1) : 'n/a') + '\u00B0C, with ' +
-                fmt(rainTotal) + ' mm of rain across the 24 hours. Source: trained MLP prediction model.';
-        }
     }
     /* ------------------------------------------------------------------
        Render: temperature area chart

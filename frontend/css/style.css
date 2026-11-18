@@ -1876,13 +1876,16 @@ button {
     transform: translate(-50%, -50%);
     object-fit: cover;
     pointer-events: none;
+    transition: filter 0.6s ease;
+}
+
+/* Conditions without a dedicated night clip reuse the daytime footage and
+   get this filter, so rain/snow/storm still read as night. */
+.weather-background__video.is-night {
+    filter: brightness(0.5) saturate(0.8) hue-rotate(-6deg);
 }
 
 .weather-background__layer {
-    display: none;
-}
-
-.weather-background__layer.is-active {
     display: none;
 }
 

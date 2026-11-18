@@ -19,7 +19,7 @@
     var records = null;             // { years (hour labels), aqi[], pm25[], pm10[], no2[] } for the picked day
     var ranges = [];
     var activeRange = null;
-    var meta = null;                // { date, aqi, aqiStatus, insight, peakHour, peakAqi }
+    var meta = null;                // { date, aqi, aqiStatus, peakHour, peakAqi }
     var svgNS = 'http://www.w3.org/2000/svg';
     host.innerHTML =
         '<div class="ao">' +
@@ -35,14 +35,12 @@
                 '<article class="ao-chart"><h4 class="ao-chart__title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V4M4 20h17M6 16l4-4 3 2 6-7"/><path d="M15 7h4v4"/></svg>AQI Trend</h4><div class="ao-chart__plot" data-ao-aqi-chart></div><div class="ao-chart__legend"><span class="ao-legend-item"><i class="ao-legend-item__swatch ao-legend-item__swatch--aqi"></i>Annual Avg. AQI</span></div></article>' +
                 '<article class="ao-chart"><h4 class="ao-chart__title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 15H8a5 5 0 1 1 4.8-6.4h.7a3.7 3.7 0 0 1 4 3.7 3.2 3.2 0 0 1-.1 2.7z"/><path d="M8 18l-1 2.5M12 18l-1 2.5M16 18l-1 2.5"/></svg>Pollutant Trend (Annual Avg.)</h4><div class="ao-chart__plot" data-ao-pollutant-chart></div><div class="ao-chart__legend"><span class="ao-legend-item"><i class="ao-legend-item__swatch ao-legend-item__swatch--pm25"></i>PM2.5</span><span class="ao-legend-item"><i class="ao-legend-item__swatch ao-legend-item__swatch--pm10"></i>PM10</span></div></article>' +
             '</div>' +
-            '<aside class="ao__insight"><div class="ao__insight-title"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4c-9 0-15 4-15 10a6 6 0 0 0 6 6c6 0 9-6 9-16z"/><path d="M4 21c2-5 6-8 11-10"/></svg>Outlook Insight</div><p class="ao__insight-text" data-ao-insight></p></aside>' +
         '</div>';
     var els = {
         subtitle: host.querySelector('[data-ao-subtitle]'),
         stats: host.querySelector('[data-ao-stats]'),
         aqiChart: host.querySelector('[data-ao-aqi-chart]'),
         pollutantChart: host.querySelector('[data-ao-pollutant-chart]'),
-        insight: host.querySelector('[data-ao-insight]'),
         range: host.querySelector('#ao-range'),
         status: host.querySelector('[data-ao-status]'),
         badge: host.querySelector('.ao__demo-badge')
@@ -107,7 +105,6 @@
             date: f.date,
             aqi: f.aqi,
             aqiStatus: f.aqiStatus,
-            insight: detail.aiInsight || '',
             peakHour: peak ? peak.hour : null,
             peakAqi: peak ? peak.v : null
         };
@@ -129,7 +126,6 @@
         els.stats.innerHTML = '';
         els.aqiChart.replaceChildren();
         els.pollutantChart.replaceChildren();
-        els.insight.textContent = '';
         els.range.innerHTML = '';
         els.range.disabled = true;
         els.subtitle.textContent = 'Pick a prediction date in the calendar to see its air-quality outlook.';
@@ -235,14 +231,6 @@
         renderStats();
         renderAqiChart(data);
         renderPollutantChart(data);
-        if (meta && meta.insight) {
-            els.insight.textContent = meta.insight;
-        } else if (meta) {
-            els.insight.textContent = location.city + ' on ' + (meta.date || 'the picked day') +
-                ': US AQI about ' + (meta.aqi !== null && meta.aqi !== undefined ? Math.round(meta.aqi) : 'n/a') +
-                (meta.peakHour ? ', peaking around ' + meta.peakHour + ' (AQI ' + Math.round(meta.peakAqi) + ')' : '') +
-                '. Source: trained MLP prediction model.';
-        }
     }
     function setLocation(detail) {
         if (!detail || typeof detail !== 'object') return;

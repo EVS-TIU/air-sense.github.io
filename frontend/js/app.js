@@ -16,11 +16,8 @@ const API_BASE_URL = (
   (isLocalFrontend ? LOCAL_API_BASE_URL : (apiBaseMeta?.content || DEFAULT_API_BASE_URL))
 ).replace(/\/+$/, "");
 
-const WEATHER_ASSET_ROOT = "./assets/images/weather/";
 const WEATHER_ILLUSTRATION_ROOT = "./assets/images/weather-illustrations/";
 const WEATHER_ICON_ROOT = "./assets/icons/weather/";
-const DEFAULT_BACKGROUND = "Clear_day.jpg";
-const NIGHT_BACKGROUND = "Clear_night.jpg";
 const DEFAULT_ILLUSTRATION = "cloudy.png";
 const DEFAULT_CONDITION_ICON = "default.svg";
 const WEATHER_REFRESH_MS = 10 * 60 * 1000;
@@ -35,22 +32,6 @@ const WEATHER_CACHE_TTL_MS = 5 * 60 * 1000;
 const WEATHER_CACHE_KEY = "airsense:weather:v2";
 const HERO_WEATHER_CACHE_KEY = "airsense:hero-weather:v4";
 const UNITS_STORAGE_KEY = "airsense:units";
-
-/* Keep this in sync with backend/app/services.py. */
-const CONDITION_BACKGROUNDS = {
-  clear: "Clear_day.jpg",
-  partly_cloudy: "Partly_cloudy_day.jpg",
-  cloudy: "Overcast.jpg",
-  overcast: "Overcast.jpg",
-  fog: "Dense_fog.jpg",
-  drizzle: "Drizzle.jpg",
-  rain: "Moderate_rain.jpg",
-  snow: "Moderate_snow.jpg",
-  rain_showers: "Heavy_rain.jpg",
-  snow_showers: "Snow_showers.jpg",
-  thunderstorm: "Thunder_storm.jpg",
-  unknown: DEFAULT_BACKGROUND,
-};
 
 const CONDITION_ILLUSTRATIONS = {
   clear: "sunny.png",
@@ -68,14 +49,8 @@ const CONDITION_ILLUSTRATIONS = {
 };
 
 const backgroundRoot = document.querySelector("#weather-background");
-const backgroundLayers = backgroundRoot
-  ? Array.from(backgroundRoot.querySelectorAll("[data-weather-layer]"))
-  : [];
 
-let activeLayerIndex = 0;
-let currentBackground = null;
 let weatherBackgroundRevision = 0;
-let backgroundUpdateToken = 0;
 let refreshTimer = null;
 let lastPosition = null;
 const preloadedImages = new Map();
@@ -558,24 +533,12 @@ function updateTemperatureUnitUI() {
   }
 }
 
-function normaliseBackgroundName(name) {
-  const filename = String(name || "")
-    .trim()
-    .replace(/^.*[\\/]/, "");
-
-  return filename || DEFAULT_BACKGROUND;
-}
-
 function normaliseIllustrationName(name) {
   const filename = String(name || "")
     .trim()
     .replace(/^.*[\\/]/, "");
 
   return filename || DEFAULT_ILLUSTRATION;
-}
-
-function resolveBackground(weather) {
-  return null;
 }
 
 function resolveIllustration(weather) {
@@ -894,25 +857,6 @@ function updateConditionIcon(resolved) {
   }
 }
 
-function loadBackgroundImage(filename) {
-  const url = `${WEATHER_ASSET_ROOT}${filename}`;
-
-  if (!preloadedImages.has(url)) {
-    preloadedImages.set(
-      url,
-      new Promise((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => resolve(url);
-        image.onerror = () =>
-          reject(new Error(`Missing weather background asset: ${filename}`));
-        image.src = url;
-      }),
-    );
-  }
-
-  return preloadedImages.get(url);
-}
-
 function loadIllustrationImage(filename) {
   const url = `${WEATHER_ILLUSTRATION_ROOT}${filename}`;
 
@@ -933,59 +877,7 @@ function loadIllustrationImage(filename) {
 }
 
 function applyFallbackBackground() {
-  backgroundUpdateToken += 1;
-  currentBackground = null;
-
-  if (!backgroundRoot) {
-    return;
-  }
-
-  backgroundRoot.classList.add("is-fallback");
-  backgroundLayers.forEach((layer) => layer.classList.remove("is-active"));
-}
-
-async function applyWeatherBackground(filename) {
-  if (!backgroundRoot || backgroundLayers.length < 2) {
-    return;
-  }
-
-  const safeName = normaliseBackgroundName(filename);
-
-  // Temperature or other data may change without changing the visual
-  // category. Do not reload the same image in that case.
-  if (safeName === currentBackground) {
-    return;
-  }
-
-  const token = ++backgroundUpdateToken;
-
-  try {
-    const url = await loadBackgroundImage(safeName);
-
-    // A newer update or a fallback may have happened while this image loaded.
-    if (token !== backgroundUpdateToken) {
-      return;
-    }
-
-    const nextLayerIndex = activeLayerIndex === 0 ? 1 : 0;
-    const nextLayer = backgroundLayers[nextLayerIndex];
-    const currentLayer = backgroundLayers[activeLayerIndex];
-
-    nextLayer.style.backgroundImage = `url("${url}")`;
-
-    // Force a style flush so the opacity transition runs.
-    void nextLayer.offsetWidth;
-
-    nextLayer.classList.add("is-active");
-    currentLayer.classList.remove("is-active");
-
-    activeLayerIndex = nextLayerIndex;
-    currentBackground = safeName;
-    backgroundRoot.classList.remove("is-fallback");
-  } catch (error) {
-    console.warn(error.message);
-    applyFallbackBackground();
-  }
+  window.AirSenseBackground?.fallback();
 }
 
 function setHeroLoading(isLoading) {
@@ -2020,10 +1912,9 @@ async function updateWeatherForPosition(position) {
 
   if (requestRevision !== weatherBackgroundRevision) return;
 
-  const background = resolveBackground(weather);
-  if (background) {
-    await applyWeatherBackground(background);
-  }
+  window.AirSenseBackground?.update(weather, {
+    isDay: resolveIsDaytime(weather) ?? undefined,
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -2096,7 +1987,6 @@ async function initialiseWeatherBackground() {
   }
   if (!heroPosition) applyFallbackBackground();
 }
-
 function scheduleWeatherRefresh() {
   if (refreshTimer) {
     clearInterval(refreshTimer);
