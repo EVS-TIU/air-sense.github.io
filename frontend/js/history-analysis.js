@@ -92,8 +92,16 @@
         }
     }
 
-    let location = readLocation() || DEFAULT_LOCATION;
+    const savedLocation = readLocation();
+    let location = savedLocation || DEFAULT_LOCATION;
     renderLocation();
+
+    // Tell the background/other widgets which location this page is showing.
+    // Without this, a first visit with no saved city would render Dubai data
+    // on top of the configured default background.
+    if (!savedLocation) {
+        document.dispatchEvent(new CustomEvent('weatherly:location-change', { detail: location }));
+    }
 
     function renderLocation() {
         els.locationName.textContent = location.name;

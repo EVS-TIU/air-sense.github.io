@@ -74,6 +74,81 @@
     },
   };
 
+  /* Solar elevation, so "day" means the sun is actually above the horizon at
+     the selected coordinates (fixed 06:00-18:00 is wrong in winter/high
+     latitudes). NOAA's approximation is accurate to about a minute. */
+  function solarElevationDegrees(latitude, longitude, nowMilliseconds) {
+    const date = new Date(nowMilliseconds);
+    const yearStart = Date.UTC(date.getUTCFullYear(), 0, 0);
+    const dayOfYear = Math.floor(
+      (Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) -
+        yearStart) / 86400000,
+    );
+    const utcHours =
+      date.getUTCHours() +
+      date.getUTCMinutes() / 60 +
+      date.getUTCSeconds() / 3600;
+    const gamma = (2 * Math.PI / 365) * (dayOfYear - 1 + (utcHours - 12) / 24);
+    const equationOfTime = 229.18 * (
+      0.000075 +
+      0.001868 * Math.cos(gamma) -
+      0.032077 * Math.sin(gamma) -
+      0.014615 * Math.cos(2 * gamma) -
+      0.040849 * Math.sin(2 * gamma)
+    );
+    const declination =
+      0.006918 -
+      0.399912 * Math.cos(gamma) +
+      0.070257 * Math.sin(gamma) -
+      0.006758 * Math.cos(2 * gamma) +
+      0.000907 * Math.sin(2 * gamma) -
+      0.002697 * Math.cos(3 * gamma) +
+      0.00148 * Math.sin(3 * gamma);
+    const trueSolarMinutes =
+      utcHours * 60 + equationOfTime + 4 * longitude;
+    const hourAngle = ((trueSolarMinutes / 4) - 180) * Math.PI / 180;
+    const latitudeRadians = latitude * Math.PI / 180;
+    const cosZenith =
+      Math.sin(latitudeRadians) * Math.sin(declination) +
+      Math.cos(latitudeRadians) * Math.cos(declination) * Math.cos(hourAngle);
+    const zenith = Math.acos(Math.min(1, Math.max(-1, cosZenith)));
+    return 90 - zenith * 180 / Math.PI;
+  }
+
+  function isDaytime(weather, nowMilliseconds = Date.now()) {
+    const flag = weather?.is_day;
+    if (flag === true || flag === 1) return true;
+    if (flag === false || flag === 0) return false;
+
+    let sunrise = Number(weather?.sunrise);
+    let sunset = Number(weather?.sunset);
+    if (Number.isFinite(sunrise) && Number.isFinite(sunset) && sunset > sunrise) {
+      // Some providers send milliseconds instead of Unix seconds.
+      if (sunrise > 1e12) sunrise /= 1000;
+      if (sunset > 1e12) sunset /= 1000;
+      const now = nowMilliseconds / 1000;
+      return now >= sunrise && now < sunset;
+    }
+
+    const latitude = Number(weather?.latitude);
+    const longitude = Number(weather?.longitude);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      // -0.833° is the standard horizon refraction/solar-radius correction.
+      return solarElevationDegrees(latitude, longitude, nowMilliseconds) > -0.833;
+    }
+
+    const offset = Number(weather?.timezone_offset);
+    if (Number.isFinite(offset)) {
+      const seconds =
+        ((Math.floor(nowMilliseconds / 1000) + offset) % 86400 + 86400) % 86400;
+      const hour = seconds / 3600;
+      return hour >= 6 && hour < 18;
+    }
+
+    const hour = new Date(nowMilliseconds).getHours();
+    return hour >= 6 && hour < 18;
+  }
+
   const video = document.querySelector(".weather-background__video");
   if (!video) {
     return;
@@ -93,28 +168,12 @@
   let lastRequest = null;
   let requestSequence = 0;
 
-  function isNightTime(weather) {
-    const flag = weather?.is_day;
-    if (flag === true || flag === 1) return false;
-    if (flag === false || flag === 0) return true;
-
-    const offset = Number(weather?.timezone_offset);
-    if (Number.isFinite(offset)) {
-      const seconds = ((Math.floor(Date.now() / 1000) + offset) % 86400 + 86400) % 86400;
-      const hour = seconds / 3600;
-      return hour < 6 || hour >= 18;
-    }
-
-    const hour = new Date().getHours();
-    return hour < 6 || hour >= 18;
-  }
-
   function resolve(weather, isDayOverride) {
     const condition =
       typeof weather?.condition === "string" ? weather.condition : "unknown";
     const clip = CLIPS[condition] || CLIPS.unknown;
     const isDay =
-      typeof isDayOverride === "boolean" ? isDayOverride : !isNightTime(weather);
+      typeof isDayOverride === "boolean" ? isDayOverride : isDaytime(weather);
     const nightClip = clip.night || clip.day;
     return {
       file: isDay ? clip.day : nightClip,
@@ -296,6 +355,11 @@
     }, WEATHER_CACHE_MS);
   }
 
-  window.AirSenseBackground = { update, fallback };
+  window.AirSenseBackground = {
+    update,
+    fallback,
+    isDaytime,
+    hasSelection: () => current.file !== null,
+  };
   startAutoMode();
 })();

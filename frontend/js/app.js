@@ -32,6 +32,7 @@ const WEATHER_CACHE_TTL_MS = 5 * 60 * 1000;
 const WEATHER_CACHE_KEY = "airsense:weather:v2";
 const HERO_WEATHER_CACHE_KEY = "airsense:hero-weather:v4";
 const UNITS_STORAGE_KEY = "airsense:units";
+const SELECTED_LOCATION_STORAGE_KEY = "airsense:selected-location";
 
 const CONDITION_ILLUSTRATIONS = {
   clear: "sunny.png",
@@ -808,6 +809,16 @@ function resolveForecastCondition(point, context = {}) {
 }
 
 function resolveIsDaytime(weather) {
+  // Share the background module's solar calculation so the icon and the clip
+  // agree on sunrise/sunset instead of assuming a fixed 06:00-18:00 day.
+  const solarDaytime = window.AirSenseBackground?.isDaytime;
+  if (typeof solarDaytime === "function") {
+    try {
+      return solarDaytime(weather, Date.now());
+    } catch {
+      // Fall through to the local approximations below.
+    }
+  }
   return isLocationDaytime(weather) ?? resolveForecastIsDaytime(weather, weather);
 }
 
@@ -877,6 +888,12 @@ function loadIllustrationImage(filename) {
 }
 
 function applyFallbackBackground() {
+  // Never replace a real weather clip with the generic cloudy fallback. This
+  // runs from error paths such as a denied geolocation prompt, which must not
+  // undo the background already resolved from the saved/default location.
+  if (window.AirSenseBackground?.hasSelection?.()) {
+    return;
+  }
   window.AirSenseBackground?.fallback();
 }
 
@@ -1565,7 +1582,6 @@ async function updateCurrentWeatherHero(position) {
   };
   writeCachedWeatherHero(latitude, longitude, weather);
   renderCurrentWeather(weather);
-  applyFallbackBackground();
 }
 
 function formatGeolocationAccuracy(accuracy) {
@@ -1779,7 +1795,9 @@ async function initialiseCurrentWeatherHero() {
   const permission = await getGeolocationPermissionState();
 
   if (permission === "denied") {
-    setHeroError("Location permission is required to load live weather.");
+    if (!showFallbackLocationWeather()) {
+      setHeroError("Location permission is required to load live weather.");
+    }
     document.dispatchEvent(new CustomEvent("weatherly:location-unavailable"));
     return;
   }
@@ -1788,9 +1806,40 @@ async function initialiseCurrentWeatherHero() {
     await fetchDeviceLocationWeather({ explicitClick: false });
   } catch (error) {
     console.error("Live weather unavailable:", error);
-    setHeroError("Unable to load live weather. Check your connection or try again.");
+    if (!showFallbackLocationWeather() && !currentHeroWeather) {
+      setHeroError("Unable to load live weather. Check your connection or try again.");
+    }
     applyFallbackBackground();
   }
+}
+
+/* When device location is unavailable, keep the dashboard consistent with the
+   map and background by showing the saved (or configured default) location. */
+function showFallbackLocationWeather() {
+  if (currentHeroWeather) {
+    return true;
+  }
+
+  const fallbackPosition = readBackgroundFallbackPosition();
+  if (!fallbackPosition) {
+    return false;
+  }
+
+  heroPosition = {
+    ...fallbackPosition,
+    accuracy: null,
+    timestamp: Date.now(),
+    source: "manual",
+  };
+  lastPosition = { ...heroPosition };
+  sessionStorage.removeItem(HERO_WEATHER_CACHE_KEY);
+  updateCurrentWeatherHero(heroPosition).catch(() => {
+    if (!currentHeroWeather) {
+      setHeroError("Unable to load weather for the saved location. Check your connection or try again.");
+    }
+  });
+  updateWeatherForPosition(heroPosition).catch(() => {});
+  return true;
 }
 
 function scheduleHeroWeatherRefresh() {
@@ -1981,11 +2030,52 @@ function getBrowserPosition(options = {}) {
   return pendingPositionPromise;
 }
 
+function readBackgroundFallbackPosition() {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(SELECTED_LOCATION_STORAGE_KEY) || "null",
+    );
+    const latitude = Number(saved?.lat);
+    const longitude = Number(saved?.lon);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude, source: "manual" };
+    }
+  } catch {
+    // Ignore unreadable storage; fall through to the configured default.
+  }
+
+  const fallback = window.AIREC_CONFIG?.DEFAULT_LOCATION;
+  const latitude = Number(fallback?.latitude);
+  const longitude = Number(fallback?.longitude);
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    return { latitude, longitude, source: "manual" };
+  }
+
+  return null;
+}
+
 async function initialiseWeatherBackground() {
   if (!backgroundRoot) {
     return;
   }
-  if (!heroPosition) applyFallbackBackground();
+
+  // The saved location is restored by map.js before this deferred script
+  // runs, so its `weatherly:location-change` event can be missed. Seed the
+  // background from the stored (or configured default) location instead of
+  // leaving the cloudy fallback up when device location is unavailable.
+  if (heroPosition) {
+    updateWeatherForPosition(heroPosition).catch(() => {});
+    return;
+  }
+
+  const fallbackPosition = readBackgroundFallbackPosition();
+  if (!fallbackPosition) {
+    applyFallbackBackground();
+    return;
+  }
+
+  lastPosition = { ...fallbackPosition };
+  updateWeatherForPosition(fallbackPosition).catch(() => {});
 }
 function scheduleWeatherRefresh() {
   if (refreshTimer) {

@@ -702,13 +702,19 @@ background clip that follows the live weather at the selected location.
 | `snow` | `snow_fall.mp4` | `snow_fall.mp4` + night filter |
 | `thunderstorm` | `thunderstorm.mp4` | `thunderstorm.mp4` + night filter |
 
-Day/night comes from `is_day` when the provider supplies it, otherwise from
-`timezone_offset`, so the clip matches the selected city and not the viewer's
-clock. Pages driven by `app.js` call `AirSenseBackground.update(weather)`;
+Day/night comes from `is_day` when the provider supplies it, then from the
+provider's `sunrise`/`sunset`, and otherwise from the sun's actual elevation
+at the selected coordinates (NOAA approximation) — not a fixed 06:00–18:00
+window, which would be wrong in winter and at high latitudes. Pages driven by
+`app.js` call `AirSenseBackground.update(weather)`;
 standalone pages set `data-weather-background="auto"` on their container and
 the script fetches `/weather/current` itself and follows
 `weatherly:location-change` events. A missing clip logs a warning and falls
-back to `cloudy.mp4` (`Overcast.jpg` poster).
+back to `cloudy.mp4` (`Overcast.jpg` poster). If device location is denied,
+`app.js` seeds both the Current Weather card and the background from
+`airsense:selected-location` (or `AIREC_CONFIG.DEFAULT_LOCATION`), so the two
+stay consistent; geolocation errors no longer reset an already-resolved clip
+back to the cloudy fallback.
 
 To add or replace a clip, drop an `.mp4` (H.264, 720p, 10–30 s loop) into
 `frontend/assets/video/` and add or edit its entry in the `CLIPS` map. Videos
