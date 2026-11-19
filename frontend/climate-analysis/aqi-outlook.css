@@ -240,6 +240,13 @@
     font-size: 10px;
 }
 
+.ao-chart__note {
+    fill: #8fa9c0;
+    font-family: inherit;
+    font-size: 10px;
+    font-style: italic;
+}
+
 .ao-chart__point {
     fill: #ff814b;
     stroke: #fff0e8;
