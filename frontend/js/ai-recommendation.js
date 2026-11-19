@@ -276,22 +276,13 @@
   const nh = (h) => String((h + 1) % 24).padStart(2, "0") + ":00";
 
   /* ---------- render ---------- */
-  function render(day, loc) {
-    $("#rec-place").textContent = locationLabel(loc);
-    $("#rec-date").textContent = day.dateLabel;
+  function render(day) {
     $("#rec-tz").textContent = day.timezone ? day.timezone.replace(/_/g, " ") + " time" : "local time";
-
-    const sev = day.overall;
-    $("#rec-severity").textContent = SEV_LABEL[sev] + " risk today";
-    $("#rec-severity").setAttribute("data-sev", sev);
-    $("#rec-summary").textContent = day.summary;
 
     const s = day.stats;
     const metric = (label, value) => '<div class="rec-metric"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
     $("#rec-metrics").innerHTML =
       '<div class="rec-metrics__grid">' +
-        metric("Now", s.tempNow != null ? round1(s.tempNow) + "°C" : "—") +
-        metric("High / Low", (s.tempMax != null ? round1(s.tempMax) + "°" : "—") + " / " + (s.tempMin != null ? round1(s.tempMin) + "°" : "—")) +
         metric("Rain chance", s.rainMax != null ? "up to " + Math.round(s.rainMax) + "%" : "—") +
         metric("Peak AQI", s.aqiMax != null ? Math.round(s.aqiMax) : "—") +
         metric("Peak wind", s.windMax != null ? round1(s.windMax) + " km/h" : "—") +
@@ -370,7 +361,7 @@
       }
       const aq = aqRes.status === "fulfilled" ? aqRes.value : null;
       const day = buildDay(wxRes.value, aq);
-      render(day, loc);
+      render(day);
       clearState();
     } catch (err) {
       if (token !== loadToken) return;

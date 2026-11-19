@@ -276,9 +276,11 @@ The page is replaced, not patched:
   note per hour. All interpolated values are HTML-escaped. Includes loading,
   error and retry states.
 - `frontend/css/AI-recommendation.css` — rewritten with the same glass/sidebar
-  shell plus a distinct day-briefing design: severity chip, metric row,
-  inline SVG temperature curve, precaution cards, a 24-cell colour strip and
-  a 24-row hourly timeline. Responsive down to mobile.
+  shell plus a distinct day-briefing design: a compact metric row (rain chance,
+  peak AQI, peak wind), inline SVG temperature curve, precaution cards, a
+  24-cell colour strip and a 24-row hourly timeline. Responsive down to mobile.
+  The hero title/status block and the Now / High-Low metrics were removed on
+  request; the page starts directly with the metrics and the hourly guide.
 - `frontend/index.html`, `frontend/history-analysis.html` — nav label updated.
 
 ### Verification performed (local)
