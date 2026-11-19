@@ -56,6 +56,18 @@
         svg.appendChild(element);
         return element;
     }
+    // Render at the plot's real pixel size so the SVG viewBox matches the box
+    // exactly. A fixed viewBox (e.g. 560x220) gets letterboxed by the browser
+    // inside a tall/narrow panel, leaving large empty gaps above and below.
+    function chartSize(el, fallbackW, fallbackH) {
+        return {
+            w: el.clientWidth > 40 ? el.clientWidth : fallbackW,
+            h: el.clientHeight > 40 ? el.clientHeight : fallbackH
+        };
+    }
+    function labelEvery(count, plotWidth) {
+        return Math.max(1, Math.ceil(count / Math.max(1, Math.floor(plotWidth / 46))));
+    }
     function setStatus(msg, kind) {
         els.status.hidden = !msg;
         els.status.textContent = msg || '';
@@ -188,9 +200,12 @@
             stat('<svg class="ao-stat__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c3-7 15-7 18 0-3 7-15 7-18 0z"/><circle cx="12" cy="12" r="3"/></svg>', 'clean', 'Peak AQI Hour', day.peakHour ? day.peakHour + ' \u00b7 AQI ' + Math.round(day.peakAqi) : 'n/a', '(worst hour of the day)');
     }
     function renderAqiChart(data) {
-        var width = 560, height = 220, margin = { top: 16, right: 12, bottom: 32, left: 44 };
+        var size = chartSize(els.aqiChart, 560, 220);
+        var width = size.w, height = size.h;
+        var margin = { top: 16, right: 12, bottom: 32, left: 44 };
         var plotWidth = width - margin.left - margin.right;
         var plotHeight = height - margin.top - margin.bottom;
+        var every = labelEvery(data.years.length, plotWidth);
         // Fixed US AQI scale: 0-500 for every picked day. AQI can exceed 400,
         // so a data-derived axis would either clip the peak or keep rescaling.
         var max = 500;
@@ -215,12 +230,13 @@
             var point = svgElement('circle', { cx: x(index), cy: y(value), r: data.years.length > 8 ? 3.5 : 4.5, 'class': 'ao-chart__point' });
             point.appendChild(svgElement('title')).textContent = data.years[index] + ': AQI ' + Math.round(value);
             svg.appendChild(point);
-            if (data.years.length <= 6 || index % 2 === 0 || index === data.years.length - 1) svgText(svg, x(index), height - 9, String(data.years[index]));
+            if (data.years.length <= 6 || index % every === 0 || index === data.years.length - 1) svgText(svg, x(index), height - 9, String(data.years[index]));
         });
         els.aqiChart.replaceChildren(svg);
     }
     function renderPollutantChart(data) {
-        var width = 560, height = 220;
+        var size = chartSize(els.pollutantChart, 560, 220);
+        var width = size.w, height = size.h;
         var poll = resolvePollutants(data);
         var flat = poll.pm25.concat(poll.pm10).filter(function (v) { return v !== null && v !== undefined; });
         if (!flat.length) {
@@ -232,10 +248,11 @@
         var margin = { top: poll.estimated ? 30 : 16, right: 12, bottom: 32, left: 54 };
         var plotWidth = width - margin.left - margin.right;
         var plotHeight = height - margin.top - margin.bottom;
+        var every = labelEvery(data.years.length, plotWidth);
         var max = Math.max(50, Math.ceil(Math.max.apply(null, flat) / 20) * 20);
         var stepV = Math.ceil(max / 5 / 10) * 10;
         var groupWidth = plotWidth / data.years.length;
-        var barWidth = Math.min(15, groupWidth * 0.28);
+        var barWidth = Math.max(3, Math.min(15, groupWidth * 0.36));
         var svg = svgElement('svg', { viewBox: '0 0 ' + width + ' ' + height, role: 'img', 'aria-label': 'Hourly PM2.5 and PM10 for the picked day in ' + location.city + ', micrograms per cubic meter' + (poll.estimated ? ' (estimated from AQI)' : '') });
         svg.appendChild(svgElement('title')).textContent = 'Hourly PM2.5 and PM10 for ' + location.city + (poll.estimated ? ' (estimated from AQI)' : '');
         if (poll.estimated) {
@@ -266,7 +283,7 @@
                 bar.appendChild(svgElement('title')).textContent = year + ': ' + series.label + ' ' + value.toFixed(1) + ' \u00b5g/m\u00b3' + (poll.estimated ? ' (est.)' : '');
                 svg.appendChild(bar);
             });
-            if (data.years.length <= 6 || index % 2 === 0 || index === data.years.length - 1) svgText(svg, center, height - 9, String(year));
+            if (data.years.length <= 6 || index % every === 0 || index === data.years.length - 1) svgText(svg, center, height - 9, String(year));
         });
         els.pollutantChart.replaceChildren(svg);
     }
@@ -320,6 +337,21 @@
         activeRange = els.range.value;
         render();
     });
+    /* Re-render at the new pixel size when the panel resizes or a hidden tab
+       becomes visible; otherwise the viewBox would go back to being letterboxed. */
+    var lastChartSize = { w: 0, h: 0 };
+    function onChartResize(entries) {
+        if (!records) return;
+        var box = entries[0].contentRect;
+        if (Math.abs(box.width - lastChartSize.w) < 1 && Math.abs(box.height - lastChartSize.h) < 1) return;
+        lastChartSize = { w: box.width, h: box.height };
+        render();
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(onChartResize).observe(els.aqiChart);
+    } else {
+        window.addEventListener('resize', function () { if (records) render(); });
+    }
     /* Prediction fan-out from the Weather Prediction tab. */
     document.addEventListener('weatherly:prediction-data', function (e) { mountPrediction(e.detail); });
     document.addEventListener('weatherly:prediction-blank', resetToBlank);
