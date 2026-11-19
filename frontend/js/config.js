@@ -20,3 +20,46 @@ window.AIREC_CONFIG = {
   // Used when the user denies location access
   DEFAULT_LOCATION: { name: "Kolkata", latitude: 22.5726, longitude: 88.3639 }
 };
+
+/* Several widgets on a page ask for /weather/current at the same time with
+   the same coordinates. Share one in-flight request so a page load doesn't
+   fire the same network call two or three times. */
+window.WeatherlyCurrent = (function () {
+  var inFlight = Object.create(null);
+
+  return {
+    fetch: function (apiBase, latitude, longitude, includeLocation, timeoutMs) {
+      var base = String(apiBase).replace(/\/+$/, "");
+      var lat = Number(latitude), lon = Number(longitude);
+      var key = [base, lat.toFixed(4), lon.toFixed(4), includeLocation ? "1" : "0"].join("|");
+      if (inFlight[key]) return inFlight[key];
+
+      var url = new URL(base + "/weather/current", window.location.href);
+      url.searchParams.set("latitude", String(lat));
+      url.searchParams.set("longitude", String(lon));
+      if (includeLocation) url.searchParams.set("include_location", "true");
+
+      var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+      var timer = controller && timeoutMs ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
+      var init = { headers: { Accept: "application/json" }, mode: "cors" };
+      if (controller) init.signal = controller.signal;
+
+      var request = fetch(url.toString(), init).then(function (response) {
+        if (!response.ok) {
+          return response.json().then(function (body) {
+            throw new Error((body && body.detail) || "Weather request failed (" + response.status + ")");
+          }).catch(function () {
+            throw new Error("Weather request failed (" + response.status + ")");
+          });
+        }
+        return response.json();
+      }).finally(function () {
+        if (timer) clearTimeout(timer);
+      });
+
+      inFlight[key] = request;
+      request.then(function () { delete inFlight[key]; }, function () { delete inFlight[key]; });
+      return request;
+    }
+  };
+})();

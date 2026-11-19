@@ -1516,36 +1516,9 @@ function writeCachedWeatherHero(latitude, longitude, weather) {
 }
 
 async function fetchCurrentWeatherHero(latitude, longitude) {
-  const url = new URL(`${API_BASE_URL}/weather/current`, window.location.origin || window.location.href);
-  url.searchParams.set("latitude", String(Number(latitude)));
-  url.searchParams.set("longitude", String(Number(longitude)));
-  url.searchParams.set("include_location", "true");
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), WEATHER_REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url.toString(), {
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-      mode: "cors",
-    });
-
-    if (!response.ok) {
-      let detail = "";
-      try {
-        const body = await response.json();
-        detail = typeof body.detail === "string" ? body.detail : "";
-      } catch {
-        // Ignore non-JSON bodies.
-      }
-      throw new Error(detail || `Weather request failed (${response.status})`);
-    }
-
-    return await response.json();
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return window.WeatherlyCurrent.fetch(
+    API_BASE_URL, latitude, longitude, true, WEATHER_REQUEST_TIMEOUT_MS,
+  );
 }
 
 async function updateCurrentWeatherHero(position) {
@@ -1911,35 +1884,9 @@ function writeCachedWeather(latitude, longitude, weather) {
 }
 
 async function fetchCurrentWeather(latitude, longitude) {
-  const url = new URL(`${API_BASE_URL}/weather/current`, window.location.href);
-  url.searchParams.set("latitude", String(latitude));
-  url.searchParams.set("longitude", String(longitude));
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), WEATHER_REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      let detail = "";
-      try {
-        const body = await response.json();
-        detail = typeof body.detail === "string" ? body.detail : "";
-      } catch {
-        // Ignore non-JSON error bodies.
-      }
-
-      throw new Error(detail || `Weather request failed (${response.status})`);
-    }
-
-    return await response.json();
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return window.WeatherlyCurrent.fetch(
+    API_BASE_URL, latitude, longitude, true, WEATHER_REQUEST_TIMEOUT_MS,
+  );
 }
 
 async function updateWeatherForPosition(position) {

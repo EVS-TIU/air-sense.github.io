@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  const ASSET_VERSION = "20261118-2";
+  const ASSET_VERSION = "20261119-1";
   const FALLBACK_VIDEO = "cloudy.mp4";
   const FALLBACK_POSTER = "Overcast.jpg";
   const LOCATION_STORAGE_KEY = "airsense:selected-location";
@@ -196,7 +196,9 @@
     }
     current = { file, filter };
 
-    video.poster = new URL(poster, posterDir).href;
+    const posterUrl = new URL(poster, posterDir);
+    posterUrl.searchParams.set("v", ASSET_VERSION);
+    video.poster = posterUrl.href;
     video.classList.toggle("is-night", filter);
 
     const url = new URL(`${file}?v=${ASSET_VERSION}`, videoDir).href;
@@ -302,20 +304,10 @@
     }
 
     const sequence = ++requestSequence;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), WEATHER_REQUEST_TIMEOUT_MS);
     try {
-      const url = new URL(`${apiBaseUrl()}/weather/current`, window.location.href);
-      url.searchParams.set("latitude", String(lat));
-      url.searchParams.set("longitude", String(lon));
-      const response = await fetch(url, {
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new Error(`Weather request failed (${response.status})`);
-      }
-      const weather = await response.json();
+      const weather = await window.WeatherlyCurrent.fetch(
+        apiBaseUrl(), lat, lon, true, WEATHER_REQUEST_TIMEOUT_MS,
+      );
       if (sequence !== requestSequence) return;
       writeWeatherCache(lat, lon, weather);
       update(weather);
@@ -323,8 +315,6 @@
       if (sequence === requestSequence) {
         console.warn("Weather background unavailable:", error.message);
       }
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
