@@ -129,6 +129,77 @@ def summarize(values: list[float]) -> VariableStats | None:
     return VariableStats(round(mean, 2), round(std, 2), min(values), max(values), len(values))
 
 
+def year_window(year: int, target: date_type) -> tuple[date_type, date_type]:
+    """The target's calendar window placed in `year`.
+
+    Building it from the target's month/day and then substituting the year is
+    only safe when the window does not cross 1 Jan: a 31 Dec target gives
+    29 Dec .. 2 Jan, which used to become `year-12-29 .. year-01-02` (start
+    after end) and made the archive answer 400. Anchoring on a real date and
+    adding/subtracting the offset keeps the range chronological.
+    """
+    try:
+        centre = date_type(year, target.month, target.day)
+    except ValueError:  # 29 Feb in a non-leap year
+        centre = date_type(year, target.month, 28)
+    return (centre - timedelta(days=HISTORY_WINDOW_DAYS),
+            centre + timedelta(days=HISTORY_WINDOW_DAYS))
+
+
+def calendar_distance(first: date_type, second: date_type) -> int:
+    """Day-of-year distance that wraps at New Year (29 Dec is 3 days from 1 Jan)."""
+    # 2000 is a leap year, so 29 Feb exists and can be compared as well.
+    a = date_type(2000, first.month, first.day).timetuple().tm_yday
+    b = date_type(2000, second.month, second.day).timetuple().tm_yday
+    gap = abs(a - b)
+    return min(gap, 366 - gap)
+
+
+def archive_rows(data: dict) -> list[dict[str, object]]:
+    """Turn an Open-Meteo `daily` response into the internal row format."""
+    daily = data.get("daily") or {}
+    times = daily.get("time") or []
+    values = {variable: daily.get(variable) or [] for variable in VARIABLES}
+    rows: list[dict[str, object]] = []
+    for index, when in enumerate(times):
+        row: dict[str, object] = {"date": str(when)}
+        for variable, series in values.items():
+            finite = _finite(series[index:index + 1])
+            row[variable] = finite[0] if finite else None
+        rows.append(row)
+    return rows
+
+
+def climatology_rows(rows: list[dict[str, object]], target: date_type,
+                     current_year: int) -> list[dict[str, object]]:
+    """Rows for the last HISTORY_YEARS whose day matches the target's season."""
+    result: list[dict[str, object]] = []
+    for row in rows:
+        try:
+            when = date_type.fromisoformat(str(row["date"]))
+        except (KeyError, ValueError, TypeError):
+            continue
+        # Early-January days belong to the previous year's winter window
+        # (e.g. 1 Jan 2026 is part of the 2025 window around 31 Dec).
+        window_year = when.year - 1 if (when.month == 1 and when.day <= HISTORY_WINDOW_DAYS) else when.year
+        if not current_year - HISTORY_YEARS <= window_year < current_year:
+            continue
+        if calendar_distance(when, target) <= HISTORY_WINDOW_DAYS:
+            result.append(row)
+    return result
+
+
+def model_archive_start() -> date_type:
+    """First day of a stable archive window, independent of the target date.
+
+    Anchoring on 1 Jan of `today.year - MODEL_YEARS` means a 31 Dec target and
+    a 2 Jan target share the same contiguous rows (and therefore one cache
+    entry). It is a superset of every per-target season window because
+    `build_samples` only keeps days near the target's (circular) day of year.
+    """
+    return date_type(date_type.today().year - MODEL_YEARS, 1, 1)
+
+
 def hourly_temperatures(prediction: dict, target_iso: str,
                         provider_hourly: dict) -> list[dict]:
     """24 temperature points for the predicted day (the one custom day).
@@ -342,6 +413,10 @@ class ClimatePredictService:
         # Date+location predictions are expensive (multi-year archive fetch);
         # reuse them well beyond the default weather cache window.
         self.cache: TTLCache = TTLCache(max(settings.cache_ttl_seconds, 1800))
+        # One-slot cache for the contiguous archive: ~10 years of rows is a few
+        # MB, so keep only the current location (bounded memory on the small
+        # deployment target) instead of one copy per cached prediction.
+        self._archive_cache: tuple[str, list[dict[str, object]]] | None = None
         # Optional zero-shot time-series model; loads on first use, never on boot.
         self.chronos = (
             chronos_model.ChronosForecaster(settings.chronos_model_path)
@@ -413,12 +488,38 @@ class ClimatePredictService:
             "end_date": end.isoformat(),
         }
 
-    async def _history_year(self, lat: float, lon: float, year: int, window_start: date_type, window_end: date_type) -> list[dict]:
+    async def _archive_rows(self, lat: float, lon: float,
+                            start: date_type, end: date_type) -> list[dict[str, object]] | None:
+        """One contiguous archive fetch. None means unavailable (callers fall back)."""
         try:
-            start = date_type(year, window_start.month, window_start.day)
-            end = date_type(year, window_end.month, window_end.day)
-        except ValueError:  # Feb 29 in a non-leap year
-            return []
+            data = await self._open_meteo(
+                self.settings.openmeteo_archive_url,
+                self._history_params(lat, lon, start, end),
+                attempts=2,
+            )
+        except ClimatePredictError as exc:
+            logger.info("Archive fetch %s..%s failed (%s)", start, end, exc)
+            return None
+        return archive_rows(data) or None
+
+    async def _shared_archive_rows(self, lat: float, lon: float,
+                                   target: date_type) -> list[dict[str, object]] | None:
+        """Archive for both climatology and the MLP, cached per location/day."""
+        start = model_archive_start()
+        end = date_type.today()
+        key = f"{lat:.3f}:{lon:.3f}:{end.isoformat()}:{start.isoformat()}"
+        cached = self._archive_cache
+        if cached is not None and cached[0] == key:
+            return cached[1]
+        rows = await self._archive_rows(lat, lon, start, end)
+        if rows is not None:
+            self._archive_cache = (key, rows)
+        return rows
+
+    async def _history_year(self, lat: float, lon: float, year: int,
+                            target: date_type) -> list[dict[str, object]]:
+        """Fallback: one year's short window, safe across the New Year."""
+        start, end = year_window(year, target)
         try:
             data = await self._open_meteo(
                 self.settings.openmeteo_archive_url,
@@ -437,59 +538,31 @@ class ClimatePredictService:
             except ClimatePredictError as exc2:
                 logger.warning("Historical fetch %s..%s failed: %s", start, end, exc2)
                 return []
-        daily = data.get("daily") or {}
-        times = daily.get("time") or []
-        records: list[dict] = []
-        for index in range(len(times)):
-            record: dict[str, float | None] = {}
-            for variable in VARIABLES:
-                values = daily.get(variable) or []
-                finite = _finite(values[index:index + 1])
-                record[variable] = finite[0] if finite else None
-            record["date"] = times[index]
-            records.append(record)
-        return records
+        return archive_rows(data)
 
     # -------------------------------------------------------- trained model
 
-    async def _trained_model(self, lat: float, lon: float,
-                             target: date_type) -> ml_model.MLPModel | None:
+    async def _trained_model(self, lat: float, lon: float, target: date_type,
+                             rows: list[dict[str, object]] | None = None
+                             ) -> ml_model.MLPModel | None:
         """Train (or reuse) the tiny MLP for this location and season.
 
-        One contiguous archive request covers the last MODEL_YEARS of
-        daily data; the training samples are the days near the target's
-        season. Cached per location and calendar day, like the predictions
-        themselves. Never raises: any failure means "no model", and the
-        plain climatology blend runs as before.
+        `rows` is the shared contiguous archive fetch; when it is unavailable
+        the method falls back to its own request. Training samples are the
+        days near the target's season. Cached per location and calendar day.
+        Never raises: any failure means "no model", and the plain climatology
+        blend runs as before.
         """
         cache_key = f"mlp:{lat:.2f}:{lon:.2f}:{target.month}:{target.day}"
         cached = await self.cache.get(cache_key)
         if cached is not None:
             return None if cached == "none" else cached
-        try:
-            start = date_type(target.year - MODEL_YEARS, target.month, target.day)
-        except ValueError:  # Feb 29 in a non-leap year
-            start = date_type(target.year - MODEL_YEARS, target.month, 28)
-        try:
-            data = await self._open_meteo(
-                self.settings.openmeteo_archive_url,
-                self._history_params(lat, lon, start, date_type.today()),
-                attempts=2,
-            )
-        except ClimatePredictError as exc:
-            logger.warning("Trained-model archive fetch failed: %s", exc)
+        if rows is None:
+            rows = await self._archive_rows(
+                lat, lon, model_archive_start(), date_type.today())
+        if rows is None:
             await self.cache.set(cache_key, "none")
             return None
-        daily = data.get("daily") or {}
-        times = daily.get("time") or []
-        rows: list[dict] = []
-        for index in range(len(times)):
-            row: dict[str, object] = {"date": times[index]}
-            for variable in VARIABLES:
-                values = daily.get(variable) or []
-                finite = _finite(values[index:index + 1])
-                row[variable] = finite[0] if finite else None
-            rows.append(row)
         samples = ml_model.build_samples(
             rows, ml_model.day_of_year(target), MODEL_WINDOW_DAYS)
         # Training is pure-Python CPU work; keep it off the event loop.
@@ -642,7 +715,12 @@ class ClimatePredictService:
         }
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
         try:
-            response = await self.client.post(self.settings.llm_base_url, json=body, headers=headers)
+            # The shared client allows 60 s for slow archive hosts; the LLM is
+            # optional decoration and must never stall a prediction that long
+            # when the provider is rate-limiting/timing out.
+            response = await self.client.post(
+                self.settings.llm_chat_url, json=body, headers=headers,
+                timeout=httpx.Timeout(10.0, connect=5.0))
             response.raise_for_status()
             choices = response.json().get("choices") or []
             text = (choices[0].get("message") or {}).get("content") if choices else None
@@ -675,8 +753,6 @@ class ClimatePredictService:
             trend_end = target + timedelta(days=6)
         else:
             trend_end = min(max(target, today + timedelta(days=6)), today + timedelta(days=MAX_FORECAST_DAYS_AHEAD))
-        window_start = target - timedelta(days=HISTORY_WINDOW_DAYS)
-        window_end = target + timedelta(days=HISTORY_WINDOW_DAYS)
 
         if outlook:
             aqi, hourly_aqi = await asyncio.gather(
@@ -704,12 +780,20 @@ class ClimatePredictService:
         if provider_row is None and not outlook:
             raise ClimatePredictError("Provider returned no row for the target date")
 
-        # Sequential on purpose: hammering the archive endpoint with parallel
-        # requests is what gets it to answer "service is overloaded".
-        records: list[dict] = []
-        for offset in range(1, HISTORY_YEARS + 1):
-            records.extend(await self._history_year(
-                lat, lon, today.year - offset, window_start, window_end))
+        # One contiguous archive request supplies both the climatology windows
+        # and the MLP's training data. The old path made five short requests
+        # sequentially (the archive host dislikes parallel ones), which took
+        # ~50 s on the small deployment target and stalled the gateway.
+        archive = await self._shared_archive_rows(lat, lon, target)
+        if archive is not None:
+            records = climatology_rows(archive, target, today.year)
+        else:
+            # Fallback: still one request per year, never in parallel, and
+            # with year-boundary-safe windows.
+            records = []
+            for offset in range(1, HISTORY_YEARS + 1):
+                records.extend(await self._history_year(
+                    lat, lon, today.year - offset, target))
         if not records:
             raise ClimatePredictError("No historical archive data available for this location")
 
@@ -732,7 +816,7 @@ class ClimatePredictService:
         model_temp: float | None = None
         mlp_weight = 0.0
         try:
-            model = await self._trained_model(lat, lon, target)
+            model = await self._trained_model(lat, lon, target, rows=archive)
         except Exception as exc:  # the model must never break a working prediction
             logger.warning("Trained model unavailable: %s", exc)
             model = None

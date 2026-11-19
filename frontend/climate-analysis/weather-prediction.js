@@ -480,12 +480,22 @@ window.MOCK_CLIMATE_DATA = {
     } catch (e) { return null; }
   }
 
+  /* The gateway drops very slow requests without CORS headers, so the browser
+     only exposes an opaque "Failed to fetch". Say what that means instead. */
+  function describeFetchError(err) {
+    var msg = (err && err.message) || String(err);
+    if (/failed to fetch|networkerror/i.test(msg)) {
+      return "The prediction server took too long or is temporarily unreachable. Try again in a moment.";
+    }
+    return msg;
+  }
+
   /* ---------- Prediction overview, human-readable text under the calendar ---------- */
   function writeJsonOverview(data, err) {
     var pre = document.querySelector(".ca-mlp-json");
     if (!pre) return;
     if (err) {
-      pre.textContent = "Prediction failed: " + (err.message || err);
+      pre.textContent = "Prediction failed: " + describeFetchError(err);
       return;
     }
     if (!data) {
@@ -556,9 +566,10 @@ window.MOCK_CLIMATE_DATA = {
       .catch(function (err) {
         if (myId !== fetchId) return;
         console.warn("Weather Prediction load failed:", err);
-        status("Prediction unavailable: " + (err.message || err));
+        var message = describeFetchError(err);
+        status("Prediction unavailable: " + message);
         writeJsonOverview(null, err);
-        fanOut("error", { message: err.message || String(err) });
+        fanOut("error", { message: message });
       });
   }
 

@@ -1,12 +1,15 @@
 """Unit tests for the climate prediction blend/guardrail logic (no network)."""
 
-from datetime import date
+import asyncio
+from datetime import date, timedelta
 
 import pytest
 
 from app.climate_predict import (
+    ClimatePredictService,
     VariableStats,
     aqi_status,
+    climatology_rows,
     clamp,
     confidence_score,
     condition_text,
@@ -15,7 +18,9 @@ from app.climate_predict import (
     provider_weight,
     rainfall_intensity,
     summarize,
+    year_window,
 )
+from app.config import Settings
 
 
 def test_summarize_computes_mean_std_and_bounds():
@@ -87,3 +92,85 @@ def test_fallback_insight_mentions_climatology_and_confidence():
     prediction = {"temperature": 28.5}
     text = fallback_insight(prediction, {"temperature_2m_mean": stats}, days_ahead=2, confidence=80)
     assert "25.0" in text and "28.5" in text and "80%" in text
+
+
+def test_year_window_crosses_new_year_instead_of_building_an_inverted_range():
+    # The old implementation produced 2025-12-29 .. 2025-01-02 (start > end)
+    # for this date and Open-Meteo answered 400 for all five years.
+    start, end = year_window(2025, date(2026, 12, 31))
+    assert (start.isoformat(), end.isoformat()) == ("2025-12-29", "2026-01-02")
+    start, end = year_window(2026, date(2027, 1, 1))
+    assert (start.isoformat(), end.isoformat()) == ("2025-12-30", "2026-01-03")
+
+
+def test_climatology_rows_include_days_on_both_sides_of_new_year():
+    rows = [
+        {"date": "2025-12-30"},
+        {"date": "2026-01-01"},   # belongs to the 2025 winter window
+        {"date": "2026-01-05"},   # too far from 31 Dec
+        {"date": "2026-12-31"},   # current year is excluded
+    ]
+    picked = climatology_rows(rows, date(2026, 12, 31), 2026)
+    assert {row["date"] for row in picked} == {"2025-12-30", "2026-01-01"}
+
+
+def _sample_days(start: date, end: date, values: dict[str, float]) -> dict:
+    times, stamps = [], []
+    current = start
+    while current <= end:
+        times.append(current.isoformat())
+        stamps.append(current.isoformat() + "T12:00")
+        current += timedelta(days=1)
+    daily = {"time": times}
+    daily.update({key: [value] * len(times) for key, value in values.items()})
+    return {"daily": daily, "hourly": {
+        "time": stamps,
+        "temperature_2m": [24.0] * len(stamps),
+        "relative_humidity_2m": [70.0] * len(stamps),
+        "precipitation": [0.0] * len(stamps),
+        "us_aqi": [100.0] * len(stamps),
+        "pm2_5": [12.0] * len(stamps),
+        "pm10": [20.0] * len(stamps),
+        "nitrogen_dioxide": [10.0] * len(stamps),
+    }}
+
+
+def test_new_year_prediction_uses_one_archive_fetch_and_reuses_it():
+    """A 31 Dec target must not issue ten inverted archive requests."""
+    settings = Settings(chronos_enabled=False)
+    service = ClimatePredictService(settings)
+    today = date.today()
+    target = date(today.year, 12, 31)
+    calls: list[tuple[str, str | None, str | None]] = []
+
+    values = {
+        "temperature_2m_mean": 24.0, "apparent_temperature_mean": 27.0,
+        "temperature_2m_max": 29.0, "temperature_2m_min": 19.0,
+        "relative_humidity_2m_mean": 70.0, "precipitation_sum": 0.0,
+        "wind_speed_10m_max": 10.0, "cloud_cover_mean": 30.0,
+        "wind_direction_10m_dominant": 90.0,
+    }
+
+    async def fake_open_meteo(url, params, attempts=3):
+        calls.append((url, params.get("start_date"), params.get("end_date")))
+        if url == settings.openmeteo_archive_url:
+            assert date.fromisoformat(params["start_date"]) < date.fromisoformat(params["end_date"])
+            return _sample_days(date(target.year - 10, 1, 1), today, values)
+        if url == settings.openmeteo_forecast_url:
+            return _sample_days(params["start_date"], params["end_date"], values)
+        return {"current": {"us_aqi": 100.0}, **_sample_days(
+            target, target, {"temperature_2m_mean": 24.0})}
+
+    service._open_meteo = fake_open_meteo
+
+    async def exercise():
+        first = await service.predict(22.70, 88.40, target, "Sukant Nagar", "India")
+        archive_calls = [call for call in calls if call[0] == settings.openmeteo_archive_url]
+        assert len(archive_calls) == 1
+        assert isinstance(first["forecast"]["temperature"], (int, float))
+        next_target = date(today.year + 1, 1, 2)
+        await service.predict(22.70, 88.40, next_target, "Sukant Nagar", "India")
+        archive_calls = [call for call in calls if call[0] == settings.openmeteo_archive_url]
+        assert len(archive_calls) == 1  # archive rows reused from the one-slot cache
+
+    asyncio.run(exercise())

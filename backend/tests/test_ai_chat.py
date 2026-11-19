@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import httpx
 
 from app.ai_chat import AiChatService
-from app.config import Settings
+from app.config import Settings, normalize_llm_base_url
 
 
 def _service(weather=None, llm_key: str = "") -> AiChatService:
@@ -77,6 +77,44 @@ def test_llm_key_enables_the_llm_path():
     assert service.llm_enabled is True
     service_no_key = _service()
     assert service_no_key.llm_enabled is False
+
+
+def test_llm_base_url_variants_all_resolve_to_chat_endpoint():
+    expected = "https://openrouter.ai/api/v1/chat/completions"
+    for raw in ("https://openrouter.ai/api/v1",
+                "https://openrouter.ai/api/v1/",
+                "https://openrouter.ai/api/v1/chat/completions",
+                "https://openrouter.ai/api/v1/chat/completions/"):
+        assert normalize_llm_base_url(raw) == expected
+    assert normalize_llm_base_url("") == ""
+
+
+def test_llm_posts_to_normalised_endpoint():
+    """The exact 404 cause: a short base URL must still reach /chat/completions."""
+    service = _service(llm_key="test-key")
+    urls = []
+
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    async def fake_post(self, url, json=None, headers=None):
+        urls.append(url)
+        return FakeResponse()
+
+    original_post = httpx.AsyncClient.post
+    httpx.AsyncClient.post = fake_post
+    try:
+        result = asyncio.run(service._llm_answer("hi", {}, []))
+    finally:
+        httpx.AsyncClient.post = original_post
+    assert result == "ok"
+    assert urls == ["https://example.test/v1/chat/completions"]
 
 
 def test_data_failures_degrade_gracefully():

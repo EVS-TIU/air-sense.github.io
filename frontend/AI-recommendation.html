@@ -1,22 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script>
-    /* Every reload returns to the dashboard's Current Weather view, no matter
-       which tab was open. Deliberate link navigation (type "navigate") is
-       unaffected, so the sidebar tabs stay reachable. */
-    (function () {
-        try {
-            var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
-            if (nav && nav.type === 'reload') location.replace('index.html');
-        } catch (e) { /* navigation timing unavailable: leave the page as-is */ }
-    })();
-</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="AirSense - weather recommendations for your location.">
+<meta name="description" content="AirSense - today's weather precautions and an hour-by-hour guide for your location.">
 <meta name="airsense-api-base" content="https://airsense-backend-docker.getvoroa.com/api/v1">
-<title>AirSense - Weather Chat</title>
+<title>AirSense - AI Recommendation</title>
 <link rel="stylesheet" href="css/style.css?v=20261118-1">
 <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/map.css?v=20261115-5">
@@ -71,7 +60,7 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
                     </svg>
-                    <span>Weather Chat</span>
+                    <span>AI Recommendation</span>
                 </a>
                 <a href="#hotspot-map" data-nav="hotspot-map">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -224,7 +213,7 @@
                             <svg viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
                             </svg>
-                            Weather Chat
+                            AI Recommendation
                         </button>
                     </li>
                     <li role="none">
@@ -300,43 +289,64 @@
         </header>
 
     <main>
-      <section id="ai-content" class="content-placeholder ai-chat" aria-label="Weather Chat">
-        <header class="ai-chat__header">
-          <div class="ai-chat__brand">
-            <span class="ai-chat__bot" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M8 12h.01M16 12h.01M9 16h6M12 7V4M9 4h6"/></svg></span>
-            <div>
-              <h1>Weather Chat <span class="ai-chat__live"><i></i> Live Expert</span></h1>
-              <p>Real-time intelligent recommendations based on active sensor stream in <strong id="ai-chat-city">Kolkata</strong></p>
-            </div>
-          </div>
-          <button class="ai-chat__reset" id="ai-chat-reset" type="button"><span aria-hidden="true">↻</span> Reset Chat</button>
-        </header>
-
-        <div class="ai-chat__body" id="ai-chat-messages">
-          <!-- The opening today-overview message is posted automatically by
-               js/ai-app.js (backend /ai/chat/intro) once a location resolves. -->
+      <section id="ai-content" class="content-placeholder rec-page" aria-label="AI Recommendation for today">
+        <!-- Loading / error state overlays the panel until the day model is ready -->
+        <div class="rec-state" id="rec-state" role="status" aria-live="polite" data-kind="loading">
+          <div class="rec-state__pulse" aria-hidden="true"><span></span><span></span><span></span></div>
+          <p id="rec-state-text">Building today's recommendation…</p>
+          <button type="button" id="rec-retry" class="rec-retry" hidden>Try again</button>
         </div>
 
-        <form class="ai-chat__composer" id="ai-chat-form">
-          <span aria-hidden="true">⌕</span>
-          <input id="ai-chat-input" type="text" placeholder="Ask AI about AQI, weather safety, or city comparison..." autocomplete="off">
-          <button class="ai-chat__send" type="submit" aria-label="Send message">➤</button>
-        </form>
+        <header class="rec-hero">
+          <div class="rec-hero__head">
+            <div class="rec-hero__title">
+              <p class="rec-eyebrow">AI RECOMMENDATION · TODAY ONLY</p>
+              <h1 id="rec-date">Today</h1>
+              <p class="rec-hero__place"><span aria-hidden="true">📍</span> <span id="rec-place">Locating…</span></p>
+            </div>
+            <div class="rec-hero__status">
+              <span class="rec-severity" id="rec-severity" data-sev="low">Checking conditions…</span>
+              <p id="rec-summary">Reading today's weather and air quality.</p>
+            </div>
+          </div>
+          <div class="rec-metrics" id="rec-metrics"></div>
+        </header>
+
+        <div class="rec-body">
+          <section class="rec-section" aria-labelledby="rec-prec-title">
+            <div class="rec-section__head">
+              <div>
+                <h2 id="rec-prec-title">Precautions for today</h2>
+                <p>Based on the highest-risk hours of this calendar day.</p>
+              </div>
+            </div>
+            <div class="rec-precautions" id="rec-precautions"></div>
+          </section>
+
+          <section class="rec-section" aria-labelledby="rec-time-title">
+            <div class="rec-section__head">
+              <div>
+                <h2 id="rec-time-title">Hour by hour · midnight to midnight</h2>
+                <p>24 one-hour slots from 00:00 to the next 00:00 · <span id="rec-tz">local time</span></p>
+              </div>
+            </div>
+            <div class="rec-timeline" id="rec-timeline"></div>
+          </section>
+        </div>
+
+        <footer class="rec-foot" id="rec-foot"></footer>
       </section>
     </main>
 </div>
 
 <script src="assets/vendor/leaflet/leaflet.js"></script>
-<script src="js/map.js?v=20261113-7"></script>
 <script src="js/config.js"></script>
+<script src="js/map.js?v=20261113-7"></script>
 <script src="js/weather-background.js?v=20261118-4"></script>
-<script src="js/weather.js?v=20261110-2"></script>
-<script src="js/engine.js?v=20261110-2"></script>
-<script src="js/llm.js"></script>
 <script src="js/topbar.js?v=20261113-3" defer></script>
-<script src="js/ai-app.js?v=20261115-11"></script>
 <script src="js/popular-cities-data.js?v=20261102-1"></script>
 <script src="js/popular-cities.js?v=20261110-1"></script>
 <script src="js/sidebar-active.js?v=20261112-2"></script>
+<script src="js/ai-recommendation.js?v=20261119-1"></script>
 </body>
 </html>

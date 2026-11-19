@@ -33,7 +33,7 @@ class LLMRecommendationService:
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
         try:
             async with httpx.AsyncClient(timeout=5) as client:
-                response = await client.post(self.settings.llm_base_url, json=payload, headers=headers)
+                response = await client.post(self.settings.llm_chat_url, json=payload, headers=headers)
                 response.raise_for_status()
                 data = response.json()
                 return data.get("choices", [{}])[0].get("message", {}).get("content")

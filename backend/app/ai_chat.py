@@ -179,7 +179,7 @@ class AiChatService:
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
         try:
             async with httpx.AsyncClient(timeout=20.0) as client:
-                response = await client.post(self.settings.llm_base_url,
+                response = await client.post(self.settings.llm_chat_url,
                                              json=body, headers=headers)
                 response.raise_for_status()
                 choices = response.json().get("choices") or []

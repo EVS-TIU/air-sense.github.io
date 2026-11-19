@@ -5,6 +5,20 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def normalize_llm_base_url(url: str) -> str:
+    """Turn a short/loose LLM base URL into a usable chat-completions URL.
+
+    Operators often paste the API root (`.../api/v1`) instead of the full
+    endpoint, or leave a trailing slash. Both make OpenRouter answer
+    `404 Not Found` and leave the app silently on its rule-based fallback.
+    Normalising here means the chat works with either form.
+    """
+    cleaned = (url or "").strip().rstrip("/")
+    if cleaned and not cleaned.endswith("/chat/completions"):
+        cleaned = f"{cleaned}/chat/completions"
+    return cleaned
+
+
 class Settings(BaseSettings):
     """Runtime configuration loaded from environment variables."""
 
@@ -25,6 +39,11 @@ class Settings(BaseSettings):
     llm_api_key: str = Field(default="", validation_alias="LLM_API_KEY")
     llm_base_url: str = Field(default="", validation_alias="LLM_BASE_URL")
     llm_model: str = Field(default="", validation_alias="LLM_MODEL")
+
+    @property
+    def llm_chat_url(self) -> str:
+        """Normalised chat endpoint derived from the configured base URL."""
+        return normalize_llm_base_url(self.llm_base_url)
 
     # Optional Chronos-Bolt-mini zero-shot forecaster (see chronos_model.py).
     # Disabled automatically when the checkpoint or torch is missing.
