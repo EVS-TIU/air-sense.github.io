@@ -249,45 +249,12 @@
     };
   }
 
-  /* ---------- temperature curve (inline SVG, no library) ---------- */
-  function tempCurve(day) {
-    const pts = day.hours.map((h, i) => (h && h.temperature != null) ? { i, t: h.temperature } : null).filter(Boolean);
-    if (pts.length < 2) return "";
-    const W = 720, H = 96, pad = 8;
-    const ts = pts.map((p) => p.t);
-    const lo = Math.min.apply(null, ts), hi = Math.max.apply(null, ts);
-    const span = (hi - lo) || 1;
-    const xy = pts.map((p) => ({
-      x: pad + p.i * (W - pad * 2) / 23,
-      y: H - pad - ((p.t - lo) / span) * (H - pad * 2)
-    }));
-    const line = xy.map((p, i) => (i ? "L" : "M") + p.x.toFixed(1) + " " + p.y.toFixed(1)).join(" ");
-    const area = line + " L" + xy[xy.length - 1].x.toFixed(1) + " " + H + " L" + xy[0].x.toFixed(1) + " " + H + " Z";
-    return '<svg class="rec-curve" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Temperature across the day">' +
-      '<defs><linearGradient id="recCurveFill" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#7fd0ff" stop-opacity=".38"/><stop offset="1" stop-color="#7fd0ff" stop-opacity="0"/>' +
-      '</linearGradient></defs>' +
-      '<path d="' + area + '" fill="url(#recCurveFill)"/>' +
-      '<path d="' + line + '" fill="none" stroke="#7fd0ff" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>' +
-      '</svg>';
-  }
-
   const hh = (h) => String(h).padStart(2, "0") + ":00";
   const nh = (h) => String((h + 1) % 24).padStart(2, "0") + ":00";
 
   /* ---------- render ---------- */
   function render(day) {
     $("#rec-tz").textContent = day.timezone ? day.timezone.replace(/_/g, " ") + " time" : "local time";
-
-    const s = day.stats;
-    const metric = (label, value) => '<div class="rec-metric"><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
-    $("#rec-metrics").innerHTML =
-      '<div class="rec-metrics__grid">' +
-        metric("Rain chance", s.rainMax != null ? "up to " + Math.round(s.rainMax) + "%" : "—") +
-        metric("Peak AQI", s.aqiMax != null ? Math.round(s.aqiMax) : "—") +
-        metric("Peak wind", s.windMax != null ? round1(s.windMax) + " km/h" : "—") +
-      '</div>' + tempCurve(day) +
-      '<div class="rec-curve-axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span></div>';
 
     $("#rec-precautions").innerHTML = day.precautions.map((p) =>
       '<article class="rec-card" data-sev="' + p.sev + '">' +
