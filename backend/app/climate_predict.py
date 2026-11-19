@@ -39,6 +39,13 @@ MAX_FORECAST_DAYS_AHEAD = 15  # Open-Meteo forecast horizon is ~16 days
 # window ("what this date is usually like"), not a day-specific forecast.
 MAX_OUTLOOK_DAYS_AHEAD = 365
 
+# User-facing wording for an out-of-range prediction date. Shared by the API
+# error and the frontend so both say the same thing.
+PREDICTION_RANGE_MESSAGE = (
+    "You have selected out of the predict range. "
+    "Choose a date from today up to 1 year ahead."
+)
+
 # The trained regression model (ml_model.py) learns temperature from ten
 # years of archive data around the target season, then contributes to the
 # climatology term of the blend. One contiguous archive request covers it.
@@ -92,6 +99,29 @@ AGENT_SYSTEM_PROMPT = (
 
 class ClimatePredictError(Exception):
     """Raised when neither provider nor archive data can produce a prediction."""
+
+
+class PredictionRangeError(ClimatePredictError):
+    """Raised when the requested date is outside the supported 1-year window.
+
+    Kept as a subclass so the route can answer 400 (bad user input) while
+    genuine data-provider failures still answer 502 (server error).
+    """
+
+
+def resolve_prediction_target(target: date_type,
+                              today: date_type | None = None) -> date_type:
+    """Clamp past dates to today and reject dates more than 1 year ahead.
+
+    The rule lives here so it can be unit-tested without any network calls and
+    is shared by the API handler before any slow archive/forecast work starts.
+    """
+    today = today or date_type.today()
+    if target < today:
+        return today
+    if (target - today).days > MAX_OUTLOOK_DAYS_AHEAD:
+        raise PredictionRangeError(PREDICTION_RANGE_MESSAGE)
+    return target
 
 
 def clamp(value: float, lo: float, hi: float) -> float:
@@ -734,11 +764,10 @@ class ClimatePredictService:
     async def predict(self, lat: float, lon: float, target: date_type,
                       city: str | None = None, country: str | None = None) -> dict:
         today = date_type.today()
-        if target < today:
-            target = today
+        # Validate the range before any slow archive/forecast work so an
+        # out-of-range date fails immediately with a clear user-facing error.
+        target = resolve_prediction_target(target, today)
         days_ahead = (target - today).days
-        if days_ahead > MAX_OUTLOOK_DAYS_AHEAD:
-            raise ClimatePredictError("date must be within 1 year of today")
         # Beyond the provider horizon we cannot fetch a day-specific
         # forecast; the prediction is built from climatology + the trained
         # model only and is labelled a climate outlook in the response.

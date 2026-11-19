@@ -414,6 +414,27 @@
     color: rgba(168, 195, 216, 0.4);
 }
 
+/* Dates outside the supported 1-year prediction window. Clicks are still
+   allowed through so the UI can explain why that date cannot be predicted. */
+.ca-calendar__day.is-disabled {
+    opacity: 0.3;
+    color: rgba(168, 195, 216, 0.3);
+    cursor: not-allowed;
+}
+
+.ca-calendar__day.is-disabled:hover {
+    background: transparent;
+    color: rgba(168, 195, 216, 0.3);
+}
+
+.ca-calendar__range-hint {
+    margin: 8px 0 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: rgba(168, 195, 216, 0.7);
+    text-align: center;
+}
+
 /* Today */
 .ca-calendar__day.is-today {
     border-color: rgba(33, 169, 255, 0.45);

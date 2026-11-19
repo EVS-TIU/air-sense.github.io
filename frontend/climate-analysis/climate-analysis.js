@@ -100,16 +100,20 @@
         'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
-    var today      = new Date();
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
     var viewYear   = today.getFullYear();
     var viewMonth  = today.getMonth();
     var selectedDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-    // Scrollable year span: first year of the archive data through a
-    // decade ahead — this is a prediction tab, so future possibilities
-    // must be selectable.
-    var FIRST_DATA_YEAR = 2005;
-    var FUTURE_YEARS = 10;
+    // The prediction API supports today through 365 days ahead. Keep the
+    // picker inside that window so the UI never asks for a date the backend
+    // is guaranteed to reject.
+    var PREDICTION_RANGE_DAYS = 365;
+    var PREDICTION_RANGE_MESSAGE =
+        'You have selected out of the predict range. Choose a date from today up to 1 year ahead.';
+    var maxDate = new Date(today);
+    maxDate.setDate(maxDate.getDate() + PREDICTION_RANGE_DAYS);
 
     function isSameDay(a, b) {
         return a && b &&
@@ -127,16 +131,32 @@
                '-' + (day < 10 ? '0' + day : day);
     }
 
+    function isOutOfRange(date) {
+        return date < today || date > maxDate;
+    }
+
+    function monthHasAllowedDays(year, month) {
+        var first = new Date(year, month, 1);
+        var last = new Date(year, month + 1, 0);
+        return last >= today && first <= maxDate;
+    }
+
+    function showRangeError() {
+        document.dispatchEvent(new CustomEvent('weatherly:prediction-range-error', {
+            detail: { message: PREDICTION_RANGE_MESSAGE }
+        }));
+    }
+
     /* ---------- Year | month dropdowns ---------- */
 
     function initSelectors() {
         if (!yearSelect || !monthSelect) return;
 
         var years = '';
-        var lastYear = today.getFullYear() + FUTURE_YEARS;
-        // Past years are gone: predictions start from today, so the
-        // dropdown begins at the current year.
-        var firstYear = Math.max(FIRST_DATA_YEAR, today.getFullYear());
+        // Only years that can contain a selectable day: the current year
+        // through the year containing today + 365 days.
+        var firstYear = today.getFullYear();
+        var lastYear = maxDate.getFullYear();
         for (var y = firstYear; y <= lastYear; y++) {
             years += '<option value="' + y + '"' + (y === viewYear ? ' selected' : '') + '>' + y + '</option>';
         }
@@ -180,14 +200,17 @@
 
         for (var p = startOffset - 1; p >= 0; p--) {
             var pDay = prevMonthDays - p;
-            html += '<span class="ca-calendar__day is-outside" data-date="' +
-                localISO(new Date(viewYear, viewMonth - 1, pDay)) +
-                '">' + pDay + '</span>';
+            var prevDate = new Date(viewYear, viewMonth - 1, pDay);
+            var prevCls = 'ca-calendar__day is-outside' +
+                (isOutOfRange(prevDate) ? ' is-disabled' : '');
+            html += '<span class="' + prevCls + '" data-date="' +
+                localISO(prevDate) + '">' + pDay + '</span>';
         }
 
         for (var d = 1; d <= daysInMonth; d++) {
             var date = new Date(viewYear, viewMonth, d);
             var cls  = 'ca-calendar__day';
+            if (isOutOfRange(date))              cls += ' is-disabled';
             if (isSameDay(date, today))          cls += ' is-today';
             if (isSameDay(date, selectedDate))   cls += ' is-selected';
 
@@ -198,9 +221,11 @@
         var totalCells = startOffset + daysInMonth;
         var remaining  = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
         for (var n = 1; n <= remaining; n++) {
-            html += '<span class="ca-calendar__day is-outside" data-date="' +
-                localISO(new Date(viewYear, viewMonth + 1, n)) +
-                '">' + n + '</span>';
+            var nextDate = new Date(viewYear, viewMonth + 1, n);
+            var nextCls = 'ca-calendar__day is-outside' +
+                (isOutOfRange(nextDate) ? ' is-disabled' : '');
+            html += '<span class="' + nextCls + '" data-date="' +
+                localISO(nextDate) + '">' + n + '</span>';
         }
 
         daysContainer.innerHTML = html;
@@ -208,8 +233,19 @@
 
     /* ---------- Unified render ---------- */
 
+    function syncNavButtons() {
+        var prevY = viewYear, prevM = viewMonth - 1;
+        if (prevM < 0) { prevM = 11; prevY--; }
+        if (prevBtn) prevBtn.disabled = !monthHasAllowedDays(prevY, prevM);
+
+        var nextY = viewYear, nextM = viewMonth + 1;
+        if (nextM > 11) { nextM = 0; nextY++; }
+        if (nextBtn) nextBtn.disabled = !monthHasAllowedDays(nextY, nextM);
+    }
+
     function renderCalendar() {
         renderDays();
+        syncNavButtons();
     }
 
     /* ---------- Click: day cells (single-day selection) ---------- */
@@ -221,6 +257,13 @@
 
             if (!cell.dataset.date) return;
             var clicked = new Date(cell.dataset.date + 'T00:00:00');
+
+            // Never run a prediction for a date outside the 1-year window.
+            if (isOutOfRange(clicked)) {
+                showRangeError();
+                return;
+            }
+
             selectedDate = clicked;
 
             // If clicked day is in a different month, navigate there
@@ -239,16 +282,22 @@
 
     if (prevBtn) {
         prevBtn.addEventListener('click', function () {
-            viewMonth--;
-            if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+            var y = viewYear, m = viewMonth - 1;
+            if (m < 0) { m = 11; y--; }
+            if (!monthHasAllowedDays(y, m)) return;
+            viewYear = y;
+            viewMonth = m;
             renderCalendar();
         });
     }
 
     if (nextBtn) {
         nextBtn.addEventListener('click', function () {
-            viewMonth++;
-            if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+            var y = viewYear, m = viewMonth + 1;
+            if (m > 11) { m = 0; y++; }
+            if (!monthHasAllowedDays(y, m)) return;
+            viewYear = y;
+            viewMonth = m;
             renderCalendar();
         });
     }
@@ -256,6 +305,18 @@
     // Initial render
     initSelectors();
     renderCalendar();
+
+    /* Visible reminder of the supported window, so a disabled day is not
+       mistaken for a broken calendar. */
+    var rangeHint = section.querySelector('.ca-calendar__range-hint');
+    if (rangeHint) {
+        var prettyDate = function (d) {
+            return d.toLocaleDateString(undefined,
+                { day: 'numeric', month: 'short', year: 'numeric' });
+        };
+        rangeHint.textContent = 'Prediction range: ' + prettyDate(today) +
+            ' – ' + prettyDate(maxDate) + ' (1 year).';
+    }
 
     /* Public accessor: the single prediction target day, for the
        Generate Analysis / prediction pipeline to consume. */

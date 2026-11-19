@@ -6,7 +6,11 @@ from datetime import date, timedelta
 import pytest
 
 from app.climate_predict import (
+    MAX_OUTLOOK_DAYS_AHEAD,
+    PREDICTION_RANGE_MESSAGE,
+    ClimatePredictError,
     ClimatePredictService,
+    PredictionRangeError,
     VariableStats,
     aqi_status,
     climatology_rows,
@@ -17,6 +21,7 @@ from app.climate_predict import (
     parse_agent_json,
     provider_weight,
     rainfall_intensity,
+    resolve_prediction_target,
     summarize,
     year_window,
 )
@@ -64,6 +69,33 @@ def test_aqi_status_bands():
 def test_clamp():
     assert clamp(5.0, 0.0, 3.0) == 3.0
     assert clamp(-1.0, 0.0, 3.0) == 0.0
+
+
+def test_prediction_range_allows_today_and_the_one_year_boundary():
+    today = date(2026, 11, 19)
+    assert resolve_prediction_target(today, today) == today
+    assert resolve_prediction_target(
+        today + timedelta(days=MAX_OUTLOOK_DAYS_AHEAD), today
+    ) == today + timedelta(days=MAX_OUTLOOK_DAYS_AHEAD)
+
+
+def test_prediction_range_rejects_more_than_one_year_with_user_message():
+    today = date(2026, 11, 19)
+    with pytest.raises(PredictionRangeError) as exc:
+        resolve_prediction_target(
+            today + timedelta(days=MAX_OUTLOOK_DAYS_AHEAD + 1), today
+        )
+    assert "out of the predict range" in str(exc.value).lower()
+    assert "1 year" in PREDICTION_RANGE_MESSAGE
+
+
+def test_prediction_range_clamps_past_dates_to_today():
+    today = date(2026, 11, 19)
+    assert resolve_prediction_target(today - timedelta(days=30), today) == today
+
+
+def test_prediction_range_error_is_a_climate_predict_error():
+    assert issubclass(PredictionRangeError, ClimatePredictError)
 
 
 def test_parse_agent_json_accepts_plain_and_fenced_json():

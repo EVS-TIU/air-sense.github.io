@@ -9,7 +9,11 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from .ai_chat import AiChatService
-from .climate_predict import ClimatePredictService, ClimatePredictError
+from .climate_predict import (
+    ClimatePredictService,
+    ClimatePredictError,
+    PredictionRangeError,
+)
 from .map_service import MapService, parse_bbox
 from .services import WeatherClient, WeatherServiceError, build_recommendations
 
@@ -138,6 +142,10 @@ async def climate_predict(
     target = prediction_date(date) or date_type.today()
     try:
         return await predictor.predict(location.latitude, location.longitude, target, city=city, country=country)
+    except PredictionRangeError as exc:
+        # Bad user input (date outside the 1-year prediction window), not a
+        # server failure. Answer 400 so the UI can show the specific message.
+        raise HTTPException(400, str(exc)) from None
     except ClimatePredictError as exc:
         raise HTTPException(502, str(exc)) from None
 

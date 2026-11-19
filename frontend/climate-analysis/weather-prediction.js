@@ -469,6 +469,33 @@ window.MOCK_CLIMATE_DATA = {
   var currentLocation = null;
   var currentDate = null;
 
+  /* Keep in sync with MAX_OUTLOOK_DAYS_AHEAD in the backend and the calendar
+     in climate-analysis.js. The guard here also covers prediction events fired
+     by other tabs (e.g. "Generate Analysis"), not just calendar clicks. */
+  var PREDICTION_RANGE_DAYS = 365;
+  var PREDICTION_RANGE_MESSAGE =
+    "You have selected out of the predict range. Choose a date from today up to 1 year ahead.";
+
+  function isOutOfRangeDate(iso) {
+    if (typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    var parts = iso.split("-").map(Number);
+    var picked = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(picked.getTime())) return false;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var max = new Date(today);
+    max.setDate(max.getDate() + PREDICTION_RANGE_DAYS);
+    return picked < today || picked > max;
+  }
+
+  function showPredictionError(message) {
+    var myId = ++fetchId; // invalidate any in-flight prediction
+    status("Prediction unavailable: " + message);
+    writeJsonOverview(null, new Error(message));
+    fanOut("error", { message: message });
+    return myId;
+  }
+
   function readLocation() {
     try {
       var raw = window.localStorage.getItem(LOCATION_KEY);
@@ -554,6 +581,10 @@ window.MOCK_CLIMATE_DATA = {
 
   function load(date) {
     if (!currentLocation) { blankState(); return; }
+    if (isOutOfRangeDate(date)) {
+      showPredictionError(PREDICTION_RANGE_MESSAGE);
+      return;
+    }
     var myId = ++fetchId;
     status("Running trained-MLP prediction for " + date + "…");
     ClimateApi.getClimateForecast(currentLocation, date)
@@ -572,6 +603,12 @@ window.MOCK_CLIMATE_DATA = {
         fanOut("error", { message: message });
       });
   }
+
+  /* Calendar → out-of-range click: show the specific message, never fetch. */
+  document.addEventListener("weatherly:prediction-range-error", function (e) {
+    var message = (e.detail && e.detail.message) || PREDICTION_RANGE_MESSAGE;
+    showPredictionError(message);
+  });
 
   /* Calendar → prediction date */
   document.addEventListener("weatherly:prediction-date", function (e) {
