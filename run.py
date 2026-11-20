@@ -5,11 +5,13 @@ Starts the FastAPI backend (uvicorn) and the static frontend on one command:
 
     python3 run.py
 
+By default it opens the frontend in your browser once both servers are up.
+
 Optional flags:
     --backend-port 8000    backend port (env: PORT)
     --frontend-port 5500   frontend port
     --reload               auto-reload the backend on code changes
-    --open                 open the frontend in the default browser
+    --no-open              do not open a browser window
     --install              pip install backend/requirements.txt first
 """
 
@@ -137,7 +139,7 @@ def main() -> None:
         "--frontend-port", type=int, default=5500, help="frontend port (default: 5500)"
     )
     parser.add_argument("--reload", action="store_true", help="auto-reload backend on changes")
-    parser.add_argument("--open", action="store_true", help="open the frontend in a browser")
+    parser.add_argument("--no-open", action="store_true", help="do not open the frontend in a browser")
     parser.add_argument("--install", action="store_true", help="install backend requirements first")
     args = parser.parse_args()
 
@@ -175,8 +177,8 @@ def main() -> None:
     print("  Press Ctrl+C to stop.")
     print()
 
-    if args.open:
-        threading.Timer(1.0, webbrowser.open, args=(frontend_url,)).start()
+    if not args.no_open:
+        threading.Timer(1.5, webbrowser.open, args=(frontend_url,)).start()
 
     try:
         uvicorn.run(

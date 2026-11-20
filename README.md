@@ -55,7 +55,7 @@ a vanilla-JS single-page dashboard (no build step, no framework).
 ```
 ┌──────────────────────────────  Frontend (vanilla JS + Leaflet)  ─────────────────────────────┐
 │  Dashboard   Weather Map (heatmap layers, wind particles)   Climate Analysis   AI Chat      │
-│  engine.js deterministic rule engine · weather-map/* renderers · weather-prediction.js       │
+│  ai-recommendation.js deterministic rules · weather-map/* renderers · weather-prediction.js   │
 └───────────────────────────────────────┬──────────────────────────────────────────────────────┘
                                         │  JSON over HTTP (/api/v1/…)
 ┌───────────────────────────────────────▼──────────────────────────────────────────────────────┐
@@ -446,16 +446,14 @@ wind/visibility/AQI thresholds (configurable via `Settings`) produce typed
 risks `{type, severity: Low|Moderate|High|Severe, message}` plus an overall
 severity.
 
-**Frontend** (`frontend/js/engine.js`): a richer rule catalog with explicit
-priorities **P0–P4** (from "Extreme heat risk" P1 down to "Comfortable
-weather" P4), classification ladders for each variable (e.g. temperature:
-Cold → Cool → Comfortable → Warm → Hot → Very hot → Extreme heat), an activity
-engine that maps risk sets onto plan advice, and a **null-safe comparison
-design**: missing data never matches a rule — it can never read as "safe" or
-"zero".
+**Frontend** (`frontend/js/ai-recommendation.js`): hour-by-hour deterministic
+labels driven by severity thresholds (low → moderate → high → severe) for
+temperature, rain, wind, UV and AQI, plus a null-safe comparison design:
+missing data never matches a rule, so it can never read as "safe" or "zero".
+Each hour shows the single highest-priority driver, which keeps the advice
+short and auditable.
 
-Every rule fires from measured values with a machine-readable trigger list
-(e.g. `["visibility_km", "weather_code"]`), which makes the output auditable —
+Every rule fires from measured values, which makes the output auditable —
 exactly the property you want to defend in a paper.
 
 ---
@@ -569,10 +567,9 @@ air_sense/
 │   ├── AI-recommendation.html   Weather Chat page
 │   ├── history-analysis.html    historical analysis page
 │   ├── js/
-│   │   ├── engine.js            ★ deterministic rule engine (P0–P4) + activities
-│   │   ├── weather.js / app.js  dashboard data wiring
+│   │   ├── app.js               dashboard data wiring
+│   │   ├── ai-recommendation.js deterministic day advice (severity thresholds)
 │   │   ├── weather-background.js ★ condition + day/night background video
-│   │   ├── ai-app.js            chat UI (Markdown-safe rendering)
 │   │   └── weather-map/         map renderers: palettes, scalar, wind, legends, popups
 │   └── assets/                  icons, weather images, background clips, vendored Leaflet
 ├── docs/                        api.md (endpoint handbook), architecture.md

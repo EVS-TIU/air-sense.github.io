@@ -1107,17 +1107,6 @@ def epa_category(aqi: int) -> str:
     return "Hazardous"
 
 
-def normalize_air_quality(raw: dict[str, Any], lat: float, lon: float) -> dict[str, Any]:
-    item = (raw.get("list") or [{}])[0]
-    provider_aqi = item.get("main", {}).get("aqi")
-    components = item.get("components", {})
-    return {"location": {"latitude": lat, "longitude": lon}, "provider": "OpenWeather",
-            "provider_index": provider_aqi, "provider_scale": "1–5 (OpenWeather air pollution index)",
-            "methodology": "US EPA AQI when valid averaged pollutant data is available; otherwise OpenWeather 1–5 index",
-            "epa_aqi": None, "dominant_pollutant": None, "components": components,
-            "observed_at": item.get("dt")}
-
-
 def build_recommendations(weather: Mapping[str, Any], air: Mapping[str, Any] | None, settings: Settings) -> dict[str, Any]:
     risks: list[dict[str, Any]] = []
     def add(kind: str, severity: str, message: str) -> None:

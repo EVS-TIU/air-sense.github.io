@@ -1044,63 +1044,6 @@ function formatForecastHour(time, timestamp, timezoneOffset = 0) {
   return `${displayHour} ${suffix}`;
 }
 
-function forecastConditionClass(code) {
-  const key = conditionKeyFromWeatherCode(Number(code), true);
-  if (key === "sunny" || key === "clear-night") {
-    return "clear";
-  }
-  if (key === "partly-cloudy" || key === "partly-cloudy-night") {
-    return "partly-cloudy";
-  }
-  if (key === "thunderstorm") {
-    return "storm";
-  }
-  if (key === "drizzle" || key === "rain" || key === "heavy-rain" || key === "sleet") {
-    return "rain";
-  }
-  if (key === "snow") {
-    return "snow";
-  }
-  if (key === "fog") {
-    return "fog";
-  }
-  return "cloudy";
-}
-
-function forecastConditionLabel(point, context = {}) {
-  return resolveForecastCondition(point, context).label;
-}
-
-function forecastIconMarkup(code) {
-  const conditionClass = forecastConditionClass(code);
-  if (conditionClass === "clear") {
-    return '<circle class="sun" cx="40" cy="28" r="13"></circle><g class="sun-rays"><path d="M40 6v8M40 42v8M18 28h8M54 28h8M24 12l6 6M50 38l6 6M56 12l-6 6M30 38l-6 6"></path></g>';
-  }
-  const cloud = '<path class="cloud" d="M18 42C5 42 4 26 16 20C18 8 37 6 43 20C58 12 73 25 69 38C67 44 62 46 55 46H18Z"></path>';
-  if (conditionClass === "partly-cloudy") {
-    return '<circle class="sun" cx="27" cy="20" r="11"></circle>' + cloud;
-  }
-  if (conditionClass === "rain") {
-    return cloud + '<path class="rain-drop" d="M24 50l-5 9M40 50l-5 9M56 50l-5 9"></path>';
-  }
-  if (conditionClass === "snow") {
-    return cloud + '<g class="snow-flake"><circle cx="24" cy="55" r="2"></circle><circle cx="40" cy="55" r="2"></circle><circle cx="56" cy="55" r="2"></circle></g>';
-  }
-  if (conditionClass === "storm") {
-    return cloud + '<path class="lightning" d="M42 47l-8 10h7l-4 9 11-13h-7z"></path>';
-  }
-  return cloud;
-}
-
-function createForecastIcon(code, extraClass = "") {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 80 64");
-  svg.setAttribute("focusable", "false");
-  svg.setAttribute("class", `weather-icon ${forecastConditionClass(code)} ${extraClass}`.trim());
-  svg.innerHTML = forecastIconMarkup(code);
-  return svg;
-}
-
 function setForecastConditionIcon(iconEl, resolved, className = "weather-icon") {
   if (!iconEl) {
     return;

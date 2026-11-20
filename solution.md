@@ -312,3 +312,68 @@ backend fixes above.
 4. Verify live prediction: `date=2026-12-31` and `date=2027-01-02` must return HTTP 200 with a temperature, not 502.
 5. Verify the new page live: `https://air-sense-web.vercel.app/AI-recommendation.html` must show "AI Recommendation", a date, precaution cards and 24 hour rows `00:00–01:00 … 23:00–00:00`, with no "LLM is briefly unavailable" text.
 6. Do not claim any issue fixed until its live probe passes.
+
+---
+
+## Problem 4 — In-range predictions still hang on live (confirmed 2026-11-19)
+
+### Symptom
+After the 1-year range fix went live (frontend `v=20261119-2`), picking an
+**in-range** date still fails on the live site with
+`Prediction failed: The prediction server took too long or is temporarily unreachable.`
+
+Live API probes (base `https://airsense-backend-docker.getvoroa.com/api/v1`):
+
+| Request | Result |
+|---|---|
+| `/health` | HTTP 200 in 2.7 s |
+| `climate/predict?...date=2026-11-20` | HTTP 200 in 4.7 s (**cached** from earlier tests) |
+| `climate/predict?...date=2026-11-21` (fresh, today+2) | HTTP 000, 22 s timeout, 0 bytes |
+| `climate/predict?...date=2026-12-05` (16 d) | HTTP 000, 22 s timeout, 0 bytes |
+| `climate/predict?...date=2027-02-15` (88 d) | HTTP 000, 22 s timeout, 0 bytes |
+
+So it is **not** specific to the >15-day outlook path: *any* cache-miss
+prediction hangs on live. The one date that works is a cache hit.
+
+### Exact root cause
+The code currently in `main` is correct and fast. Running the **local** backend
+with the current source (uncached, real Open-Meteo calls):
+
+- `2026-11-20` (1 d) → HTTP 200 in **6.3 s**
+- `2026-12-05` (16 d) → HTTP 200 in **7.9 s**
+- `2027-02-15` (88 d) → HTTP 200 in **7.4 s**
+
+The single-request archive optimization (`_shared_archive_rows`), the 10 s LLM
+cap, and the 1-year range guard are all present in the committed source. The
+live Voroa container is still running an **older image** (legacy path: several
+sequential archive requests, no fast guard), so it stalls past the gateway
+timeout on every cache miss. This is a **deployment** problem, not a code bug.
+
+Supporting checks:
+- AQI hourly request for a far-future date returns HTTP 400 in 0.65 s locally
+  (`start_date` outside allowed range), so AQI is not the stall.
+- `git status` clean; `main` and `origin/main` both at `aa71339`; no open PRs.
+  There is nothing left to commit or merge for the range fix.
+
+### Fix / required action
+**Redeploy the backend container on Voroa from the current `main`.** Pushing to
+GitHub updates the frontend (Vercel/GitHub Pages auto-build) but does **not**
+rebuild the Voroa Docker backend — that step is manual in the Voroa dashboard.
+
+After redeploy, wait for **Live**, then verify with fresh (never-requested)
+dates:
+
+```bash
+BASE=https://airsense-backend-docker.getvoroa.com/api/v1
+for d in 2026-11-21 2026-12-05 2027-02-15; do
+  curl -sS --max-time 25 -o /dev/null -w "$d -> HTTP %{http_code} in %{time_total}s\n" \
+    "$BASE/climate/predict?latitude=22.5726&longitude=88.3639&city=Kolkata&date=$d"
+done
+# out of range -> 400 with the exact message
+curl -sS --max-time 25 -w '\nHTTP %{http_code}\n' \
+  "$BASE/climate/predict?latitude=22.5726&longitude=88.3639&date=2027-11-20"
+```
+
+Expected: all three in-range dates return **HTTP 200 in roughly 6–10 s**; the
+out-of-range date returns **HTTP 400** with
+`You have selected out of the predict range. Choose a date from today up to 1 year ahead.`
