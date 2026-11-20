@@ -90,12 +90,13 @@ window.MOCK_CLIMATE_DATA = {
         "https://airsense-backend-docker.getvoroa.com/api/v1")
   ).replace(/\/+$/, "");
 
-  /* A cold prediction on the small hosted container can take ~50-75 s, and the
-     CDN gateway may drop very long requests without CORS headers. The backend
-     caches every completed result, so a retry after a dropped request normally
-     comes straight from that cache. Bound each attempt and retry transparently. */
-  var PREDICTION_TIMEOUT_MS = 50000;
-  var PREDICTION_ATTEMPTS = 3;
+  /* A cold prediction on the small hosted container can take 60-100 s. Give a
+     single attempt enough headroom to finish (an early abort only leaves extra
+     computations running on the already-busy server). If the CDN gateway drops
+     the connection, the backend still completes and caches the result, so one
+     retry normally resolves straight from that cache. */
+  var PREDICTION_TIMEOUT_MS = 180000;
+  var PREDICTION_ATTEMPTS = 2;
 
   function fetchPredictionOnce(url) {
     var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -152,7 +153,7 @@ window.MOCK_CLIMATE_DATA = {
     function attempt(n) {
       return fetchPredictionOnce(url).catch(function (err) {
         if (n < PREDICTION_ATTEMPTS && isRetryablePredictionError(err)) {
-          return new Promise(function (resolve) { setTimeout(resolve, 500); })
+          return new Promise(function (resolve) { setTimeout(resolve, 1500); })
             .then(function () { return attempt(n + 1); });
         }
         throw err;
@@ -624,7 +625,7 @@ window.MOCK_CLIMATE_DATA = {
     }
     var myId = ++fetchId;
     status("Running trained-MLP prediction for " + date +
-      "… first run on a new date can take about a minute.");
+      "… first run on a new date can take a minute or two.");
     ClimateApi.getClimateForecast(currentLocation, date)
       .then(function (data) {
         if (myId !== fetchId) return;
