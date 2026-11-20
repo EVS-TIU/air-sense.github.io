@@ -169,3 +169,48 @@ Expected log signature after the fixed backend is deployed: one
 `archive-api.open-meteo.com` call for `2016-01-01..<today>` per location (no
 inverted ranges), followed by `climate/predict ... 200 OK` for
 `date=2026-12-31` in roughly 10 s.
+
+## 8. Follow-up (2026-11-20): latency, not correctness
+
+Measured again after the range/year-wrap fixes reached the live image:
+
+| Live request | HTTP | Time |
+|---|---|---|
+| `/health` | 200 | 0.19 s |
+| `climate/predict` d+1 | 200 | 52.7 s |
+| `climate/predict` d+15 | 200 | 57.0 s |
+| `climate/predict` d+88 | 200 | 63.9 s |
+| `climate/predict` d+365 | 200 | 52.6 s |
+| `climate/predict` d+366 | 400 + exact range message | 0.98 s |
+| `climate/predict` 2026-12-31 / 2027-01-02 (year wrap) | 200 | 74.4 / 59.6 s |
+
+So the deployed code is current — out-of-range and year-boundary dates now
+behave correctly. The remaining failure is **pure latency**: a cold live
+prediction takes 52–74 s, while the browser fetch (and the CDN gateway around
+60–66 s) gives up first and surfaces the opaque “Failed to fetch” → the two
+error strings in the report. A repeat of any of those dates is served from the
+server cache in <1 s.
+
+The live `aiInsight` is the deterministic fallback, matching an LLM that is
+still unavailable/oversized in the deployed environment; that only costs a few
+seconds thanks to the 5 s cap, so it is not the dominant term on a 0.1 vCPU box.
+
+### Fixes applied in this round
+
+1. **Frontend (auto-deployed by Vercel):** `getClimateForecast()` now bounds each
+   attempt at 50 s and retries up to 3 times. Because the backend caches every
+   *completed* prediction, a retry after a gateway-dropped request is normally
+   served from cache and resolves in under a second. 4xx responses (including
+   the exact out-of-range message) are never retried. The loading text now sets
+   the expectation that the first run for a date can take about a minute.
+2. **Backend (needs a Voroa redeploy):** `_open_meteo()` no longer retries
+   permanent 4xx responses — it previously retried HTTP 400 three times with
+   backoff, which is exactly what hourly AQI does for any date past the
+   provider's ~6-day horizon. `_hourly_aqi()` now skips those calls entirely;
+   `predict()` already holds the current daily AQI flat across the 24 h axis in
+   that case. Measured locally: cold prediction 15.3 s → 6.0 s, HTTP calls
+   3 → 2 for a far-future date.
+
+Verified locally: `node --check` on the frontend file, backend `py_compile`,
+and `68 passed` (one pre-existing unrelated `test_missing_api_key` failure).
+Live verification of the backend half still requires a fresh Voroa deploy.

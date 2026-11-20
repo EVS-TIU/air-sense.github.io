@@ -680,6 +680,12 @@ class ClimatePredictService:
                 response = await self.client.get(url, params=params)
                 if response.status_code in (429, 500, 502, 503):
                     last_error = ClimatePredictError(f"provider busy (HTTP {response.status_code})")
+                elif 400 <= response.status_code < 500:
+                    # A malformed/out-of-range request is permanent: retrying it
+                    # three times with backoff only adds seconds (e.g. hourly
+                    # AQI for a date beyond the provider's forecast horizon).
+                    raise ClimatePredictError(
+                        f"provider rejected request (HTTP {response.status_code})")
                 else:
                     response.raise_for_status()
                     return response.json()
@@ -704,6 +710,11 @@ class ClimatePredictService:
 
     async def _hourly_aqi(self, lat: float, lon: float, target: date_type) -> dict:
         """Hourly US-AQI + pollutants for the predicted day (never breaks a request)."""
+        # Open-Meteo only serves hourly AQI ~6 days ahead. For longer-range
+        # outlooks the call is always rejected, so skip it; predict() holds the
+        # current daily AQI flat across the 24 h axis when this returns empty.
+        if (target - date_type.today()).days > 6:
+            return {}
         try:
             data = await self._open_meteo(
                 self.settings.openmeteo_air_quality_url,

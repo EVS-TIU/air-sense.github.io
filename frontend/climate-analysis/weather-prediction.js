@@ -90,6 +90,44 @@ window.MOCK_CLIMATE_DATA = {
         "https://airsense-backend-docker.getvoroa.com/api/v1")
   ).replace(/\/+$/, "");
 
+  /* A cold prediction on the small hosted container can take ~50-75 s, and the
+     CDN gateway may drop very long requests without CORS headers. The backend
+     caches every completed result, so a retry after a dropped request normally
+     comes straight from that cache. Bound each attempt and retry transparently. */
+  var PREDICTION_TIMEOUT_MS = 50000;
+  var PREDICTION_ATTEMPTS = 3;
+
+  function fetchPredictionOnce(url) {
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, PREDICTION_TIMEOUT_MS) : null;
+    return fetch(url.toString(), controller ? { signal: controller.signal } : {})
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return null; }).then(function (detail) {
+            var err = new Error((detail && detail.detail) ? String(detail.detail)
+              : "Prediction request failed (HTTP " + res.status + ")");
+            err.status = res.status;
+            throw err;
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !data.forecast) throw new Error("Prediction response was incomplete");
+        return data;
+      })
+      .then(function (data) { if (timer) clearTimeout(timer); return data; },
+            function (err) { if (timer) clearTimeout(timer); throw err; });
+  }
+
+  function isRetryablePredictionError(err) {
+    if (!err) return false;
+    /* Never retry validation errors (e.g. the exact out-of-range message). */
+    if (err.status >= 400 && err.status < 500) return false;
+    var msg = (err && err.message) || String(err);
+    return /abort|failed to fetch|networkerror|timeout|5\d\d/i.test(msg) || !err.status;
+  }
+
   /**
    * @param {{city?: string, country?: string, lat: number, lon: number}} params
    * @param {string} targetDate YYYY-MM-DD picked in the calendar
@@ -110,18 +148,17 @@ window.MOCK_CLIMATE_DATA = {
     if (params.city) url.searchParams.set("city", params.city);
     if (params.country) url.searchParams.set("country", params.country);
     url.searchParams.set("date", targetDate);
-    return fetch(url.toString()).then(function (res) {
-      if (!res.ok) {
-        return res.json().catch(function () { return null; }).then(function (detail) {
-          throw new Error((detail && detail.detail) ? String(detail.detail)
-            : "Prediction request failed (HTTP " + res.status + ")");
-        });
-      }
-      return res.json();
-    }).then(function (data) {
-      if (!data || !data.forecast) throw new Error("Prediction response was incomplete");
-      return data;
-    });
+
+    function attempt(n) {
+      return fetchPredictionOnce(url).catch(function (err) {
+        if (n < PREDICTION_ATTEMPTS && isRetryablePredictionError(err)) {
+          return new Promise(function (resolve) { setTimeout(resolve, 500); })
+            .then(function () { return attempt(n + 1); });
+        }
+        throw err;
+      });
+    }
+    return attempt(1);
   }
   window.ClimateApi = { API_BASE: API_BASE, getClimateForecast: getClimateForecast };
 })();
@@ -586,7 +623,8 @@ window.MOCK_CLIMATE_DATA = {
       return;
     }
     var myId = ++fetchId;
-    status("Running trained-MLP prediction for " + date + "…");
+    status("Running trained-MLP prediction for " + date +
+      "… first run on a new date can take about a minute.");
     ClimateApi.getClimateForecast(currentLocation, date)
       .then(function (data) {
         if (myId !== fetchId) return;
