@@ -213,4 +213,25 @@ seconds thanks to the 5 s cap, so it is not the dominant term on a 0.1 vCPU box.
 
 Verified locally: `node --check` on the frontend file, backend `py_compile`,
 and `68 passed` (one pre-existing unrelated `test_missing_api_key` failure).
-Live verification of the backend half still requires a fresh Voroa deploy.
+
+### Live verification (2026-11-20, headless Chrome on the Vercel page)
+
+After `34f9bc6` was deployed by Vercel:
+
+- Fresh in-range date `2027-09-14` for Sukant Nagar: the real page event
+  (`weatherly:prediction-date`) rendered the full prediction in **56 s**, one
+  fetch attempt, no error. Dashboard showed condition, temperature, AQI and the
+  trained-model note; the overview showed the explanation text.
+- A repeat date was served from cache instantly.
+- Out-of-range date `2028-01-01`: **0** prediction API calls and the exact
+  message `You have selected out of the predict range. Choose a date from
+  today up to 1 year ahead.` in both the status and the overview.
+
+A 50 s single-attempt timeout with three retries was tried first and rejected:
+each client abort leaves the server computing, so retries pile extra work onto
+the 0.1 vCPU container and can exhaust the whole budget. The deployed setting
+is a 180 s single-attempt budget plus one retry (needed only when the CDN drops
+the connection, in which case the completed result is already cached).
+
+Live verification of the **backend** half (4xx no-retry, skipped hourly AQI)
+still requires a fresh Voroa deploy; no deploy webhook is exposed on the repo.
