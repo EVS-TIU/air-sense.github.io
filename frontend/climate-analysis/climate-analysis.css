@@ -208,7 +208,7 @@
     min-height: 0;
 
     display: grid;
-    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+    grid-template-columns: minmax(260px, 310px) minmax(0, 1fr);
     gap: 16px;
 }
 
@@ -220,6 +220,10 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+    /* Keep the whole left rail inside the fixed-height workspace. Without this,
+       a long prediction overview grows past the section and gets clipped. */
+    min-height: 0;
+    overflow: hidden;
 }
 
 .ca-calendar-card {
@@ -467,7 +471,13 @@
 
 /* MLP prediction overview — raw model output as JSON text */
 .ca-mlp-overview {
-    flex: 0 0 auto;
+    /* Let the overview shrink when the calendar needs room, but never let its
+       text push the rail outside the workspace. */
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: 45%;
 
     padding: 14px 16px;
 
@@ -487,6 +497,10 @@
 
 .ca-mlp-json {
     margin: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 
     font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
     font-size: 11px;
@@ -494,6 +508,14 @@
     color: #9fd8ff;
     white-space: pre-wrap;
     word-break: break-word;
+    padding-right: 4px;
+}
+
+/* Slim scrollbar so the scrollable overview stays unobtrusive. */
+.ca-mlp-json::-webkit-scrollbar { width: 6px; }
+.ca-mlp-json::-webkit-scrollbar-thumb {
+    background: rgba(105, 158, 196, 0.35);
+    border-radius: 6px;
 }
 
 /* Generate Analysis button */.ca-generate-btn {
