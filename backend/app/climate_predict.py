@@ -20,6 +20,7 @@ import asyncio
 import json
 import logging
 import math
+import time
 from dataclasses import dataclass
 from datetime import date as date_type, timedelta
 
@@ -38,6 +39,13 @@ MAX_FORECAST_DAYS_AHEAD = 15  # Open-Meteo forecast horizon is ~16 days
 # trained MLP + multi-year archive climatology for the same calendar
 # window ("what this date is usually like"), not a day-specific forecast.
 MAX_OUTLOOK_DAYS_AHEAD = 365
+
+# The hosted LLM is optional decoration, not part of the verified prediction.
+# Cap its budget so a slow provider can never dominate response time, and back
+# off briefly after a failure instead of paying the timeout on every request.
+LLM_AGENT_TIMEOUT_SECONDS = 5.0
+LLM_AGENT_CONNECT_TIMEOUT_SECONDS = 3.0
+LLM_AGENT_COOLDOWN_SECONDS = 300.0
 
 # User-facing wording for an out-of-range prediction date. Shared by the API
 # error and the frontend so both say the same thing.
@@ -440,6 +448,9 @@ class ClimatePredictService:
         self.client = client or httpx.AsyncClient(
             timeout=httpx.Timeout(60.0, connect=10.0))
         self._owns_client = client is None
+        self._agent_timeout = httpx.Timeout(
+            LLM_AGENT_TIMEOUT_SECONDS, connect=LLM_AGENT_CONNECT_TIMEOUT_SECONDS)
+        self._agent_retry_after = 0.0
         # Date+location predictions are expensive (multi-year archive fetch);
         # reuse them well beyond the default weather cache window.
         self.cache: TTLCache = TTLCache(max(settings.cache_ttl_seconds, 1800))
@@ -734,6 +745,8 @@ class ClimatePredictService:
         """Ask the hosted LLM to compare forecast vs climatology. None = fallback."""
         if not (self.settings.llm_api_key and self.settings.llm_base_url and self.settings.llm_model):
             return None
+        if time.monotonic() < self._agent_retry_after:
+            return None
         body = {
             "model": self.settings.llm_model,
             "messages": [
@@ -745,17 +758,22 @@ class ClimatePredictService:
         }
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
         try:
-            # The shared client allows 60 s for slow archive hosts; the LLM is
-            # optional decoration and must never stall a prediction that long
-            # when the provider is rate-limiting/timing out.
+            # The shared client allows 60 s for slow archive hosts, but the LLM
+            # is optional decoration: use a short dedicated budget so a slow or
+            # overloaded provider cannot stall an otherwise-ready prediction.
             response = await self.client.post(
                 self.settings.llm_chat_url, json=body, headers=headers,
-                timeout=httpx.Timeout(10.0, connect=5.0))
+                timeout=self._agent_timeout)
             response.raise_for_status()
             choices = response.json().get("choices") or []
             text = (choices[0].get("message") or {}).get("content") if choices else None
-            return parse_agent_json(text or "")
+            result = parse_agent_json(text or "")
+            self._agent_retry_after = 0.0
+            return result
         except (httpx.HTTPError, ValueError, KeyError, IndexError):
+            # Back off so repeated requests do not each pay the full timeout
+            # while the provider is down; the deterministic insight covers it.
+            self._agent_retry_after = time.monotonic() + LLM_AGENT_COOLDOWN_SECONDS
             logger.warning("LLM climate agent unavailable; using deterministic blend")
             return None
 
